@@ -22,3 +22,7 @@
     areWeak(X,Y) :- weak(X), weak(Y).
     %"Compose" rule, with AND operator (,).
 
+    test(X,Y) :- areWeak(X,_), weak(Y).
+    %"anonymous variable" (_) when the value is not useful.
+    %Can be used to hide the value of some variable when asking a question too
+

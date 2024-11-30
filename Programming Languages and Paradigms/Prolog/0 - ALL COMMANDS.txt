@@ -25,5 +25,29 @@ areWeak(bread, seed).       true.
 
 
 (4) ===================
+isSumRightEqual.            false.
+isSumRightIs.               true.
+isAlwaysFalse(X,Y).         false.
+
++ There are other, but no need
+
+(5) ===================
+ancestor(a,X).              X=b X=c X=d...
+ancestor(a,e).              true.
+
+(6) ===================
+
+
+(7) ===================
+
+
+(8) ===================
+
+
+(9) ===================
+
+
+(10) ==================
+
 
 ...
