@@ -1,0 +1,29 @@
+(1) ===================
+hello_world.
+
+
+(2) ===================
+eat(X,duck).    X = human.
+eat(duck,X).    X = bread;  X = seed.       //";" means NEXT, "." means STOP
+
+eat(duck, X), strong(X).    X = worm.       //"," means AND operator
+
+listing(eat).                               //All eat relations set
+
+
+(3) ===================
+isEatenBy(duck, X).         X = human.      
+
+isEatenBy(duck, human).     true.
+isEatenBy(human, duck).     false.
+
+isEatenBy(i, apple).        false.
+isEatenBy(apple, i).        true.
+
+areWeak(bread, human).      false.
+areWeak(bread, seed).       true.
+
+
+(4) ===================
+
+...
