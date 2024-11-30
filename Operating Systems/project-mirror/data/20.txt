@@ -1,0 +1,13 @@
+program 20.txt 7
+begin
+execute
+execute
+block 2
+block 2
+execute
+block 5
+execute
+execute
+block 3
+block 4
+end

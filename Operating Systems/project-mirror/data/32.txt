@@ -1,0 +1,9 @@
+program 32.txt 5
+begin
+execute
+execute
+execute
+execute
+execute
+execute
+end

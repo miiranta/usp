@@ -1,0 +1,18 @@
+program 19.txt 0
+begin
+execute
+execute
+block 1
+block 1
+execute
+block 2
+execute
+execute
+block 3
+block 3
+execute
+block 4
+execute
+execute
+execute
+end

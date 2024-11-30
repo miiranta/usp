@@ -1,0 +1,17 @@
+program 8.txt 1
+begin
+execute
+block 4
+execute
+block 5
+block 3
+block 4
+execute
+block 1
+execute
+block 1
+execute
+execute
+block 2
+block 1
+end

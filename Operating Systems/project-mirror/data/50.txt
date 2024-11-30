@@ -1,0 +1,16 @@
+program 50.txt 6
+begin
+block 2
+execute
+execute
+execute
+execute
+execute
+execute
+block 5
+execute
+block 1
+execute
+execute
+block 1
+end

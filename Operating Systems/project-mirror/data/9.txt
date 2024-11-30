@@ -1,0 +1,19 @@
+program 9.txt 3
+begin
+block 3
+block 2
+block 3
+execute
+block 4
+block 2
+execute
+execute
+execute
+execute
+execute
+block 2
+block 4
+execute
+execute
+block 2
+end

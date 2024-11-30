@@ -1,0 +1,19 @@
+program 49.txt 0
+begin
+execute
+execute
+block 3
+block 1
+block 5
+block 2
+block 1
+block 5
+block 2
+execute
+execute
+execute
+execute
+block 3
+block 1
+execute
+end

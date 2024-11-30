@@ -1,0 +1,16 @@
+program 21.txt 7
+begin
+execute
+execute
+block 2
+block 1
+execute
+execute
+execute
+execute
+execute
+execute
+execute
+execute
+block 1
+end

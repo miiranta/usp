@@ -1,0 +1,13 @@
+program 25.txt 8
+begin
+block 4
+execute
+execute
+block 1
+execute
+execute
+execute
+execute
+execute
+execute
+end

@@ -1,0 +1,9 @@
+program teste2.txt 9
+begin
+execute
+block 4
+execute
+execute
+block 2
+execute
+end

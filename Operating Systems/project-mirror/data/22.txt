@@ -1,0 +1,4 @@
+program 22.txt 0
+begin
+execute
+end

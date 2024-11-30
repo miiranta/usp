@@ -1,0 +1,14 @@
+program 47.txt 2
+begin
+block 4
+block 2
+execute
+block 1
+execute
+block 5
+execute
+block 2
+block 1
+block 1
+block 3
+end

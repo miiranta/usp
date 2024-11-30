@@ -1,0 +1,4 @@
+program 26.txt 3
+begin
+block 5
+end

@@ -1,0 +1,19 @@
+program 6.txt 7
+begin
+block 4
+block 3
+execute
+execute
+block 4
+block 5
+block 5
+block 3
+execute
+execute
+block 1
+block 1
+block 2
+block 1
+block 3
+block 2
+end

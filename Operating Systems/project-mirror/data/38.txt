@@ -1,0 +1,13 @@
+program 38.txt 6
+begin
+block 4
+execute
+block 2
+block 2
+block 4
+block 2
+execute
+block 2
+execute
+block 1
+end

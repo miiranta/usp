@@ -1,0 +1,11 @@
+program 1.txt 7
+begin
+execute
+execute
+block 2
+execute
+block 2
+execute
+block 5
+execute
+end

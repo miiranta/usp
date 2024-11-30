@@ -1,0 +1,6 @@
+program 36.txt 6
+begin
+block 3
+execute
+block 3
+end

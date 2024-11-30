@@ -1,0 +1,20 @@
+program 24.txt 0
+begin
+execute
+execute
+execute
+execute
+block 4
+execute
+block 1
+block 4
+block 3
+execute
+execute
+execute
+execute
+block 5
+execute
+block 2
+block 4
+end

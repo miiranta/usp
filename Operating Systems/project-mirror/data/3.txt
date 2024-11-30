@@ -1,0 +1,21 @@
+program 3.txt 2
+begin
+execute
+execute
+execute
+execute
+block 3
+block 4
+block 5
+execute
+execute
+execute
+execute
+execute
+execute
+block 1
+execute
+execute
+execute
+execute
+end

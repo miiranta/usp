@@ -1,0 +1,4 @@
+program 30.txt 5
+begin
+execute
+end

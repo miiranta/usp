@@ -1,0 +1,16 @@
+program 5.txt 6
+begin
+block 4
+block 1
+execute
+execute
+block 3
+execute
+execute
+execute
+execute
+block 4
+block 2
+block 1
+execute
+end

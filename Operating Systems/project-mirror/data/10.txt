@@ -1,0 +1,15 @@
+program 10.txt 6
+begin
+execute
+execute
+block 2
+block 1
+execute
+block 1
+block 3
+block 2
+block 2
+block 5
+block 1
+block 1
+end

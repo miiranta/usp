@@ -1,0 +1,17 @@
+program 34.txt 3
+begin
+block 3
+execute
+execute
+block 4
+execute
+execute
+block 3
+block 4
+block 5
+block 5
+execute
+execute
+execute
+execute
+end

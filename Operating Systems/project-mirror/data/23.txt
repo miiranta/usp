@@ -1,0 +1,9 @@
+program 23.txt 3
+begin
+block 4
+execute
+block 1
+execute
+block 5
+execute
+end

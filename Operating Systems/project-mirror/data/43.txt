@@ -1,0 +1,15 @@
+program 43.txt 0
+begin
+block 2
+block 3
+block 1
+execute
+block 1
+execute
+block 2
+execute
+block 5
+execute
+block 5
+block 3
+end

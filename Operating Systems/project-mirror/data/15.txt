@@ -1,0 +1,17 @@
+program 15.txt 2
+begin
+execute
+block 4
+execute
+execute
+block 3
+block 5
+block 5
+execute
+execute
+execute
+execute
+execute
+execute
+block 2
+end

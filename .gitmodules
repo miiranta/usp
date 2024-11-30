@@ -1,0 +1,3 @@
+[submodule "Operating Systems/project/OSProject"]
+	path = Operating Systems/project/OSProject
+	url = https://github.com/SO-AGL/OSProject
