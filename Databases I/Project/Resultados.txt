@@ -1,0 +1,87 @@
+    nome     |    cargo    
+-------------+-------------
+ Marcin      | AdmPlantio
+ Juan        | Agronomo
+ Mogu Mogu   | Operador
+ Amomogusgus | Operador
+ Jorge       | Controlador
+ Amogus      | AdmSistema
+ Semfone     | Controlador
+(7 rows)
+
+ idarmazem |  local  | capacidade | idcontrolador 
+-----------+---------+------------+---------------
+         1 | Lote 11 |        100 |             5
+         2 | Lote 22 |        200 |             5
+         5 | Lote 55 |        230 |             5
+         4 | Lote 44 |        300 |             5
+         3 | Lote 33 |        400 |             5
+(5 rows)
+
+ nome  | idrecplantio 
+-------+--------------
+ Jorge |            1
+ Jorge |            2
+ Jorge |            3
+ Jorge |            4
+(4 rows)
+
+ idtarefa |    nome     
+----------+-------------
+        1 | Amomogusgus
+        2 | Mogu Mogu
+(2 rows)
+
+DROP VIEW
+CREATE VIEW
+  cultura  |  produção  | colheitadeira | uso_de_combustível |  operador   | fone_do_operador | local_de_estoque | controlador_do_armazém | formacao_controlador | data_do_plantio | data_da_colheita | terreno_colhido 
+-----------+------------+---------------+--------------------+-------------+------------------+------------------+------------------------+----------------------+-----------------+------------------+-----------------
+ Cultura 5 | 1000000000 | GTX-730       |              73620 | Amomogusgus | 17171717171      | Lote 55          | Jorge                  | Técnico em controle  | 2020-01-01      | 2020-07-01       | Lote 52
+ Cultura 4 |      12345 | GTX-730       |               1110 | Amomogusgus | 17171717171      | Lote 44          | Jorge                  | Técnico em controle  | 2021-01-01      | 2021-07-01       | Lote 42
+ Cultura 3 |      10000 | GTX-730       |                370 | Mogu Mogu   | 17122171611      | Lote 33          | Jorge                  | Técnico em controle  | 2022-01-01      | 2022-07-01       | Lote 32
+ Cultura 2 |       8241 | MX330         |                350 | Mogu Mogu   | 17122171611      | Lote 22          | Jorge                  | Técnico em controle  | 2023-01-01      | 2023-07-01       | Lote 22
+(4 rows)
+
+ nome_usuario |    fone1    |    fone2    
+--------------+-------------+-------------
+ Mogu Mogu    | 11111111111 | 17122171611
+ Jorge        | 12987564544 | 17923456677
+ Amomogusgus  | 17171717171 | 
+ Juan         | 12928374625 | 19928274725
+ Semfone      |             | 
+ Amogus       | 77777777777 | 99999999999
+ Marcin       | 11928174921 | 19923274625
+(7 rows)
+
+ sum  |    cargo    
+------+-------------
+  999 | Agronomo
+ 9999 | AdmSistema
+ 1355 | Controlador
+ 4444 | Operador
+ 2486 | AdmPlantio
+(5 rows)
+
+ max |  local  
+-----+---------
+ 400 | Lote 33
+ 100 | Lote 11
+ 230 | Lote 55
+ 300 | Lote 44
+ 200 | Lote 22
+(5 rows)
+
+  round   | idplantio | seq_colheita 
+----------+-----------+--------------
+ 36810.00 |         1 |            1
+   175.00 |         4 |            1
+    15.00 |         5 |            1
+   185.00 |         3 |            1
+   555.00 |         2 |            1
+(5 rows)
+
+  praga  
+---------
+ Minhoca
+(1 row)
+
