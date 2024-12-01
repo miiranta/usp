@@ -7,3 +7,6 @@
 [submodule "Compilers/Project/TrabCompiladores"]
 	path = Compilers/Project/TrabCompiladores
 	url = https://github.com/angelopra/TrabCompiladores
+[submodule "Computer Networks/Project/TrabRedes"]
+	path = Computer Networks/Project/TrabRedes
+	url = https://github.com/angelopra/TrabRedes
