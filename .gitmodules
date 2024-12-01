@@ -1,3 +1,6 @@
 [submodule "Operating Systems/project/OSProject"]
 	path = Operating Systems/project/OSProject
 	url = https://github.com/SO-AGL/OSProject
+[submodule "Extension/Pegdev/page/pegdev.github.io"]
+	path = Extension/Pegdev/page/pegdev.github.io
+	url = https://github.com/pegdev/pegdev.github.io
