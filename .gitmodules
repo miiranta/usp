@@ -4,3 +4,6 @@
 [submodule "Extension/Pegdev/page/pegdev.github.io"]
 	path = Extension/Pegdev/page/pegdev.github.io
 	url = https://github.com/pegdev/pegdev.github.io
+[submodule "Compilers/Project/TrabCompiladores"]
+	path = Compilers/Project/TrabCompiladores
+	url = https://github.com/angelopra/TrabCompiladores
