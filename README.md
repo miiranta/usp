@@ -1,4 +1,4 @@
-# tu-braunschweig
+# usp
 
 Code from my classes at University of São Paulo (Bachelor of Computer Science).
 
