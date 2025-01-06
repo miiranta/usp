@@ -43,7 +43,7 @@ void CalculaCurvas();
 
 //Config
 unsigned int MAP_SEED = 11425;
-float MAP_LENGTH = 32; //63 is max
+float MAP_LENGTH = 28; //63 is max
 
 float MAX_WALK_SPEED = 2;
 float WALK_ACCELERATION = 0.2;
@@ -69,7 +69,7 @@ float ITEM_SIZE = 10;
 
 float JUMP_SPEED = 10;
 
-float SPAWN_COORDS[3] = {0, 0, 40};
+float SPAWN_COORDS[3] = {0, MAP_LENGTH, 40};
 
 float CAM_MODE = 1; //0 - Minecraft Cam | 1 - Free Cam
 
@@ -77,7 +77,7 @@ float GAME_MODE = 1; //0 - Survival | 1 - Spectator
 
 bool HIDE_CURSOR = true;
 bool ENABLE_MOUSE_NAV = true;
-float MOUSE_SENSE = 0.2;
+float MOUSE_SENSE = 1;
 
 //Global vars
 int largura = 1200;
