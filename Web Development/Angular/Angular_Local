@@ -1,0 +1,4 @@
+npx -p @angular/cli ng new 
+
+npx -p @angular/cli ng s
+

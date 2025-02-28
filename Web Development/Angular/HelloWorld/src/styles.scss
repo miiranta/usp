@@ -1,0 +1,16 @@
+body {
+    background-color: rgba(10, 10, 10, 0.815);
+}
+
+.flex {
+    display: flex;
+    justify-content: center;
+}
+
+.flex-col {
+    flex-direction: column;
+}
+
+.flex-row {
+    flex-direction: row;
+}

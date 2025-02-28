@@ -1,0 +1,23 @@
+.central-btn {
+    height: 20vh;
+    width: 20vw;
+
+    color: white;
+    
+    background-color: rgba(0, 0, 0, 0.247);
+
+    border: 2px solid white;
+    border-radius: 15px;
+
+    cursor: pointer;
+
+    font-size: 50pt;
+
+    transition: 0.3s;
+}
+
+.central-btn:hover {
+    background-color: rgba(0, 0, 0, 0.5);
+
+    transition: 0.3s;
+}
