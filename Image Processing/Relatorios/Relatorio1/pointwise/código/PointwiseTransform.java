@@ -4,8 +4,6 @@ public class PointwiseTransform extends Object {
 	/**
 	* Question 2.1 Contrast reversal
 	*/
-
-
 	static public ImageAccess inverse(ImageAccess input) {
 		int nx = input.getWidth();
 		int ny = input.getHeight();
@@ -23,8 +21,6 @@ public class PointwiseTransform extends Object {
 	/**
 	* Question 2.2 Stretch normalized constrast
 	*/
-
-
 	static public ImageAccess rescale(ImageAccess input) {
 		int nx = input.getWidth();
 		int ny = input.getHeight();
@@ -49,7 +45,6 @@ public class PointwiseTransform extends Object {
 	/**
 	* Question 2.3 Saturate an image
 	*/
-
 	static public ImageAccess saturate(ImageAccess input) {
 		int nx = input.getWidth();
 		int ny = input.getHeight();
@@ -67,60 +62,31 @@ public class PointwiseTransform extends Object {
 			output.putPixel(x, y, value);
 		}
 
+
 		return output;
 	}
 	
 	/**
 	* Question 4.1 Maximum Intensity Projection
 	*/
-
-
 	static public ImageAccess zprojectMaximum(ImageAccess[] zstack) {
 		int nx = zstack[0].getWidth();
 		int ny = zstack[0].getHeight();
 		int nz = zstack.length;
 		ImageAccess output = new ImageAccess(nx, ny);
-
-		double value = 0.0;
-
-		for (int x=0; x<nx; x++)
-		for (int y=0; y<ny; y++) {
-			value = zstack[0].getPixel(x, y);
-			for (int z=1; z<nz; z++) {
-				if (zstack[z].getPixel(x, y) > value) {
-					value = zstack[z].getPixel(x, y);
-				}
-			}
-			output.putPixel(x, y, value);
-		}
-
+		// Add your code here
 		return output;	
 	}
 
 	/**
 	* Question 4.2 Z-stack mean
 	*/
-
-
-	
 	static public ImageAccess zprojectMean(ImageAccess[] zstack) {
 		int nx = zstack[0].getWidth();
 		int ny = zstack[0].getHeight();
 		int nz = zstack.length;
 		ImageAccess output = new ImageAccess(nx, ny);
-		
-		double value = 0.0;
-
-		for (int x=0; x<nx; x++)
-		for (int y=0; y<ny; y++) {
-			value = 0.0;
-			for (int z=0; z<nz; z++) {
-				value += zstack[z].getPixel(x, y);
-			}
-			value /= nz;
-			output.putPixel(x, y, value);
-		}
-
+		// Add your code here
 		return output;	
 	}
 
