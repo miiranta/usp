@@ -178,7 +178,7 @@ public class FilteringSession_ extends Dialog
 				journal = null;	
 		}
 		if (journal == null) {
-			journal = new TextWindow("Journal", "Input Image\tFilter\tImpl.\tTime [ms]\tOutput Image\tMean(out)\tMin(out)\tMax(out)", null, 700, 250);
+			journal = new TextWindow("Journal", "Input Image\tFilter\tImpl.\tTime [ms]\tOutput Image\tMean(out)\tMin(out)\tMax(out)", "", 700, 250);
 			Point loc = this.getLocation();
 			Dimension dim = this.getSize();
 			Point locj = journal.getLocation();
@@ -307,7 +307,7 @@ public class FilteringSession_ extends Dialog
 				journal = null;	
 		}
 		if (journal == null) {
-			journal = new TextWindow("Journal", "Input Image\tFilter\tImpl.\tTime [ms]\tOutput Image\tMean(out)\tMin(out)\tMax(out)", null, 700, 250);
+			journal = new TextWindow("Journal", "Input Image\tFilter\tImpl.\tTime [ms]\tOutput Image\tMean(out)\tMin(out)\tMax(out)", "", 700, 250);
 			Point loc = this.getLocation();
 			Dimension dim = this.getSize();
 			Point locj = journal.getLocation();
