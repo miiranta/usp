@@ -39,34 +39,55 @@ public class CalculatorProtocolServer extends Thread{
                 datagram.receive(requestPacket);
 
                 // extracts pdu
-                
+                try {
+                    reqPdu = new RequestPDU(requestPacket.getData());
+                } catch (Exception e){
+                    System.err.println(e);
+                    continue;
+                }
 
                 // extracts info
-                
-                
+                op1 = reqPdu.getOp1();
+                op2 = reqPdu.getOp2();
+
                 // check request
                 switch(reqPdu.getOpcode()){
                     case 0: // calculate add
-                        
+                        result = op1 + op2;
+                        respCode = 1;
                         break;
                     case 1: // calculate sub
-                        
+                        result = op1 - op2;
+                        respCode = 1;   
                         break;
                     case 2: // calculate times
-                        
+                        result = op1 * op2;
+                        respCode = 1;
                         break;
                     case 3: // calculate div
-                        
+                        if(op2 == 0){
+                            result = 0;
+                            respCode = 0;
+                        } else {
+                            result = op1 / op2;
+                            respCode = 1;
+                        }
                         break;
                 }
 
                 // create response PDU
-               
-
+                try {
+                    respPdu = new ResponsePDU(respCode, result);
+                } catch (Exception e){
+                    System.err.println(e);
+                    continue;
+                }
+                             
                 // create response packet
+                responsePacket = new DatagramPacket(respPdu.getPDUData(), respPdu.getPDUData().length, requestPacket.getAddress(), requestPacket.getPort());
                
-
                 // send response packet
+                datagram.send(responsePacket);
                 
             } catch (IOException ioe){
                 System.err.println("Could not receive data: "+ioe);

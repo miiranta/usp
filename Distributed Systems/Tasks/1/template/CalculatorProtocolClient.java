@@ -6,11 +6,11 @@ import java.io.IOException;
 import java.net.*;
 
 public class CalculatorProtocolClient extends Thread implements ServiceInterface{
-
+    
     // declaring constant
     private final short TIMEOUT = 100;
 
-      // declaring variables
+    // declaring variables
     private ServiceUserInterface serviceUser;	// Service user reference
     private int currentState;                 	// Protocol entity current state
 
@@ -42,8 +42,11 @@ public class CalculatorProtocolClient extends Thread implements ServiceInterface
     public void add(int op1, int op2){
         DatagramPacket requestPacket;
 
+        // <RSPPDU><espaço><respcode><espaço><resultado>
+        // espcode é um número inteiro que representa sucesso (ou não) da realização da operação (0 – falha e 1 – sucesso);
+
         // create pdu
-        
+
         // create packet
 
         // send packet

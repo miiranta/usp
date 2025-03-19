@@ -29,6 +29,7 @@ public class ServiceUser extends Thread implements ServiceUserInterface{
 
     public void run(){
 		// variable declaration 
+        
 		
 		// protocol user behaviour
 

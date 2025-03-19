@@ -19,18 +19,25 @@ public class CalculatorClient{
         if (args.length == 3){
             try{
 			    // parse arguments
+                localPort = Integer.parseInt(args[0]);
+                remoteAddress = args[1];
+                remotePort = Integer.parseInt(args[2]);
 
-				// create protocol entity
-				
+                // create protocol entity
+                client = new CalculatorProtocolClient(localPort, remoteAddress, remotePort);
+
 				// create service user 
+                user = new ServiceUser(client);
 
                 // start entities
+                client.start();
+                user.start();
 
             } catch (NumberFormatException nfe){
                 System.err.println("Erro formato nro porta");
             }
         } else{
-            System.err.println("Erro nro argumentos");
+            System.err.println("Erro nro argumentos: java CalculatorClient <localPort> <remoteAddress> <remotePort>");
         }
 
     }

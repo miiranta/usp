@@ -9,6 +9,15 @@ public class ResponsePDU {
     private int respcode;
     private int value;
 
+    /*
+    Codificação concreta: 
+    <RSPPDU><espaço><respcode><espaço><resultado> 
+    Onde:  
+    respcode é um número inteiro que representa sucesso (ou não) da realização da operação (0 – 
+    falha e 1 – sucesso); 
+    resultado é um número inteiro; 
+    */
+
     /** Creates a new instance of ResponsePDU */
     public ResponsePDU(int respcode, int valor) throws IllegalFormatException{
 
@@ -17,7 +26,9 @@ public class ResponsePDU {
             throw new IllegalFormatException();
         } else{
             // create pdu
-			
+            pduData = new String("RSPPDU " + respcode + " " + valor);
+            this.respcode = respcode;
+            this.value = valor;
         }
     }
 
@@ -31,7 +42,17 @@ public class ResponsePDU {
         elements = pduData.split(" ");
         
 		// check pdu format
-		
+        String RSPPDUstr = elements[0];
+        if(!RSPPDUstr.equals("RSPPDU")){
+            throw new IllegalFormatException();
+        }
+
+        respcode = Integer.parseInt(elements[1]);
+        if (respcode < 0 || respcode > 1){
+            throw new IllegalFormatException();
+        }
+
+        value = Integer.parseInt(elements[2]);
     }
 
     public int getRespcode(){
