@@ -15,8 +15,11 @@ public class CalculatorServer {
 
         try{
 			// extracts port number
+            port = Integer.parseInt(args[0]);
 
 			// create server entity
+            server = new CalculatorProtocolServer(port);
+            server.start();
 
         } catch (NumberFormatException nfe){
             System.err.println("Erro formato nro porta");

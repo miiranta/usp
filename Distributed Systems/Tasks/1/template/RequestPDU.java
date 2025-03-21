@@ -44,7 +44,7 @@ public class RequestPDU {
         elements = pduData.split(" ");
 
 		// check pdu format
-        string RQTPDUstr = elements[0];
+        String RQTPDUstr = elements[0];
         if (!RQTPDUstr.equals("RQTPDU")){
             throw new IllegalFormatException();
         } 

@@ -46,10 +46,23 @@ public class CalculatorProtocolClient extends Thread implements ServiceInterface
         // espcode é um número inteiro que representa sucesso (ou não) da realização da operação (0 – falha e 1 – sucesso);
 
         // create pdu
+        try {
+            pdu = new RequestPDU(0, op1, op2);
+        } catch (Exception e){
+            System.err.println(e);
+            System.exit(0);
+        }
 
         // create packet
+        requestPacket = new DatagramPacket(pdu.getPDUData(), pdu.getPDUData().length, remoteAddress, remotePortNumber);
 
         // send packet
+        try{
+            datagram.send(requestPacket);
+        } catch (IOException ioe){
+            System.err.println("Could not send data: "+ioe);
+            System.exit(0);
+        }
         
         // update current state
         currentState = 1;
@@ -59,39 +72,80 @@ public class CalculatorProtocolClient extends Thread implements ServiceInterface
         DatagramPacket requestPacket;
 
         // create pdu
-        
+        try {
+            pdu = new RequestPDU(1, op1, op2);
+        } catch (IllegalFormatException e){
+            System.err.println(e);
+            System.exit(0);
+        }
+
         // create packet
+        requestPacket = new DatagramPacket(pdu.getPDUData(), pdu.getPDUData().length, remoteAddress, remotePortNumber);
 
         // send packet
-        
+        try{
+            datagram.send(requestPacket);
+        } catch (IOException ioe){
+            System.err.println("Could not send data: "+ioe);
+            System.exit(0);
+        }
+
         // update current state
         currentState = 1;       
     }
     
+    @SuppressWarnings("override")
     public void times(int op1, int op2){
         DatagramPacket requestPacket;
 
         // create pdu
-        
+        try {
+            pdu = new RequestPDU(2, op1, op2);
+        } catch (IllegalFormatException e){
+            System.err.println(e);
+            System.exit(0);
+        }
+
         // create packet
+        requestPacket = new DatagramPacket(pdu.getPDUData(), pdu.getPDUData().length, remoteAddress, remotePortNumber);
 
         // send packet
-        
+        try{
+            datagram.send(requestPacket);
+        } catch (IOException ioe){
+            System.err.println("Could not send data: "+ioe);
+            System.exit(0);
+        }
+
         // update current state
-        currentState = 1;
+        currentState = 1;   
     }
 
+    @SuppressWarnings("override")
     public void div(int op1, int op2){
         DatagramPacket requestPacket;
 
         // create pdu
-        
+        try {
+            pdu = new RequestPDU(3, op1, op2);
+        } catch (IllegalFormatException e){
+            System.err.println(e);
+            System.exit(0);
+        }
+
         // create packet
+        requestPacket = new DatagramPacket(pdu.getPDUData(), pdu.getPDUData().length, remoteAddress, remotePortNumber);
 
         // send packet
-        
+        try{
+            datagram.send(requestPacket);
+        } catch (IOException ioe){
+            System.err.println("Could not send data: "+ioe);
+            System.exit(0);
+        }
+
         // update current state
-        currentState = 1;
+        currentState = 1;   
     }
 
     public void run(){
@@ -101,11 +155,23 @@ public class CalculatorProtocolClient extends Thread implements ServiceInterface
         byte[] buf;                             // Buffer used to store data
         ResponsePDU respPdu = null;             // ResponsePDU
 
+        try {
+            datagram.setSoTimeout(TIMEOUT);
+        } catch (SocketException se){
+            System.err.println("Could not set timeout");
+            System.exit(0);
+        }
+
         while (true){ // check for incoming packets from network
              // Ckeck protocol current state
             switch (currentState){
                 case 0:
 					// sleep
+                    try{
+                        Thread.sleep(1000);
+                    } catch (InterruptedException ie){
+                        System.err.println("Thread interrupted: "+ie);
+                    }
                     break;
                 case 1:
                     buf = new byte[128];
@@ -113,13 +179,25 @@ public class CalculatorProtocolClient extends Thread implements ServiceInterface
                     // try receive Response PDU
                     try{
                         // set timer
-                        datagram.setSoTimeout(TIMEOUT);
                         responsePacket = new DatagramPacket(buf, buf.length);
                         datagram.receive(responsePacket);
 
                         // extracts pdu
+                        try {
+                            respPdu = new ResponsePDU(responsePacket.getData());
+                        } catch (Exception e){
+                            System.err.println(e);
+                            continue;
+                        }
                         
                         // check response
+                        if(respPdu.getRespcode() == 1){
+                            // success
+                            serviceUser.result(respPdu.getResult());
+                        } else {
+                            // failure
+                            serviceUser.error();
+                        }
                         
                         // update state
                         currentState = 0;
@@ -128,9 +206,15 @@ public class CalculatorProtocolClient extends Thread implements ServiceInterface
                     } catch(SocketTimeoutException ste){
                         // timeout - retransmit
                         // create packet
-
-                        // send packet
+                        requestPacket = new DatagramPacket(pdu.getPDUData(), pdu.getPDUData().length, remoteAddress, remotePortNumber);
                         
+                        // send packet
+                        try{
+                            datagram.send(requestPacket);
+                        } catch (IOException ioe){
+                            System.err.println("Could not send data: "+ioe);
+                        }
+
                     } catch (IOException ioe){
                         System.err.println("Could not receive data: "+ioe);
                     }

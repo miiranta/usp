@@ -28,6 +28,7 @@ public class CalculatorClient{
 
 				// create service user 
                 user = new ServiceUser(client);
+                client.setRef(user);
 
                 // start entities
                 client.start();
