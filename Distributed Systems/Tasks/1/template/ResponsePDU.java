@@ -36,7 +36,7 @@ public class ResponsePDU {
     public ResponsePDU(byte[] data) throws IllegalFormatException{
 		String[] elements;
 		
-        pduData = new String(data);
+        pduData = new String(data).trim();
 
         // parse PDU code
         elements = pduData.split(" ");

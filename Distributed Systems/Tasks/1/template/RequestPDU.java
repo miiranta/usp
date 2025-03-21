@@ -38,7 +38,7 @@ public class RequestPDU {
 		
         String[] elements;
 
-        pduData = new String(data);
+        pduData = new String(data).trim();
 
         // parse PDU 
         elements = pduData.split(" ");
