@@ -295,15 +295,15 @@ public class Edge_Detection extends JDialog implements ActionListener, ItemListe
 	 		impSource.setSlice(z+1);
 	 		IJ.showStatus("" + (z+1) + "/" + nz);
 			if (chkSmoothing.isSelected())
-				smooth = (teacher ? TeacherCode.blurring(image, sigma) : CodeClass.blurring(image, sigma));
+				smooth = (teacher ? TeacherCode.blurring(image, sigma) : Code.blurring(image, sigma));
 			else
 				smooth = image.duplicate();
 			
 			if (chkGradient.isSelected())
-				grad = (teacher ? TeacherCode.gradient(smooth) : CodeClass.gradient(smooth));
+				grad = (teacher ? TeacherCode.gradient(smooth) : Code.gradient(smooth));
 			
 			if (chkSuppression.isSelected())
-				thinEdge = (teacher ? TeacherCode.suppressNonMaximum(grad) : CodeClass.suppressNonMaximum(grad));
+				thinEdge = (teacher ? TeacherCode.suppressNonMaximum(grad) : Code.suppressNonMaximum(grad));
 					
 			if (chkThreshold.isSelected())
 				threshold = TeacherCode.doHysteresisThreshold(thinEdge, thresholdLow, thresholdHigh);

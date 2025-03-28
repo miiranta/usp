@@ -1,6 +1,6 @@
 import ij.*; 
 
-public class CodeClass {
+public class Code {
 
 	/**
 	* Implements a gaussian smooth filter with a parameter sigma. 
@@ -10,26 +10,32 @@ public class CodeClass {
 		int ny = input.getHeight();
 		ImageAccess out = new ImageAccess(nx, ny);
 		
-		// Definir o valor de a com base em sigma
-		double a = Math.exp(-0.5 / (sigma * sigma));  // Calcular o pólo com base no sigma
+		// Número de filtros em cascata
+		int N = 3;
+		
+		// Calcula a variância (sigma^2)
+		double variance = sigma * sigma;
+		
+		// Calcular o valor do pólo 'a' com base na relação:
+		// a = ((sigma^2 + N) - sqrt(N*(2*sigma^2 + N)))/sigma^2
+		double a = ((variance + N) - Math.sqrt(N * (2 * variance + N))) / variance;
 		
 		// Definir os pólos do filtro IIR
-		int N = 3;
 		double[] poles = new double[N];
 		for (int i = 0; i < N; i++) {
 			poles[i] = a;
 		}
-
+		
 		// Passo 1: Convolução ao longo das linhas
 		for (int j = 0; j < ny; j++) {
 			double[] row = new double[nx];
 			for (int i = 0; i < nx; i++) {
-				row[i] = input.getPixel(i, j);  // Preencher a linha com os valores de pixel
+				row[i] = input.getPixel(i, j);
 			}
 			// Aplicar convolução 1D na linha
 			double[] blurredRow = Convolver.convolveIIR(row, poles);
 			for (int i = 0; i < nx; i++) {
-				out.setPixel(i, j, blurredRow[i]);  // Definir os valores da linha borrada
+				out.putPixel(i, j, blurredRow[i]);
 			}
 		}
 		
@@ -37,12 +43,22 @@ public class CodeClass {
 		for (int i = 0; i < nx; i++) {
 			double[] col = new double[ny];
 			for (int j = 0; j < ny; j++) {
-				col[j] = out.getPixel(i, j);  // Preencher a coluna com os valores de pixel
+				col[j] = out.getPixel(i, j);
 			}
 			// Aplicar convolução 1D na coluna
 			double[] blurredCol = Convolver.convolveIIR(col, poles);
 			for (int j = 0; j < ny; j++) {
-				out.setPixel(i, j, blurredCol[j]);  // Definir os valores da coluna borrada
+				out.putPixel(i, j, blurredCol[j]);
+			}
+		}
+		
+		// Normalização: compensar o ganho DC da cascata dos filtros.
+		// Para cada direção (linhas e colunas) o ganho é 1/(1-a)^N, portanto o ganho total 2D é 1/(1-a)^(2N)
+		// Multiplicando por scale = (1-a)^(2N) garantimos que o ganho DC seja 1.
+		double scale = Math.pow((1 - a), 2 * N);
+		for (int i = 0; i < nx; i++) {
+			for (int j = 0; j < ny; j++) {
+				out.putPixel(i, j, out.getPixel(i, j) * scale);
 			}
 		}
 		
@@ -55,74 +71,57 @@ public class CodeClass {
 	static public ImageAccess[] gradient(ImageAccess input) {
 		int nx = input.getWidth();
 		int ny = input.getHeight();
-		ImageAccess grad[] = new ImageAccess[3];
 		
-		grad[0] = new ImageAccess(nx, ny);  // Módulo do gradiente
-		grad[1] = new ImageAccess(nx, ny);  // Gradiente em X (gx)
-		grad[2] = new ImageAccess(nx, ny);  // Gradiente em Y (gy)
+		// grad[0] = magnitude, grad[1] = gx, grad[2] = gy
+		ImageAccess[] grad = new ImageAccess[3];
+		grad[0] = new ImageAccess(nx, ny);
+		grad[1] = new ImageAccess(nx, ny);
+		grad[2] = new ImageAccess(nx, ny);
 		
-		// Definir os filtros hx e hy (filtros de Sobel típicos)
-		double[] hx = {-1, 0, 1};  // Filtro de gradiente em X
-		double[] hy = {-1, 0, 1};  // Filtro de gradiente em Y
+		// Filtros (3x3), cada elemento já multiplicado por 1/12
+		double[][] hx = {
+			{ -1.0/12,  0.0,      1.0/12 },
+			{ -4.0/12,  0.0,      4.0/12 },
+			{ -1.0/12,  0.0,      1.0/12 }
+		};
 		
-		// Passo 1: Convolução 1D ao longo das linhas para gx e gy
-		for (int j = 0; j < ny; j++) {
-			double[] rowX = new double[nx];
-			double[] rowY = new double[nx];
-			
-			// Preencher as linhas de entrada para as convoluções
-			for (int i = 0; i < nx; i++) {
-				rowX[i] = input.getPixel(i, j);
-				rowY[i] = input.getPixel(i, j);
-			}
-			
-			// Convolução com hx (gradiente em X)
-			double[] gx = Convolver.convolveIIR(rowX, hx);
-			for (int i = 0; i < nx; i++) {
-				grad[1].setPixel(i, j, gx[i]);  // Armazenar gradiente em X
-			}
-			
-			// Convolução com hy (gradiente em Y)
-			double[] gy = Convolver.convolveIIR(rowY, hy);
-			for (int i = 0; i < nx; i++) {
-				grad[2].setPixel(i, j, gy[i]);  // Armazenar gradiente em Y
+		double[][] hy = {
+			{ -1.0/12, -4.0/12, -1.0/12 },
+			{  0.0,     0.0,     0.0    },
+			{  1.0/12,  4.0/12,  1.0/12 }
+		};
+		
+		// Passo 1: Convolução 2D para gx e gy (ignorando a borda de 1 pixel)
+		for (int y = 1; y < ny - 1; y++) {
+			for (int x = 1; x < nx - 1; x++) {
+				double sumX = 0.0;
+				double sumY = 0.0;
+				
+				// Aplicar cada núcleo 3x3 ao redor do pixel (x,y)
+				for (int ky = -1; ky <= 1; ky++) {
+					for (int kx = -1; kx <= 1; kx++) {
+						double val = input.getPixel(x + kx, y + ky);
+						sumX += val * hx[ky + 1][kx + 1];
+						sumY += val * hy[ky + 1][kx + 1];
+					}
+				}
+				
+				// Armazenar resultados em grad[1] e grad[2]
+				grad[1].putPixel(x, y, sumX);  // gx
+				grad[2].putPixel(x, y, sumY);  // gy
 			}
 		}
 		
-		// Passo 2: Convolução 1D ao longo das colunas para gx e gy
-		for (int i = 0; i < nx; i++) {
-			double[] colX = new double[ny];
-			double[] colY = new double[ny];
-			
-			// Preencher as colunas de entrada para as convoluções
-			for (int j = 0; j < ny; j++) {
-				colX[j] = grad[1].getPixel(i, j);  // Gradiente em X da etapa anterior
-				colY[j] = grad[2].getPixel(i, j);  // Gradiente em Y da etapa anterior
-			}
-			
-			// Convolução com hx (gradiente em X)
-			double[] gx = Convolver.convolveIIR(colX, hx);
-			for (int j = 0; j < ny; j++) {
-				grad[1].setPixel(i, j, gx[j]);  // Armazenar gradiente em X
-			}
-			
-			// Convolução com hy (gradiente em Y)
-			double[] gy = Convolver.convolveIIR(colY, hy);
-			for (int j = 0; j < ny; j++) {
-				grad[2].setPixel(i, j, gy[j]);  // Armazenar gradiente em Y
+		// Passo 2: Calcular o módulo do gradiente (grad[0] = sqrt(gx^2 + gy^2))
+		for (int y = 1; y < ny - 1; y++) {
+			for (int x = 1; x < nx - 1; x++) {
+				double gx = grad[1].getPixel(x, y);
+				double gy = grad[2].getPixel(x, y);
+				double magnitude = Math.sqrt(gx * gx + gy * gy);
+				grad[0].putPixel(x, y, magnitude);
 			}
 		}
 		
-		// Passo 3: Calcular o módulo do gradiente (grad[0] = sqrt(gx^2 + gy^2))
-		for (int i = 0; i < nx; i++) {
-			for (int j = 0; j < ny; j++) {
-				double gx = grad[1].getPixel(i, j);
-				double gy = grad[2].getPixel(i, j);
-				double magnitude = Math.sqrt(gx * gx + gy * gy);  // Módulo do gradiente
-				grad[0].setPixel(i, j, magnitude);
-			}
-		}
-
 		return grad;
 	}
 
@@ -151,7 +150,7 @@ public class CodeClass {
 
 				// Se a magnitude for 0, supressão imediata
 				if (magnitude == 0) {
-					suppressed.setPixel(x, y, 0);
+					suppressed.putPixel(x, y, 0);
 					continue;
 				}
 
@@ -172,9 +171,9 @@ public class CodeClass {
 
 				// Se G(A) for maior que G(A1) e G(A2), manter o valor, caso contrário, suprimir
 				if (magnitude >= ga1 && magnitude >= ga2) {
-					suppressed.setPixel(x, y, magnitude);
+					suppressed.putPixel(x, y, magnitude);
 				} else {
-					suppressed.setPixel(x, y, 0);
+					suppressed.putPixel(x, y, 0);
 				}
 			}
 		}
@@ -183,107 +182,119 @@ public class CodeClass {
 	}
 
 	/**
-	*/
+	 * Computes the horizontal projection gradient for an image.
+	 * First, it computes the projection (sum of intensities for each row),
+	 * then it computes the gradient (difference between successive rows).
+	 */
 	static public double[] computeXProjectionGradient(ImageAccess image) {
-		int ny = image.getHeight();  // Número de linhas (direção Y)
-		int nx = image.getWidth();   // Número de colunas (direção X)
+		int ny = image.getHeight();
+		int nx = image.getWidth();
 		
-		double[] proj = new double[ny];  // Vetor de projeção (um valor por linha)
-
-		// Iterar sobre cada linha da imagem (ao longo da direção Y)
+		// Compute horizontal projection: sum over each row.
+		double[] proj = new double[ny];
 		for (int y = 0; y < ny; y++) {
 			double sum = 0;
-
-			// Somar os valores de intensidade ao longo das colunas (direção X) na linha y
 			for (int x = 0; x < nx; x++) {
-				sum += image.getPixel(x, y);  // Somar o valor de intensidade do pixel (x, y)
+				sum += image.getPixel(x, y);
 			}
-			
-			// Armazenar a soma das intensidades da linha y na projeção
 			proj[y] = sum;
 		}
-
-		// Plotar a projeção (usando o DisplayTools.plot)
-		DisplayTools.plot(proj, "Y", "Intensities");
-
-		return proj;
+		
+		// Compute gradient: difference between consecutive rows.
+		// The gradient array will have length ny - 1.
+		double[] grad = new double[ny - 1];
+		for (int y = 0; y < ny - 1; y++) {
+			grad[y] = proj[y + 1] - proj[y];
+		}
+		
+		// Plot the gradient profile for diagnostic purposes.
+		DisplayTools.plot(grad, "Y", "Gradient");
+		
+		return grad;
 	}
 
 	/**
-	*/
-	static public void measureLevel(ImageAccess sequence[]) {
+	 * Measures the water level in a sequence of images.
+	 * For each image, it:
+	 *  (1) Computes the gradient of the horizontal projection,
+	 *  (2) Finds the first maximum in the gradient (the strongest edge),
+	 *  (3) Finds two maxima that are at least 10 pixels apart,
+	 *      and uses them to determine the water level.
+	 */
+	static public void measureLevel(ImageAccess[] sequence) {
 		int nt = sequence.length;
-		IJ.write("Example of printing values: " + nt);
+		IJ.log("Número de imagens na sequência: " + nt);
 
-		// Iterar sobre cada imagem da sequência
+		// Iterate over each image in the sequence.
 		for (int t = 0; t < nt; t++) {
 			ImageAccess image = sequence[t];
 			
-			// Calcular a projeção de intensidades na direção X
-			double[] projection = computeXProjectionGradient(image);
+			// (1) Compute the gradient of the horizontal projection.
+			double[] gradient = computeXProjectionGradient(image);
 			
-			// 6.2 Detecção do primeiro máximo (ymax)
-			int ymax = findMax(projection);
+			// (2) Detect the first maximum in the gradient.
+			// Add +1 because the gradient array is offset relative to the original image rows.
+			int yMax = findMax(gradient) + 1;
+			IJ.log("Imagem " + t + ": primeiro máximo em y=" + yMax);
+			DisplayTools.drawLine(t, yMax);
 			
-			// Desenhar linha horizontal em ymax
-			DisplayTools.drawLine(t, ymax);
+			// (3) Detect two maxima that are at least 10 pixels apart.
+			int[] twoMax = findTwoMaxima(gradient);
+			int y1 = twoMax[0] + 1;  // adjust index offset
+			int y2 = twoMax[1] + 1;  // adjust index offset
 			
-			// Imprimir ou plotar ymax
-			IJ.write("Máximo da projeção na imagem " + t + ": " + ymax);
+			if (y1 >= 0 && y2 >= 0) {
+				// Draw a rectangle between y1 and y2.
+				DisplayTools.drawLevels(t, y1, y2);
+				
+				// Calculate and log the water level height.
+				int h = y2 - y1;
+				IJ.log("Imagem " + t + ": altura da água = " + h);
+			} else {
+				IJ.log("Imagem " + t + ": não foi possível encontrar dois máximos a >=10 px de distância.");
+			}
 			
-			// 6.3 Detecção dos dois máximos (y1 e y2)
-			int[] twoMax = findTwoMaxima(projection);
-			int y1 = twoMax[0];
-			int y2 = twoMax[1];
-			
-			// Desenhar retângulo entre y1 e y2
-			DisplayTools.drawLevels(t, y1, y2);
-			
-			// Calcular e imprimir as alturas da água h(t)
-			int h = y2 - y1;
-			IJ.write("Altura da água na imagem " + t + ": " + h);
-			
-			// Plotar a projeção
-			DisplayTools.plot(projection, "Y", "Intensities");
+			// (4) Plot the gradient for further diagnosis.
+			DisplayTools.plot(gradient, "Y", "Gradient");
 		}
 	}
 
-	// Função para encontrar o índice do máximo na projeção
-	static private int findMax(double[] projection) {
-		int ymax = 0;
-		double maxVal = projection[0];
-		
-		for (int y = 1; y < projection.length; y++) {
-			if (projection[y] > maxVal) {
-				maxVal = projection[y];
-				ymax = y;
+	/**
+	 * Returns the index of the highest value in an array of doubles.
+	 */
+	static private int findMax(double[] data) {
+		int indexMax = 0;
+		double maxVal = data[0];
+		for (int i = 1; i < data.length; i++) {
+			if (data[i] > maxVal) {
+				maxVal = data[i];
+				indexMax = i;
 			}
 		}
-		
-		return ymax;
+		return indexMax;
 	}
 
-	// Função para encontrar os dois máximos na projeção com pelo menos 10 pixels de distância
-	static private int[] findTwoMaxima(double[] projection) {
+	/**
+	 * Returns the indices of the two largest values that are at least 10 pixels apart.
+	 * If a valid second maximum is not found, returns [-1, -1].
+	 */
+	static private int[] findTwoMaxima(double[] data) {
 		int[] maxima = new int[2];
-		
-		// Encontrar o primeiro máximo
-		maxima[0] = findMax(projection);
-		
-		// Encontrar o segundo máximo com pelo menos 10 pixels de distância
+		maxima[0] = findMax(data);
+
+		// Search for a second maximum with a separation of at least 10 pixels.
 		int secondMax = -1;
-		for (int y = 0; y < projection.length; y++) {
-			if (y != maxima[0] && Math.abs(y - maxima[0]) >= 10) {
-				if (secondMax == -1 || projection[y] > projection[secondMax]) {
-					secondMax = y;
+		for (int i = 0; i < data.length; i++) {
+			if (i != maxima[0] && Math.abs(i - maxima[0]) >= 10) {
+				if (secondMax == -1 || data[i] > data[secondMax]) {
+					secondMax = i;
 				}
 			}
 		}
-		
 		maxima[1] = secondMax;
-		
 		return maxima;
 	}
+
 
 }
 

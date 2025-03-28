@@ -36,7 +36,7 @@ public class Measure_Level {
 			IJ.showStatus("Reading images ...");
 			imp.setSlice(t+1);
 		}
-		CodeClass.measureLevel(sequence);
+		Code.measureLevel(sequence);
 		imp.setSlice(1);		
 	}
 
