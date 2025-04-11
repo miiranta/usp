@@ -10,10 +10,10 @@ public class ChatClient {
 
         try { 
 
-            Registry registry = LocateRegistry.getRegistry("localhost");
+            Registry registry = LocateRegistry.getRegistry("192.168.1.15");
 
             // Lookup object reference associated to the name "ChatInterface"
-            obj = (ChatInterface) registry.lookup("ChatInterface"); 
+            obj = (ChatInterface) registry.lookup("ChatServer"); 
 
             // Create a new MessageInterfaceImpl object
             MessageInterfaceImpl messageRef = new MessageInterfaceImpl();
