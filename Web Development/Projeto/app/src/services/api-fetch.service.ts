@@ -2,13 +2,15 @@ import { Injectable } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { Observable } from 'rxjs';
 
+const BASE_URL = 'http://192.168.1.13:3000';
+
 @Injectable({
   providedIn: 'root'
 })
 export class ApiFetchService {
 
   constructor() {
-    this.socket = io('http://localhost:3000');
+    this.socket = io(BASE_URL);
   }
 
   // WebSocket
@@ -37,7 +39,7 @@ export class ApiFetchService {
 
   // REST
   async getMapTiles(x: number, y: number, render: number){
-    return await fetch(`http://localhost:3000/map/${x}/${y}/${render}`, {
+    return await fetch(`${BASE_URL}/map/${x}/${y}/${render}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -47,7 +49,7 @@ export class ApiFetchService {
   }
 
   async putMapTile(x: number, y: number, type: string){
-    return await fetch(`http://localhost:3000/map/${x}/${y}/${type}`, {
+    return await fetch(`${BASE_URL}/map/${x}/${y}/${type}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
