@@ -1,1 +1,16 @@
-<tiles></tiles>
+@if (welcomeScreen) {
+    <div class="row">
+    <div class="col">
+        <div>
+            <h1>Olá! Qual é seu nome?</h1>
+            <input type="text" [(ngModel)]="name" placeholder="..." />
+            <button (click)="openGame()">></button>
+        </div>
+    </div>
+    </div>
+}
+@else {
+    <tiles [playerId]="name"></tiles>
+}
+
+

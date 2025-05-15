@@ -1,0 +1,47 @@
+.col {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+
+    justify-content: center;
+}
+
+.row {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+
+    justify-content: center;
+}
+
+h1 {
+    font-size: 2rem;
+    font-family: 'Courier New', Courier, monospace;
+    margin: 0;
+    padding: 1rem;
+    text-align: center;
+    background-color: #f8f9fa;
+}
+
+button {
+    margin: 1rem;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+input {
+    margin: 1rem;
+    padding: 0.5rem;
+    font-size: 1rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+}

@@ -1,10 +1,15 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, inject, Input, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+
+import { ApiFetchService } from '../../services/api-fetch.service';
 
 const TICKS_PER_SECOND: number = 1024;
 const TILE_SIZE: number = 100;
+const CHUNK_SIZE: number = 10;
 
 const RENDER_DISTANCE: number = 20;
+
+const DRAW_ALL_MAP: boolean = true;
 
 const COLORS: string[] = [
   'white',
@@ -27,8 +32,10 @@ const COLORS: string[] = [
   styleUrl: './tiles.component.scss'
 })
 export class TilesComponent {
-
   @ViewChild('tiles') tiles: any;
+  @Input() playerId: string = "";
+
+  api: ApiFetchService = inject(ApiFetchService);
 
   coords: any = { x: 0, y: 0 };
   fps: number = 0;
@@ -37,7 +44,7 @@ export class TilesComponent {
   game?: Game = undefined;
 
   ngAfterViewInit() {
-    this.game = new Game(this.tiles);
+    this.game = new Game(this.tiles, this.api, this.playerId);
 
     this.canvasSetSize();
     window.addEventListener('resize', this.canvasSetSize.bind(this));
@@ -68,25 +75,44 @@ export class TilesComponent {
     }
   }
 
-
 }
 
 class Game {
   drawManager: DrawManager = new DrawManager();
   keyManager: KeyManager = new KeyManager();
+  multiplayerManager: MultiplayerManager = new MultiplayerManager();
   
-  map: TileMap = new TileMap();
-  player: Player = new Player();
+  map!: TileMap;
+  player!: Player;
   canvas: any;
+  api: any;
+  playerId: string;
 
-  constructor(canvas: any) {
+  constructor(canvas: any, api: any, playerId: string) {
+    this.playerId = playerId;
+    if(this.playerId == '' || this.playerId == undefined) {
+      playerId = Math.random().toString(36).substring(2, 15);
+      this.playerId = playerId;
+    }
+    
     this.canvas = canvas.nativeElement;
     if(!this.canvas) { return; }
 
+    this.api = api;
+    if(!this.api) { return; }
+
+    this.map = new TileMap(this.api);
+    if(!this.map) { return; }
+
+    this.player = new Player(this.playerId);
+    if(!this.player) { return; }
+
     this.drawManager.setGameTarget(this);
+    this.multiplayerManager.setGameTarget(this);
 
     setInterval(this.gameLoop.bind(this), 1000 / TICKS_PER_SECOND);
     setInterval(this.drawLoop.bind(this), 0);
+    setInterval(this.apiLoop.bind(this), 5);
   }
 
   gameLoop() {
@@ -98,6 +124,71 @@ class Game {
   drawLoop() {
     this.drawManager.clear();
     this.drawManager.draw();
+  }
+
+  apiLoop() {
+    this.multiplayerManager.sendPlayerPosition();
+    this.multiplayerManager.filterOldPlayers();
+    this.multiplayerManager.listenTilePlaced();
+  }
+}
+
+class MultiplayerManager {
+  private game!: Game;
+
+  public all_players: Map<string, Player> = new Map();
+
+  constructor() { 
+    // Do nothing here, please
+  }
+
+  setGameTarget(game: Game) {
+    this.game = game;
+
+    this.listenPlayerPositions();
+  }
+
+  // Player position
+  sendPlayerPosition() {
+    const player_coords = this.game.player.getPositionFloat();
+    this.game.api.sendPlayerPosition(this.game.player.playerId, player_coords.x, player_coords.y);
+  }
+
+  listenPlayerPositions() {
+    this.game.api.on('playerPosition').subscribe((data: any) => {
+      // Test if the player is already in the map
+      if (this.all_players.has(data.playerId)) {
+        var player = this.all_players.get(data.playerId)!;
+        player.x = data.x;
+        player.y = data.y;
+        player.last_update = Date.now();
+      } else {
+        const newPlayer = new Player(data.playerId);
+        newPlayer.x = data.x;
+        newPlayer.y = data.y;
+        newPlayer.last_update = Date.now();
+        this.all_players.set(data.playerId, newPlayer);
+      }
+    });
+  }
+
+  filterOldPlayers() {
+    const now = Date.now();
+    const timeout = 1000; // 1 seconds
+
+    this.all_players.forEach((player, playerId) => {
+      if (now - player.last_update > timeout) {
+        this.all_players.delete(playerId);
+      }
+    });
+  }
+
+  // Tile update
+  listenTilePlaced() {
+    this.game.api.on('tilePlaced').subscribe((data: any) => {
+      const tile = new Tile(data.x, data.y, data.type);
+      this.game.map.setTile(tile.x, tile.y, tile.type);
+    });
   }
 
 }
@@ -141,7 +232,9 @@ class DrawManager {
   private last_draw_time: number = 0;
   fps: number = 0;
 
-  constructor() {}
+  constructor() {
+    // Do nothing here, please
+  }
 
   setGameTarget(game: Game) {
     this.game = game
@@ -150,16 +243,16 @@ class DrawManager {
 
   setScalingFactor(scrollIndex: number) {
     const maxScalingFactor = 2;
-    const minScalingFactor = 0.5;
+    const minScalingFactor = 0.06;
 
     //Speed down
-    this.scale_speed *= 0.8;
+    this.scale_speed *= 0.9;
     if(Math.abs(this.scale_speed) < 0.001) {
       this.scale_speed = 0;
     }
 
     //Speed up
-    this.scale_speed += scrollIndex / 1000;
+    this.scale_speed += scrollIndex / 4000;
 
     //Apply scaling factor
     this.scaling_factor += this.scale_speed;
@@ -214,6 +307,9 @@ class DrawManager {
     // Draw the map
     this.drawMap();
 
+    // Draw other players
+    this.drawOtherPlayers();
+
     // Draw the player
     this.drawPlayer();
   }
@@ -230,16 +326,40 @@ class DrawManager {
 
   }
 
+  drawOtherPlayers() {
+    if (this.ctx) {
+      this.game.multiplayerManager.all_players.forEach((player) => {
+        if(player.playerId == this.game.player.playerId) return;
+
+        const player_coords = player.getPositionFloat();
+        const relative_x = player_coords.x - this.game.player.getPositionFloat().x;
+        const relative_y = player_coords.y - this.game.player.getPositionFloat().y;
+
+        this.ctx.strokeStyle = player.randomRgbColor;
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeRect(relative_x * TILE_SIZE, relative_y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
+        // Draw player ID
+        this.ctx.fillStyle = "black";
+        this.ctx.textAlign = 'center';
+        this.ctx.font = '20px Arial';
+        this.ctx.fillText(player.playerId, relative_x * TILE_SIZE + TILE_SIZE / 2, relative_y * TILE_SIZE - TILE_SIZE/8);
+      });
+    }
+  }
+
   drawMap() {
     if (this.ctx) {
       
       // Render distance - A square with the player in the middle
       const player_coords = this.game.player.getPosition();
 
+      // Draw only the tiles in the render distance
       for (let x = player_coords.x - RENDER_DISTANCE; x < player_coords.x + RENDER_DISTANCE + 1; x++) {
         for (let y = player_coords.y - RENDER_DISTANCE; y < player_coords.y + RENDER_DISTANCE + 1; y++) {
           const tile = this.game.map.getTile(x, y);
 
+          if(DRAW_ALL_MAP) continue;
           // Coords relative to the player - center is 0, 0
           const player_coords_float = this.game.player.getPositionFloat();
           const x_relative = x - player_coords_float.x;
@@ -249,6 +369,17 @@ class DrawManager {
         }
       }
 
+      if(DRAW_ALL_MAP) {
+        // Draw all tiles
+        this.game.map.map.forEach(tile => {
+          const player_coords_float = this.game.player.getPositionFloat();
+          const x_relative = tile.x - player_coords_float.x;
+          const y_relative = tile.y - player_coords_float.y;
+
+          this.drawTile(tile, x_relative, y_relative);
+        });
+      }
+      
     }
   }
 
@@ -279,10 +410,16 @@ class DrawManager {
 class Player {
   private x_speed: number = 0;
   private y_speed: number = 0;
-  private x: number = 0;
-  private y: number = 0;
+  public x: number = 0;
+  public y: number = 0;
+  public playerId: string;
+  public last_update: number = 0;
+  public randomRgbColor: string = '';
 
-  constructor() {}
+  constructor(playerId: string) {
+    this.playerId = playerId;
+    this.randomRgbColor = `rgb(${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)})`;
+  }
 
   getPosition() {
     const x_int = Math.round(this.x);
@@ -356,22 +493,44 @@ class Player {
 }
 
 class TileMap {
-  constructor() {}
+  private api: any;
+  constructor(api: any) {this.api = api;}
+
+  chunkFetchPending: string[] = [];
 
   map: Map<string, Tile> = new Map();
 
   getTile(x: number, y: number) {
-    return this.createTile(x, y);
+    return this.fetchTile(x, y);
   }
 
-  createTile(x: number, y: number) {
+  fetchTile(x: number, y: number) {
     const key = `${x},${y}`;
     if (this.map.has(key)) {
       return this.map.get(key)!;
     }
+
     // Create a new tile and add it to the map
-    const tile = new Tile(x, y);
-    this.map.set(key, tile);
+    const center_x = Math.floor(x / CHUNK_SIZE) * CHUNK_SIZE;
+    const center_y = Math.floor(y / CHUNK_SIZE) * CHUNK_SIZE;
+    const chunk_key = `${center_x},${center_y}`;
+
+    if (!this.chunkFetchPending.includes(chunk_key)) {
+      this.chunkFetchPending.push(chunk_key);
+
+      this.api.getMapTiles(center_x, center_y, CHUNK_SIZE).then(async (response: Response) => {
+        if(response.status == 200) {
+          const json = response.json();
+          json.then((data) => {
+            for (const tileData of data) {
+              const tile = new Tile(tileData.x, tileData.y, tileData.type);
+              this.map.set(`${tile.x},${tile.y}`, tile);
+            }
+            this.chunkFetchPending = this.chunkFetchPending.filter((key) => key !== chunk_key);
+          });
+        }
+      });
+    }
 
     return new Tile(x, y);
   }
@@ -387,24 +546,46 @@ class TileMap {
       tile.type = type;
       this.map.set(key, tile);
     }
+
+    this.api.emit('tilePlaced', { x, y, type });
+    this.api.putMapTile(x, y, type);
+  }
+
+  setTile(x: number, y: number, type: string) {
+    const key = `${x},${y}`;
+    if (this.map.has(key)) {
+      const tile = this.map.get(key)!;
+      tile.type = type;
+    } else {
+      // Create a new tile and add it to the map
+      const tile = new Tile(x, y);
+      tile.type = type;
+      this.map.set(key, tile);
+    }
   }
 
 }
 
 class Tile {
-  type: string = 'white';
-  x: number = 0;
-  y: number = 0;
-  constructor(x: number, y: number) {
+  type = 'white';
+  x = 0;
+  y = 0;
+  
+  constructor(x:number, y:number, type:string='notset') {
     this.x = x;
     this.y = y;
 
-    // Set tile type based on coordinates - grid of white and light gray
-    if ((x % 2 + 2) % 2 === (y % 2 + 2) % 2) {
-      this.type = 'white';
+    if (type == 'notset') {
+        // Set tile type based on coordinates - grid of white and light gray
+        if ((x % 2 + 2) % 2 === (y % 2 + 2) % 2) {
+        this.type = 'white';
+        } else {
+        this.type = 'lightgray';
+        }
     } else {
-      this.type = 'lightgray';
+        this.type = type;
     }
 
   }
+
 }
