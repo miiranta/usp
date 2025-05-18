@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { Observable } from 'rxjs';
 
-const BASE_URL = 'http://192.168.1.13:3000';
+const BASE_URL = 'http://localhost:3000';
 
 @Injectable({
   providedIn: 'root'
