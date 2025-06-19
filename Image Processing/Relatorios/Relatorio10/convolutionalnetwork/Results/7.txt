@@ -1,0 +1,12 @@
+precision    recall  f1-score   support
+
+   AbdomenCT     1.0000    0.9980    0.9990      1024
+   BreastMRI     1.0000    1.0000    1.0000       926
+         CXR     1.0000    0.9990    0.9995      1015
+     ChestCT     0.9970    1.0000    0.9985      1010
+        Hand     1.0000    1.0000    1.0000      1005
+      HeadCT     0.9990    0.9990    0.9990       993
+
+    accuracy                         0.9993      5973
+   macro avg     0.9993    0.9993    0.9993      5973
+weighted avg     0.9993    0.9993    0.9993      5973

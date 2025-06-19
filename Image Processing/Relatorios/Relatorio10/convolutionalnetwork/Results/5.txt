@@ -1,0 +1,348 @@
+Training dataset size: 47029
+Validation dataset size: 5952
+Batch size: 128
+Steps per epoch: 368
+----------
+epoch 1/4
+Step 10/368, train_loss: 0.1997
+Step 10/368, train_loss: 0.1997
+Step 20/368, train_loss: 0.1327
+Step 20/368, train_loss: 0.1327
+Step 30/368, train_loss: 0.1107
+Step 30/368, train_loss: 0.1107
+Step 40/368, train_loss: 0.0563
+Step 40/368, train_loss: 0.0563
+Step 50/368, train_loss: 0.1895
+Step 50/368, train_loss: 0.1895
+Step 60/368, train_loss: 0.0440
+Step 60/368, train_loss: 0.0440
+Step 70/368, train_loss: 0.0300
+Step 70/368, train_loss: 0.0300
+Step 80/368, train_loss: 0.0476
+Step 80/368, train_loss: 0.0476
+Step 90/368, train_loss: 0.0703
+Step 90/368, train_loss: 0.0703
+Step 100/368, train_loss: 0.0776
+Step 100/368, train_loss: 0.0776
+Step 110/368, train_loss: 0.0904
+Step 110/368, train_loss: 0.0904
+Step 120/368, train_loss: 0.0118
+Step 120/368, train_loss: 0.0118
+Step 130/368, train_loss: 0.0331
+Step 130/368, train_loss: 0.0331
+Step 140/368, train_loss: 0.0165
+Step 140/368, train_loss: 0.0165
+Step 150/368, train_loss: 0.0289
+Step 150/368, train_loss: 0.0289
+Step 160/368, train_loss: 0.0073
+Step 160/368, train_loss: 0.0073
+Step 170/368, train_loss: 0.0447
+Step 170/368, train_loss: 0.0447
+Step 180/368, train_loss: 0.0037
+Step 180/368, train_loss: 0.0037
+Step 190/368, train_loss: 0.0017
+Step 190/368, train_loss: 0.0017
+Step 200/368, train_loss: 0.0547
+Step 200/368, train_loss: 0.0547
+Step 210/368, train_loss: 0.0268
+Step 210/368, train_loss: 0.0268
+Step 220/368, train_loss: 0.0176
+Step 220/368, train_loss: 0.0176
+Step 230/368, train_loss: 0.0117
+Step 230/368, train_loss: 0.0117
+Step 240/368, train_loss: 0.0353
+Step 240/368, train_loss: 0.0353
+Step 250/368, train_loss: 0.0146
+Step 250/368, train_loss: 0.0146
+Step 260/368, train_loss: 0.0086
+Step 260/368, train_loss: 0.0086
+Step 270/368, train_loss: 0.0184
+Step 270/368, train_loss: 0.0184
+Step 280/368, train_loss: 0.0226
+Step 280/368, train_loss: 0.0226
+Step 290/368, train_loss: 0.0091
+Step 290/368, train_loss: 0.0091
+Step 300/368, train_loss: 0.0232
+Step 300/368, train_loss: 0.0232
+Step 310/368, train_loss: 0.0107
+Step 310/368, train_loss: 0.0107
+Step 320/368, train_loss: 0.0249
+Step 320/368, train_loss: 0.0249
+Step 330/368, train_loss: 0.0689
+Step 330/368, train_loss: 0.0689
+Step 340/368, train_loss: 0.0079
+Step 340/368, train_loss: 0.0079
+Step 350/368, train_loss: 0.0217
+Step 350/368, train_loss: 0.0217
+Step 360/368, train_loss: 0.0016
+Step 360/368, train_loss: 0.0016
+Step 368/368, train_loss: 0.0151
+epoch 1 average loss: 0.0617
+Starting validation...
+Step 368/368, train_loss: 0.0151
+epoch 1 average loss: 0.0617
+Starting validation...
+saved new best metric model
+current epoch: 1 current AUC: 0.9998 current accuracy: 0.9772 best AUC: 0.9772 at epoch: 1
+----------
+epoch 2/4
+saved new best metric model
+current epoch: 1 current AUC: 0.9998 current accuracy: 0.9772 best AUC: 0.9772 at epoch: 1
+----------
+epoch 2/4
+Step 10/368, train_loss: 0.0341
+Step 10/368, train_loss: 0.0341
+Step 20/368, train_loss: 0.0033
+Step 20/368, train_loss: 0.0033
+Step 30/368, train_loss: 0.0169
+Step 30/368, train_loss: 0.0169
+Step 40/368, train_loss: 0.0295
+Step 40/368, train_loss: 0.0295
+Step 50/368, train_loss: 0.0045
+Step 50/368, train_loss: 0.0045
+Step 60/368, train_loss: 0.0666
+Step 60/368, train_loss: 0.0666
+Step 70/368, train_loss: 0.0062
+Step 70/368, train_loss: 0.0062
+Step 80/368, train_loss: 0.0436
+Step 80/368, train_loss: 0.0436
+Step 90/368, train_loss: 0.0036
+Step 90/368, train_loss: 0.0036
+Step 100/368, train_loss: 0.0277
+Step 100/368, train_loss: 0.0277
+Step 110/368, train_loss: 0.0336
+Step 110/368, train_loss: 0.0336
+Step 120/368, train_loss: 0.0118
+Step 120/368, train_loss: 0.0118
+Step 130/368, train_loss: 0.0144
+Step 130/368, train_loss: 0.0144
+Step 140/368, train_loss: 0.0017
+Step 140/368, train_loss: 0.0017
+Step 150/368, train_loss: 0.0201
+Step 150/368, train_loss: 0.0201
+Step 160/368, train_loss: 0.0022
+Step 160/368, train_loss: 0.0022
+Step 170/368, train_loss: 0.0153
+Step 170/368, train_loss: 0.0153
+Step 180/368, train_loss: 0.0382
+Step 180/368, train_loss: 0.0382
+Step 190/368, train_loss: 0.0042
+Step 190/368, train_loss: 0.0042
+Step 200/368, train_loss: 0.0043
+Step 200/368, train_loss: 0.0043
+Step 210/368, train_loss: 0.0256
+Step 210/368, train_loss: 0.0256
+Step 220/368, train_loss: 0.0215
+Step 220/368, train_loss: 0.0215
+Step 230/368, train_loss: 0.0060
+Step 230/368, train_loss: 0.0060
+Step 240/368, train_loss: 0.0034
+Step 240/368, train_loss: 0.0034
+Step 250/368, train_loss: 0.0038
+Step 250/368, train_loss: 0.0038
+Step 260/368, train_loss: 0.0217
+Step 260/368, train_loss: 0.0217
+Step 270/368, train_loss: 0.0455
+Step 270/368, train_loss: 0.0455
+Step 280/368, train_loss: 0.0274
+Step 280/368, train_loss: 0.0274
+Step 290/368, train_loss: 0.0297
+Step 290/368, train_loss: 0.0297
+Step 300/368, train_loss: 0.0019
+Step 300/368, train_loss: 0.0019
+Step 310/368, train_loss: 0.0192
+Step 310/368, train_loss: 0.0192
+Step 320/368, train_loss: 0.0073
+Step 320/368, train_loss: 0.0073
+Step 330/368, train_loss: 0.0877
+Step 330/368, train_loss: 0.0877
+Step 340/368, train_loss: 0.0052
+Step 340/368, train_loss: 0.0052
+Step 350/368, train_loss: 0.0353
+Step 350/368, train_loss: 0.0353
+Step 360/368, train_loss: 0.0037
+Step 360/368, train_loss: 0.0037
+Step 368/368, train_loss: 0.0045
+epoch 2 average loss: 0.0198
+Starting validation...
+Step 368/368, train_loss: 0.0045
+epoch 2 average loss: 0.0198
+Starting validation...
+saved new best metric model
+current epoch: 2 current AUC: 1.0000 current accuracy: 0.9982 best AUC: 0.9982 at epoch: 2
+----------
+epoch 3/4
+saved new best metric model
+current epoch: 2 current AUC: 1.0000 current accuracy: 0.9982 best AUC: 0.9982 at epoch: 2
+----------
+epoch 3/4
+Step 10/368, train_loss: 0.0019
+Step 10/368, train_loss: 0.0019
+Step 20/368, train_loss: 0.0018
+Step 20/368, train_loss: 0.0018
+Step 30/368, train_loss: 0.0021
+Step 30/368, train_loss: 0.0021
+Step 40/368, train_loss: 0.0197
+Step 40/368, train_loss: 0.0197
+Step 50/368, train_loss: 0.0015
+Step 50/368, train_loss: 0.0015
+Step 60/368, train_loss: 0.0012
+Step 60/368, train_loss: 0.0012
+Step 70/368, train_loss: 0.0039
+Step 70/368, train_loss: 0.0039
+Step 80/368, train_loss: 0.0030
+Step 80/368, train_loss: 0.0030
+Step 90/368, train_loss: 0.0058
+Step 90/368, train_loss: 0.0058
+Step 100/368, train_loss: 0.0040
+Step 100/368, train_loss: 0.0040
+Step 110/368, train_loss: 0.0004
+Step 110/368, train_loss: 0.0004
+Step 120/368, train_loss: 0.0031
+Step 120/368, train_loss: 0.0031
+Step 130/368, train_loss: 0.0008
+Step 130/368, train_loss: 0.0008
+Step 140/368, train_loss: 0.0003
+Step 140/368, train_loss: 0.0003
+Step 150/368, train_loss: 0.0019
+Step 150/368, train_loss: 0.0019
+Step 160/368, train_loss: 0.0119
+Step 160/368, train_loss: 0.0119
+Step 170/368, train_loss: 0.0303
+Step 170/368, train_loss: 0.0303
+Step 180/368, train_loss: 0.0040
+Step 180/368, train_loss: 0.0040
+Step 190/368, train_loss: 0.0209
+Step 190/368, train_loss: 0.0209
+Step 200/368, train_loss: 0.0020
+Step 200/368, train_loss: 0.0020
+Step 210/368, train_loss: 0.0072
+Step 210/368, train_loss: 0.0072
+Step 220/368, train_loss: 0.0007
+Step 220/368, train_loss: 0.0007
+Step 230/368, train_loss: 0.0043
+Step 230/368, train_loss: 0.0043
+Step 240/368, train_loss: 0.0096
+Step 240/368, train_loss: 0.0096
+Step 250/368, train_loss: 0.0012
+Step 250/368, train_loss: 0.0012
+Step 260/368, train_loss: 0.0028
+Step 260/368, train_loss: 0.0028
+Step 270/368, train_loss: 0.0026
+Step 270/368, train_loss: 0.0026
+Step 280/368, train_loss: 0.0096
+Step 280/368, train_loss: 0.0096
+Step 290/368, train_loss: 0.0101
+Step 290/368, train_loss: 0.0101
+Step 300/368, train_loss: 0.0212
+Step 300/368, train_loss: 0.0212
+Step 310/368, train_loss: 0.0039
+Step 310/368, train_loss: 0.0039
+Step 320/368, train_loss: 0.0481
+Step 320/368, train_loss: 0.0481
+Step 330/368, train_loss: 0.0023
+Step 330/368, train_loss: 0.0023
+Step 340/368, train_loss: 0.0400
+Step 340/368, train_loss: 0.0400
+Step 350/368, train_loss: 0.0643
+Step 350/368, train_loss: 0.0643
+Step 360/368, train_loss: 0.0008
+Step 360/368, train_loss: 0.0008
+Step 368/368, train_loss: 0.0118
+epoch 3 average loss: 0.0134
+Starting validation...
+Step 368/368, train_loss: 0.0118
+epoch 3 average loss: 0.0134
+Starting validation...
+saved new best metric model
+current epoch: 3 current AUC: 1.0000 current accuracy: 0.9988 best AUC: 0.9988 at epoch: 3
+----------
+epoch 4/4
+saved new best metric model
+current epoch: 3 current AUC: 1.0000 current accuracy: 0.9988 best AUC: 0.9988 at epoch: 3
+----------
+epoch 4/4
+Step 10/368, train_loss: 0.0014
+Step 10/368, train_loss: 0.0014
+Step 20/368, train_loss: 0.0012
+Step 20/368, train_loss: 0.0012
+Step 30/368, train_loss: 0.0053
+Step 30/368, train_loss: 0.0053
+Step 40/368, train_loss: 0.0027
+Step 40/368, train_loss: 0.0027
+Step 50/368, train_loss: 0.0132
+Step 50/368, train_loss: 0.0132
+Step 60/368, train_loss: 0.0004
+Step 60/368, train_loss: 0.0004
+Step 70/368, train_loss: 0.0020
+Step 70/368, train_loss: 0.0020
+Step 80/368, train_loss: 0.0139
+Step 80/368, train_loss: 0.0139
+Step 90/368, train_loss: 0.0019
+Step 90/368, train_loss: 0.0019
+Step 100/368, train_loss: 0.0255
+Step 100/368, train_loss: 0.0255
+Step 110/368, train_loss: 0.0048
+Step 110/368, train_loss: 0.0048
+Step 120/368, train_loss: 0.0006
+Step 120/368, train_loss: 0.0006
+Step 130/368, train_loss: 0.0151
+Step 130/368, train_loss: 0.0151
+Step 140/368, train_loss: 0.0012
+Step 140/368, train_loss: 0.0012
+Step 150/368, train_loss: 0.0096
+Step 150/368, train_loss: 0.0096
+Step 160/368, train_loss: 0.0026
+Step 160/368, train_loss: 0.0026
+Step 170/368, train_loss: 0.0013
+Step 170/368, train_loss: 0.0013
+Step 180/368, train_loss: 0.0049
+Step 180/368, train_loss: 0.0049
+Step 190/368, train_loss: 0.0014
+Step 190/368, train_loss: 0.0014
+Step 200/368, train_loss: 0.0191
+Step 200/368, train_loss: 0.0191
+Step 210/368, train_loss: 0.0053
+Step 210/368, train_loss: 0.0053
+Step 220/368, train_loss: 0.0009
+Step 220/368, train_loss: 0.0009
+Step 230/368, train_loss: 0.0018
+Step 230/368, train_loss: 0.0018
+Step 240/368, train_loss: 0.0392
+Step 240/368, train_loss: 0.0392
+Step 250/368, train_loss: 0.0002
+Step 250/368, train_loss: 0.0002
+Step 260/368, train_loss: 0.0004
+Step 260/368, train_loss: 0.0004
+Step 270/368, train_loss: 0.0011
+Step 270/368, train_loss: 0.0011
+Step 280/368, train_loss: 0.0007
+Step 280/368, train_loss: 0.0007
+Step 290/368, train_loss: 0.0066
+Step 290/368, train_loss: 0.0066
+Step 300/368, train_loss: 0.0013
+Step 300/368, train_loss: 0.0013
+Step 310/368, train_loss: 0.0040
+Step 310/368, train_loss: 0.0040
+Step 320/368, train_loss: 0.0010
+Step 320/368, train_loss: 0.0010
+Step 330/368, train_loss: 0.0142
+Step 330/368, train_loss: 0.0142
+Step 340/368, train_loss: 0.0008
+Step 340/368, train_loss: 0.0008
+Step 350/368, train_loss: 0.0031
+Step 350/368, train_loss: 0.0031
+Step 360/368, train_loss: 0.0131
+Step 360/368, train_loss: 0.0131
+Step 368/368, train_loss: 0.0011
+epoch 4 average loss: 0.0096
+Starting validation...
+Step 368/368, train_loss: 0.0011
+epoch 4 average loss: 0.0096
+Starting validation...
+saved new best metric model
+current epoch: 4 current AUC: 1.0000 current accuracy: 0.9992 best AUC: 0.9992 at epoch: 4
+train completed, best_metric: 0.9992 at epoch: 4
+saved new best metric model
+current epoch: 4 current AUC: 1.0000 current accuracy: 0.9992 best AUC: 0.9992 at epoch: 4
+train completed, best_metric: 0.9992 at epoch: 4

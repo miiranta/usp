@@ -1,0 +1,58 @@
+MONAI version: 1.6.dev2524
+Numpy version: 2.3.0
+Pytorch version: 2.6.0+cu126
+MONAI flags: HAS_EXT = False, USE_COMPILED = False, USE_META_DICT = False
+MONAI rev id: 1be81d981f92f8fa2fb1c27dfe5dad8c2e371624
+MONAI __file__: C:\Users\<username>\AppData\Roaming\Python\Python312\site-packages\monai\__init__.py
+
+Optional dependencies:
+Pytorch Ignite version: NOT INSTALLED or UNKNOWN VERSION.
+Numpy version: 2.3.0
+Pytorch version: 2.6.0+cu126
+MONAI flags: HAS_EXT = False, USE_COMPILED = False, USE_META_DICT = False
+MONAI rev id: 1be81d981f92f8fa2fb1c27dfe5dad8c2e371624
+MONAI __file__: C:\Users\<username>\AppData\Roaming\Python\Python312\site-packages\monai\__init__.py
+
+Optional dependencies:
+Pytorch Ignite version: NOT INSTALLED or UNKNOWN VERSION.
+ITK version: 5.4.3
+Nibabel version: 5.3.2
+scikit-image version: NOT INSTALLED or UNKNOWN VERSION.
+scipy version: 1.15.3
+Pillow version: 11.0.0
+Tensorboard version: NOT INSTALLED or UNKNOWN VERSION.
+gdown version: 5.2.0
+TorchVision version: 0.21.0+cu126
+tqdm version: 4.67.1
+lmdb version: NOT INSTALLED or UNKNOWN VERSION.
+psutil version: 7.0.0
+pandas version: NOT INSTALLED or UNKNOWN VERSION.
+ITK version: 5.4.3
+Nibabel version: 5.3.2
+scikit-image version: NOT INSTALLED or UNKNOWN VERSION.
+scipy version: 1.15.3
+Pillow version: 11.0.0
+Tensorboard version: NOT INSTALLED or UNKNOWN VERSION.
+gdown version: 5.2.0
+TorchVision version: 0.21.0+cu126
+tqdm version: 4.67.1
+lmdb version: NOT INSTALLED or UNKNOWN VERSION.
+psutil version: 7.0.0
+pandas version: NOT INSTALLED or UNKNOWN VERSION.
+einops version: NOT INSTALLED or UNKNOWN VERSION.
+transformers version: NOT INSTALLED or UNKNOWN VERSION.
+mlflow version: NOT INSTALLED or UNKNOWN VERSION.
+pynrrd version: NOT INSTALLED or UNKNOWN VERSION.
+clearml version: NOT INSTALLED or UNKNOWN VERSION.
+
+For details about installing the optional dependencies, please visit:
+    https://docs.monai.io/en/latest/installation.html#installing-the-recommended-dependencies
+
+einops version: NOT INSTALLED or UNKNOWN VERSION.
+transformers version: NOT INSTALLED or UNKNOWN VERSION.
+mlflow version: NOT INSTALLED or UNKNOWN VERSION.
+pynrrd version: NOT INSTALLED or UNKNOWN VERSION.
+clearml version: NOT INSTALLED or UNKNOWN VERSION.
+
+For details about installing the optional dependencies, please visit:
+    https://docs.monai.io/en/latest/installation.html#installing-the-recommended-dependencies

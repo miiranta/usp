@@ -1,0 +1,4 @@
+Total image count: 58954
+Image dimensions: 64 x 64
+Label names: ['AbdomenCT', 'BreastMRI', 'CXR', 'ChestCT', 'Hand', 'HeadCT']
+Label counts: [10000, 8954, 10000, 10000, 10000, 10000]
