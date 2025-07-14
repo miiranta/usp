@@ -1,0 +1,26 @@
+@startuml UC013
+!theme plain
+
+actor User
+participant System
+
+User -> System : click "Undo"
+
+alt Previous state exists
+    System -> System : restore previous photo state
+    System -> System : update display
+    System -> System : enable "Redo" button
+    System --> User : previous state restored
+    
+    opt User wants to redo
+        User -> System : click "Redo"
+        System -> System : restore next state
+        System --> User : changes restored
+    end
+else No previous state
+    System --> User : undo button disabled
+end
+
+note right of System: System maintains\noperation history stack
+
+@enduml

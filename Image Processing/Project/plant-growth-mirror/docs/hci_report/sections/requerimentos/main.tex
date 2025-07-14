@@ -1,0 +1,56 @@
+% Configuração para numeração 1, 1.1, 1.1.1 nos níveis dos enumerate
+\renewcommand{\theenumi}{\arabic{enumi}}
+\renewcommand{\theenumii}{\theenumi.\arabic{enumii}}
+\renewcommand{\theenumiii}{\theenumii.\arabic{enumiii}}
+\renewcommand{\labelenumiv}{\theenumiii.\arabic{enumiv}}
+
+
+\chapter{Requisitos}
+
+\begin{enumerate}
+    \item \textbf{Imagens}
+    \begin{enumerate}
+        \item O usuário deve poder fazer upload de uma ou mais imagens por vez.
+        \item O usuário deve conseguir associar imagens a coleções.
+        \item O sistema deve ser personalizável com configurações de processamento.
+        \begin{enumerate}
+            \item O usuário deve conseguir sobrescrever as configurações antes do processamento. 
+            \item As configurações são: granularidade da segmentação, Threshold de verde aceitável.
+            \item As configurações definidas devem ser salvas e utilizadas por padrão na próxima execução.
+        \end{enumerate}
+        \item O usuário deve conseguir associar uma data a cada imagem.
+        \begin{enumerate}
+            \item A data é pré-preenchida na seguinte ordem de precedência:
+            \begin{enumerate}
+                \item Data presente nos metadados da imagem, ou
+                \item Data de hoje, se 1 não estiver disponível
+            \end{enumerate}
+            \item O usuário deve poder sobrescrever esse valor pré-definido, se desejar.
+        \end{enumerate}
+        \item O usuário deve conseguir visualizar os resultados do processamento da imagem, inclusive durante a definição de configurações.
+        \begin{enumerate}
+            \item O resultado final é composto pela imagem inicial, imagem final e os dados: altura, largura e área.
+        \end{enumerate}
+        \item O usuário deve ser capaz de editar as configurações e a data de uma imagem após a confirmação do resultado.
+        \item O usuário deve poder deletar uma imagem.
+    \end{enumerate}
+    \item \textbf{Coleções}
+    \begin{enumerate}
+        \item O usuário deve conseguir criar uma nova coleção.
+        \begin{enumerate}
+            \item A coleção é definida por um nome e zero ou mais imagens associadas a essa coleção.
+        \end{enumerate}
+        \item O usuário deve conseguir visualizar uma coleção e seus dados.
+        \begin{enumerate}
+            \item Acessar individualmente cada imagem.
+            \item Acessar os gráficos de evolução daquela coleção.
+            \begin{enumerate}
+                \item Os gráficos são agregações dos dados individuais de cada imagem (vide 1.5.1) no tempo.
+            \end{enumerate}
+        \end{enumerate}
+        \item O usuário deve conseguir excluir uma coleção existente.
+        \item O usuário deve conseguir renomear uma coleção.
+        \item O usuário deve conseguir associar imagens a coleções.
+        \item O usuário deve conseguir remover imagens específicas de uma coleção.
+    \end{enumerate}
+\end{enumerate}

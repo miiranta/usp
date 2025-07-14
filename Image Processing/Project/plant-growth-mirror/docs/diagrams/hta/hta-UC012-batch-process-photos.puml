@@ -1,0 +1,13 @@
+@startwbs UC012
+* 0. Batch process photos
+** 1. Open editor
+*** 1.1 Select photos\nor click "Open all in editor"
+** 2. Set mode
+*** 2.1 Select "Process All"
+** 3. Set parameters
+*** 3.1 Adjust sliders
+** 4. Click "Process All"
+** 5. Review results
+*** 5.1 Watch progress
+*** 5.2 Check results
+@endwbs

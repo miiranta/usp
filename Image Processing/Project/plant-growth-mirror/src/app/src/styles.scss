@@ -1,0 +1,17 @@
+p,
+h1,
+h2 {
+  font-family: "Open Sans", sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden; /* Prevent body scrolling */
+}
+
+body {
+  padding-top: 48px;
+}

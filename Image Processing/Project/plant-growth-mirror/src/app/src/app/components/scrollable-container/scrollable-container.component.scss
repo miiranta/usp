@@ -1,0 +1,41 @@
+::ng-deep app-scrollable-container {
+  top: -48px; /* Updated to match current titlebar height */
+  position: relative;
+}
+
+.scrollable-container {
+  height: calc(
+    100vh - 48px
+  ); /* Full viewport height minus current titlebar height */
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  top: 0;
+  left: 0;
+
+  /* Smooth scrolling */
+  scroll-behavior: smooth;
+
+  /* Custom scrollbar styling for better UX */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+
+    &:hover {
+      background: #a1a1a1;
+    }
+  }
+
+  /* For Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}

@@ -1,0 +1,24 @@
+@startuml UC003
+!theme plain
+
+actor User
+participant System
+
+User -> System : select photo
+User -> System : click assign to collection
+System -> System : show collection selector
+
+alt Select existing collection
+    User -> System : choose collection
+    System -> System : update photo assignment
+    System --> User : confirm assignment
+else Create new collection
+    User -> System : create new collection
+    System -> System : create collection & assign photo
+    System --> User : confirm assignment
+else Cancel
+    User -> System : cancel
+    System --> User : no changes
+end
+
+@enduml

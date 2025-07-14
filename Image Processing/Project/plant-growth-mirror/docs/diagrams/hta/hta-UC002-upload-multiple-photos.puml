@@ -1,0 +1,9 @@
+@startwbs UC002
+* 0. Upload multiple photos
+** 1. Open upload area
+*** 1.1 Click "Select Images"\nor drag photos
+** 2. Choose files
+** 3. (Optional) Remove file
+** 4. Click "Upload All"
+** 5. View in gallery
+@endwbs

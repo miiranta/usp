@@ -1,0 +1,42 @@
+<div class="view-collection-container">
+  <div class="collection-header">
+    <div class="collection-selector-wrapper">
+      <div class="collection-selector-row">
+        <span class="collection-label">Showing collection:</span>
+        <app-manage-collections
+          #manageCollections
+          [hideRedirectButton]="true"
+          (selectionChange)="onCollectionChanged($event)"
+          (collectionCreated)="onCollectionChanged($event)"
+        >
+        </app-manage-collections>
+      </div>
+    </div>
+  </div>
+
+  @if (currentCollection) {
+    <app-edit-collection
+      [collection]="currentCollection"
+      (collectionUpdated)="onCollectionUpdated($event)"
+    >
+    </app-edit-collection>
+    <app-list-collection-photos
+      [collection]="currentCollection"
+      (photosLoaded)="onPhotosLoaded($event)"
+      (collectionUpdated)="onCollectionUpdated($event)"
+    >
+    </app-list-collection-photos>
+    <app-show-graphs
+      [collection]="currentCollection"
+      [photos]="collectionPhotos"
+    >
+    </app-show-graphs>
+  } @else {
+    <div class="no-collection-message">
+      <h2>No Collection Selected</h2>
+      <p>
+        Please select a collection from the dropdown above to view its details.
+      </p>
+    </div>
+  }
+</div>

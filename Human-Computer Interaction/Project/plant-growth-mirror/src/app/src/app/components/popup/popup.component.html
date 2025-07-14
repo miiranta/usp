@@ -1,0 +1,26 @@
+@if (popupVisible) {
+  <div
+    class="popup-backdrop"
+    [class.visible]="popupVisible"
+    [class.hiding]="isHiding"
+    [ngStyle]="getPopupStyle()"
+    (click)="hidePopup()"
+  >
+    <div class="popup-content" (click)="$event.stopPropagation()">
+      <button class="close-btn" (click)="hidePopup()">&times;</button>
+
+      <div class="popup-body"><p [innerHTML]="popupData"></p></div>
+
+      @if (timer > 0) {
+        <div class="popup-timer-bar">
+          <div
+            class="progress"
+            [style.animation-duration.ms]="timer"
+            [class.progress-animate]="popupVisible"
+            (animationend)="onBarFinished()"
+          ></div>
+        </div>
+      }
+    </div>
+  </div>
+}

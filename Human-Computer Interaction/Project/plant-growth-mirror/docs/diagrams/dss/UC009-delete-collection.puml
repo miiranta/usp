@@ -1,0 +1,21 @@
+@startuml UC009
+!theme plain
+
+actor User
+participant System
+
+User -> System : select collection
+User -> System : click delete
+System -> System : show warning (photos will remain unassigned)
+
+alt Confirm deletion
+    User -> System : confirm
+    System -> System : delete collection
+    System -> System : unassign all photos
+    System --> User : collection deleted, photos preserved
+else Cancel
+    User -> System : cancel
+    System --> User : no deletion
+end
+
+@enduml

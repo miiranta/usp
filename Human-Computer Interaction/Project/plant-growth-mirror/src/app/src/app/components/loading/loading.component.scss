@@ -1,0 +1,137 @@
+@use "sass:math";
+
+$leaf-color: #22c55e;
+$bg-color: rgba(121, 255, 133, 0.551);
+$text-color: #ffffff;
+
+.loader-wrapper {
+  text-align: center;
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 100vw;
+  z-index: 5;
+  overflow: hidden;
+
+  background-color: $bg-color;
+
+  p {
+    color: $text-color;
+    font-size: 2.2rem;
+    margin-top: 2rem;
+    animation: pulseText 2s ease-in-out infinite;
+  }
+}
+
+.text-container {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  p {
+    color: #4caf50;
+    font-size: 1.2rem;
+    font-weight: 600;
+    text-align: center;
+    margin: 0;
+    padding: 1rem 2rem;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    animation: pulseText 2s ease-in-out infinite;
+    min-height: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.leaf-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.leaf {
+  position: absolute;
+  top: -50px;
+  width: 20px;
+  height: 20px;
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 24 24' fill='%2322c55e' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 2C6.48 3.81 2 8.94 2 14.76c0 3.31 2.69 6 6 6 5.52 0 10-5.12 10-10.94 0-3.34-1.66-6.32-4.28-8.1z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  animation-name: fall1;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  opacity: 0.8;
+}
+
+@for $i from 1 through 12 {
+  .leaf:nth-child(#{$i}) {
+    left: math.random(100) * 1%;
+    animation-duration: #{math.random(6) + 4}s;
+    animation-delay: -#{math.random(6)}s;
+    transform: scale(#{0.6 + math.random(5) * 0.1});
+    animation-name: fall#{math.random(3)};
+  }
+}
+
+@keyframes fall1 {
+  0% {
+    transform: translateY(0) translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(50vh) translateX(-20px) rotate(180deg);
+  }
+  100% {
+    transform: translateY(100vh) translateX(0px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes fall2 {
+  0% {
+    transform: translateY(0) translateX(0px) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(60vh) translateX(30px) rotate(150deg);
+  }
+  100% {
+    transform: translateY(100vh) translateX(-10px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes fall3 {
+  0% {
+    transform: translateY(0) translateX(0px) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(40vh) translateX(-30px) rotate(180deg);
+  }
+  100% {
+    transform: translateY(100vh) translateX(10px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes pulseText {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}

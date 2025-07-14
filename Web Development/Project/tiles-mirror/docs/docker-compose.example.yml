@@ -1,0 +1,46 @@
+services:
+  # MongoDB database
+  mongodb:
+    image: mongo:7.0
+    container_name: tiles-mongodb-prod
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: tilesadmin
+      MONGO_INITDB_ROOT_PASSWORD: YOUR_MONGO_PASSWORD # Replace YOUR_MONGO_PASSWORD with a secure password
+      MONGO_INITDB_DATABASE: tiles
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - tiles-network
+
+  # Tiles application
+  tiles-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tiles-app-prod
+    restart: always
+    environment:
+      MONGODB_CONNECTION_STRING: "mongodb://tilesadmin:YOUR_MONGO_PASSWORD@mongodb:27017/tiles?authSource=admin" # Replace YOUR_MONGO_PASSWORD
+      JWT_SECRET: "YOUR_JWT_SECRET" #
+      PORT: "YOUR_PORT" #e.g. 3000
+      DOMAIN: "YOUR_DOMAIN" #e.g. tiles.luvas.io or localhost
+      SSL: "false || true" # Set to 'true' if you want to use SSL
+      EMAIL: "EXAMPLE@EMAIL.COM" #
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - mongodb
+    volumes:
+      - ./api/greenlock.d:/app/api/greenlock.d
+    networks:
+      - tiles-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  tiles-network:
+    driver: bridge

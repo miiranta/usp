@@ -1,0 +1,85 @@
+<div class="upload-container">
+  <div class="upload-info">
+    <p class="accepted-formats">
+      <strong>Accepted formats:</strong> JPG, JPEG, PNG, GIF, WebP, TIFF, BMP
+    </p>
+  </div>
+
+  <div class="upload-main">
+    <div
+      class="dropzone"
+      [class.drag-over]="isDragOver"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave($event)"
+      (drop)="onDrop($event)"
+    >
+      <div class="content">
+        <p>Drag &amp; drop images here, or</p>
+        <label class="upload-button">
+          Select Images
+          <input
+            type="file"
+            multiple
+            [accept]="acceptedFormats.join(',')"
+            (change)="onFilesSelected($event)"
+            hidden
+          />
+        </label>
+      </div>
+    </div>
+    @if (files.length > 0) {
+      <div class="file-list">
+        <div class="file-list-header">
+          <span class="file-counter"
+            >{{ files.length }} file{{
+              files.length !== 1 ? "s" : ""
+            }}
+            selected</span
+          >
+          <button
+            class="clear-all-btn"
+            (click)="clearFiles()"
+            title="Clear all files"
+          >
+            Clear All Files
+          </button>
+        </div>
+        <div class="file-item" *ngFor="let file of files; let i = index">
+          <span class="file-name">{{ file.name }}</span>
+          <button class="remove-btn" (click)="removeFile(i)">&times;</button>
+        </div>
+      </div>
+    }
+  </div>
+
+  @if (files.length > 0) {
+    <button class="upload-btn" (click)="uploadFiles()">Upload All</button>
+  }
+
+  <!-- Duplicate confirmation popup -->
+  @if (showDuplicateConfirmation) {
+    <div class="popup-backdrop" (click)="cancelDuplicateConfirmation()">
+      <div class="popup-content" (click)="$event.stopPropagation()">
+        <h3>Duplicate Files Detected</h3>
+        <p>The following files are already in the upload list:</p>
+        <div class="duplicate-list">
+          <div
+            class="duplicate-item"
+            *ngFor="let fileName of duplicateFileNames"
+          >
+            • {{ fileName }}
+          </div>
+        </div>
+        <p>Do you want to add them anyway?</p>
+        <div class="popup-actions">
+          <button class="popup-confirm" (click)="confirmAddDuplicates()">
+            Add Anyway
+          </button>
+          <button class="popup-cancel" (click)="cancelDuplicateConfirmation()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

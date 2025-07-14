@@ -1,0 +1,13 @@
+@startwbs UC011
+* 0. Process single photo
+** 1. Open in editor
+*** 1.1 Locate photo
+*** 1.2 Click thumbnail\nthen "Open in editor"
+** 2. Set parameters
+*** 2.1 Adjust sliders
+*** 2.2 (Opt.) set date
+** 3. Click "Process"
+** 4. Review results
+*** 4.1 View comparison
+*** 4.2 Check results
+@endwbs

@@ -1,0 +1,48 @@
+<div class="players-list">
+  <div class="players-header">
+    <h3>Jogadores ({{ totalPlayers }})</h3>
+  </div>
+  <div class="players-container">
+    <!-- Current player -->
+    <div class="player-item current-player">
+      <div class="player-status online"></div>
+      <span class="player-name">{{ currentPlayerName }} (You)</span>
+      <button
+        class="stats-btn"
+        (click)="openPlayerStats(currentPlayerName)"
+        title="View Stats"
+      >
+        📊
+      </button>
+    </div>
+
+    <!-- Other players -->
+    <div
+      *ngFor="let player of allPlayers"
+      class="player-item"
+      [class.inactive]="!isPlayerActive(player)"
+    >
+      <div class="player-status" [class]="getPlayerStatus(player)"></div>
+      <span class="player-name">{{ player.playerName }}</span>
+      <button
+        class="stats-btn"
+        (click)="openPlayerStats(player.playerName)"
+        title="View Stats"
+      >
+        📊
+      </button>
+    </div>
+
+    <!-- Empty state -->
+    <div *ngIf="allPlayers.length === 0" class="no-players">
+      Não há outros jogadores online
+    </div>
+  </div>
+</div>
+
+<!-- Player Stats Modal -->
+<app-player-stats
+  [playerName]="selectedPlayerName"
+  [isVisible]="showStatsModal"
+  (closeStats)="closePlayerStats()"
+></app-player-stats>

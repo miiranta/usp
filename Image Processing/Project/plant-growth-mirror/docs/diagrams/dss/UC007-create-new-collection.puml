@@ -1,0 +1,24 @@
+@startuml UC007
+!theme plain
+
+actor User
+participant System
+
+User -> System : click "Create Collection"
+System -> System : show creation dialog
+User -> System : enter collection name
+opt
+    User -> System : enter description
+end
+
+alt Valid name
+    System -> System : create collection
+    System --> User : collection created successfully
+else Empty name
+    System --> User : show validation error
+else Cancel
+    User -> System : cancel
+    System --> User : no collection created
+end
+
+@enduml

@@ -1,0 +1,12 @@
+@startwbs UC014
+* 0. View growth charts
+** 1. Open analysis view
+*** 1.1 Locate collection
+*** 1.2 Click "See Collection"\nscroll to "Growth Charts"
+** 2. Interact with charts
+*** 2.1 Use toggle buttons
+*** 2.2 Hover/click data points
+** 3. Review metrics
+*** 3.1 Check height, width, area
+*** 3.2 See trends
+@endwbs

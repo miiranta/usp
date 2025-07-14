@@ -1,0 +1,432 @@
+.titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  z-index: 1001;
+  user-select: none;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.titlebar-drag-region {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  -webkit-app-region: drag;
+  padding: 0 12px;
+  position: relative;
+}
+
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+  min-width: 120px;
+  margin-left: 4px;
+}
+
+.nav-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  color: #495057;
+  font-size: 13px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  height: 36px;
+  width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: visible;
+  z-index: 2;
+
+  svg {
+    transition: all 0.3s ease;
+    z-index: 3;
+    position: relative;
+  }
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+
+    svg {
+      transform: scale(1.2);
+    }
+  }
+
+  &:active {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  }
+
+  &.back-btn {
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+    border: none;
+    color: white;
+    box-shadow: 0 4px 12px rgba(74, 222, 128, 0.35);
+
+    &:hover {
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      box-shadow: 0 8px 24px rgba(74, 222, 128, 0.5);
+    }
+  }
+  &.home-btn {
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+    border: none;
+    color: white;
+    box-shadow: 0 4px 12px rgba(74, 222, 128, 0.35);
+
+    &:hover {
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      box-shadow: 0 8px 24px rgba(74, 222, 128, 0.5);
+    }
+  }
+}
+
+.titlebar-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  z-index: 1;
+  max-width: 50%;
+}
+
+.breadcrumb-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  -webkit-app-region: no-drag;
+
+  border-radius: 18px;
+  padding: 8px 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 400px;
+
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.breadcrumb-link {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 4px 8px;
+  border-radius: 6px;
+  position: relative;
+  text-decoration: none;
+  color: inherit;
+  display: inline-block;
+  -webkit-app-region: no-drag;
+
+  &:hover {
+    color: #2563eb;
+    transform: translateY(-0.5px);
+    box-shadow: 0 1px 3px rgba(59, 130, 246, 0.2);
+  }
+
+  &.active {
+    color: #1f2937;
+    font-weight: 600;
+    background: rgba(59, 130, 246, 0.05);
+
+    &:hover {
+      background: rgba(59, 130, 246, 0.1);
+      cursor: pointer;
+    }
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 1px;
+    background: #3b82f6;
+    transition: all 0.2s ease;
+    transform: translateX(-50%);
+  }
+
+  &:hover::after {
+    width: 80%;
+  }
+
+  &:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 2px rgba(59, 130, 246, 0.3);
+  }
+
+  &:focus {
+    outline: 2px solid rgba(59, 130, 246, 0.5);
+    outline-offset: 1px;
+  }
+}
+
+.breadcrumb-separator {
+  color: #9ca3af;
+  font-size: 14px;
+  margin: 0 2px;
+  user-select: none;
+  font-weight: 400;
+}
+
+.titlebar-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+  margin-left: auto; /* Push to the right */
+}
+
+.control-btn {
+  background: transparent;
+  border: none;
+  width: 36px;
+  height: 28px;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 6px;
+  position: relative;
+
+  svg {
+    transition: all 0.2s ease;
+  }
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #374151;
+
+    svg {
+      transform: scale(1.1);
+    }
+  }
+
+  &:active {
+    background: rgba(0, 0, 0, 0.12);
+    transform: scale(0.95);
+  }
+
+  &.close-btn:hover {
+    background: #ef4444;
+    color: white;
+  }
+
+  &.close-btn:active {
+    background: #dc2626;
+  }
+
+  /* Remove focus outline */
+  &:focus {
+    outline: none;
+  }
+}
+
+/* Ensure the rest of the app content is below the titlebar */
+:host {
+  display: block;
+  height: 48px;
+}
+
+/* Responsive design for smaller windows */
+@media (max-width: 600px) {
+  .breadcrumb-container {
+    font-size: 12px;
+    padding: 6px 12px;
+    max-width: 250px;
+  }
+
+  .nav-btn {
+    height: 32px;
+    width: 32px;
+    padding: 6px;
+  }
+
+  .titlebar-drag-region {
+    padding: 0 8px;
+  }
+
+  .titlebar-left {
+    gap: 8px;
+    min-width: 80px;
+  }
+
+  .titlebar-center {
+    max-width: 60%;
+  }
+}
+
+/* Remove focus styles globally for titlebar except breadcrumb links */
+.titlebar * {
+  &:focus:not(.breadcrumb-link) {
+    outline: none;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .titlebar {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .nav-btn {
+    background: rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #d1d5db;
+
+    &:hover:not(.disabled) {
+      background: rgba(0, 0, 0, 0.6);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    &.disabled {
+      background: rgba(0, 0, 0, 0.2);
+      border-color: rgba(255, 255, 255, 0.05);
+    }
+  }
+  .breadcrumb-container {
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #f3f4f6;
+  }
+  .breadcrumb-link {
+    &:hover {
+      background: rgba(59, 130, 246, 0.25);
+      color: #60a5fa;
+    }
+
+    &.active {
+      color: #f9fafb;
+      background: rgba(59, 130, 246, 0.15);
+
+      &:hover {
+        background: rgba(59, 130, 246, 0.2);
+      }
+    }
+
+    &:focus {
+      outline-color: rgba(96, 165, 250, 0.7);
+    }
+
+    &::after {
+      background: #60a5fa;
+    }
+  }
+
+  .breadcrumb-separator {
+    color: #6b7280;
+  }
+
+  .control-btn {
+    color: #9ca3af;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #f3f4f6;
+    }
+
+    &:active {
+      background: rgba(255, 255, 255, 0.15);
+    }
+  }
+}
+
+.ripple-wave {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 10000;
+  overflow: hidden;
+}
+
+.ripple-circle {
+  position: fixed;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(59, 130, 246, 0.5) 0%,
+    rgba(59, 130, 246, 0.3) 20%,
+    rgba(59, 130, 246, 0.15) 40%,
+    rgba(59, 130, 246, 0.05) 60%,
+    transparent 80%
+  );
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  transform: scale(0);
+  animation: rippleWave 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  z-index: 10000;
+}
+
+.ripple-circle.back-btn-ripple {
+  background: radial-gradient(
+    circle,
+    rgba(34, 197, 94, 0.5) 0%,
+    rgba(34, 197, 94, 0.3) 20%,
+    rgba(34, 197, 94, 0.15) 40%,
+    rgba(34, 197, 94, 0.05) 60%,
+    transparent 80%
+  );
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+@keyframes rippleWave {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  15% {
+    opacity: 0.8;
+  }
+  30% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  70% {
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(18);
+    opacity: 0;
+  }
+}

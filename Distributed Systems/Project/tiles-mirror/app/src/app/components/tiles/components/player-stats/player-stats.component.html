@@ -1,0 +1,71 @@
+<div
+  class="player-stats-overlay"
+  *ngIf="isVisible"
+  (click)="onClose()"
+  (wheel)="$event.preventDefault()"
+  (touchmove)="$event.preventDefault()"
+>
+  <div
+    class="player-stats-modal"
+    (click)="$event.stopPropagation()"
+    (wheel)="$event.stopPropagation()"
+    (touchmove)="$event.stopPropagation()"
+  >
+    <div class="modal-header">
+      <h3>Estatísticas do jogador</h3>
+      <button class="close-btn" (click)="onClose()">&times;</button>
+    </div>
+
+    <div class="modal-content">
+      <div *ngIf="isLoading" class="loading">
+        <div class="spinner"></div>
+        <p>Loading statistics...</p>
+      </div>
+
+      <div *ngIf="error" class="error">
+        <p>{{ error }}</p>
+        <button (click)="loadPlayerStats()" class="retry-btn">Retry</button>
+      </div>
+      <div *ngIf="playerStats && !isLoading" class="stats-content">
+        <div class="player-info">
+          <h4>{{ playerStats.playerName }}</h4>
+        </div>
+
+        <div class="stats-section">
+          <h5>Movimento</h5>
+          <div class="stat-item">
+            <span class="stat-label">Distância total viajada:</span>
+            <span class="stat-value"
+              >{{ formatDistance(playerStats.distanceTraveled) }} units</span
+            >
+          </div>
+        </div>
+
+        <div class="stats-section">
+          <h5>Ladrilhos colocados</h5>
+          <div class="stat-item total">
+            <span class="stat-label">Total de ladrilhos:</span>
+            <span class="stat-value">{{ getTotalTilesPlaced() }}</span>
+          </div>
+
+          <div class="tiles-breakdown" *ngIf="getTileTypes().length > 0">
+            <div class="tile-stat" *ngFor="let tileType of getTileTypes()">
+              <div
+                class="tile-color-indicator"
+                [style.background-color]="tileType"
+              ></div>
+              <span class="tile-type">{{ tileType }}</span>
+              <span class="tile-count">{{
+                playerStats.tilesPlaced[tileType]
+              }}</span>
+            </div>
+          </div>
+
+          <div *ngIf="getTileTypes().length === 0" class="no-tiles">
+            <p>Nenhum ladrilho foi colocado ainda</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

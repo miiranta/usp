@@ -1,0 +1,43 @@
+@if (collection && popupOpen) {
+  <div class="edit-collection-backdrop">
+    <div class="edit-collection-popup">
+      <h3>Edit Collection</h3>
+      <input
+        #nameInput
+        class="popup-input"
+        type="text"
+        [(ngModel)]="editedName"
+        placeholder="Collection Name"
+        (keydown)="onInputKeyDown($event)"
+      />
+      <div class="popup-actions">
+        <button
+          class="popup-save"
+          (click)="editCollection(collection)"
+          [disabled]="!editedName.trim()"
+        >
+          Save
+        </button>
+        <button class="popup-cancel" (click)="cancel()">Cancel</button>
+      </div>
+    </div>
+  </div>
+}
+
+<div class="collection-bubble-container">
+  <div class="collection-bubble">
+    <span class="collection-name">
+      @if (loadingCollection) {
+        <app-spinner [showSpinner]="true"></app-spinner>
+      } @else {
+        {{ getCollectionName() || "No Collection" }}
+      }
+    </span>
+    <button class="edit-btn" (click)="openEditPopup()">
+      <i>✎</i>
+    </button>
+    <button class="delete-btn" (click)="deleteCollection()">
+      <p>🗑</p>
+    </button>
+  </div>
+</div>

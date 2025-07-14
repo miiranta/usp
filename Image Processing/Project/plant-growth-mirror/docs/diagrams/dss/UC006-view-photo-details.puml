@@ -1,0 +1,21 @@
+@startuml UC006
+!theme plain
+
+actor User
+participant System
+
+User -> System : click photo thumbnail
+System -> System : show photo detail view
+System -> System : display original image
+
+alt Photo is processed
+    System -> System : show processed image
+    System -> System : show processing parameters
+    System -> System : show measurement results
+else Photo not processed
+    System -> System : show basic metadata only
+end
+
+System --> User : option to navigate to editor
+
+@enduml

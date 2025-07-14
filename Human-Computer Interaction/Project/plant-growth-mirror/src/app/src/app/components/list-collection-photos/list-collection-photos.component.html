@@ -1,0 +1,44 @@
+<div class="photo-slider-container">
+  @if (photos.length > 0 && currentPhoto) {
+    <div class="photo-slider">
+      <div class="header-row">
+        <h2>Collection Details</h2>
+        <div>
+          <button
+            class="edit-collection-btn"
+            (click)="goToCollectionEditPage()"
+          >
+            Open all photos in editor
+          </button>
+        </div>
+      </div>
+      <div class="thumbnails-row">
+        @for (photo of photos; track photo.id) {
+          <div class="thumbnail-container">
+            <div
+              class="thumbnail"
+              [class.selected]="photo === currentPhoto"
+              (click)="selectPhoto(photo)"
+            >
+              <img [src]="photo.dataBase64" alt="Photo thumbnail" />
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="photo-viewer">
+        <app-view-photo
+          [photo]="currentPhoto"
+          [allowRedirect]="false"
+          (refreshListing)="onRefreshListing()"
+        ></app-view-photo>
+      </div>
+    </div>
+  } @else {
+    <app-spinner
+      [showSpinner]="mightLoad"
+      [showText]="photos.length === 0 && !mightLoad"
+      spinnerText="No photos in this collection."
+    ></app-spinner>
+  }
+</div>

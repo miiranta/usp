@@ -1,0 +1,23 @@
+@startuml UC011
+!theme plain
+
+actor User
+participant System
+participant "CV Engine" as CV
+
+User -> System : select photo\n& open editor
+System -> System : display original photo
+User -> System : adjust parameters\n(granularity,\nthreshold, timestamp)
+User -> System : click "Process"
+
+alt Valid parameters
+    System -> CV : call image processing
+    CV -> CV : apply image\nprocessing pipeline
+    CV -> System : return processed\nimage & measurements
+    System -> System : save results
+    System --> User : show side-by-side\ncomparison
+else Processing fails
+    CV --> User : show error message
+end
+
+@enduml

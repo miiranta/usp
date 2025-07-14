@@ -1,0 +1,18 @@
+@startuml UC010
+!theme plain
+
+actor User
+participant System
+
+User -> System : click on collection
+System -> System : navigate to collection detail view
+System -> System : display photo thumbnails
+System -> System : show photo count & metadata
+
+User -> System : select photo for detailed view
+System --> User : show photo details
+
+User -> System : access bulk operations
+System --> User : bulk operations available
+
+@enduml

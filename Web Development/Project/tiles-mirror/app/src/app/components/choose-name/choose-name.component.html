@@ -1,0 +1,39 @@
+<div class="name-form">
+  <h1>Olá! Qual é seu nome?</h1>
+  <div class="input-group">
+    <div class="input-wrapper">
+      <input
+        type="text"
+        [(ngModel)]="name"
+        (input)="onNameInput()"
+        placeholder="Digite seu nome..."
+        maxlength="20"
+        [class.available]="nameStatus === 'available'"
+        [class.taken]="nameStatus === 'taken'"
+        [class.exists]="nameStatus === 'exists'"
+        [class.invalid]="nameStatus === 'invalid'"
+        [class.checking]="isCheckingName"
+      />
+      <div class="name-status">
+        <span *ngIf="isCheckingName && nameStatus === 'idle'" class="checking"
+          >Verificando...</span
+        >
+        <span *ngIf="nameStatus === 'available'" class="available"
+          >✓ Nome disponível</span
+        >
+        <span *ngIf="nameStatus === 'taken'" class="taken"
+          >✗ Nome já está em uso</span
+        >
+        <span *ngIf="nameStatus === 'exists'" class="exists"
+          >✓ Nome cadastrado</span
+        >
+        <span *ngIf="nameStatus === 'invalid'" class="invalid"
+          >Nome deve ter entre 2 e 20 caracteres</span
+        >
+      </div>
+    </div>
+    <button (click)="openGame()" [disabled]="!canSubmit">
+      <span>Continuar</span>
+    </button>
+  </div>
+</div>

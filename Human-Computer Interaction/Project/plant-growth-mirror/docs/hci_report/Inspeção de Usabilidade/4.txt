@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumo da Avaliação Heurística</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #8B4513;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        h2 {
+            color: #8B4513;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        .heuristica {
+            font-weight: bold;
+        }
+        .numero {
+            text-align: center;
+            font-weight: bold;
+        }
+        .porcentagem {
+            text-align: center;
+            font-weight: bold;
+        }
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #8B4513;
+        }
+        .summary h3 {
+            color: #8B4513;
+            margin-top: 0;
+        }
+        .evaluator-info {
+            background-color: #e6f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .chart-container {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .chart {
+            position: relative;
+            width: 500px;
+            height: 400px;
+            margin: 20px auto;
+            background-color: white;
+            border: 2px solid #333;
+        }
+        .chart svg {
+            width: 100%;
+            height: 100%;
+        }
+        .axis-label {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+        .chart-labels {
+            position: relative;
+            width: 500px;
+            margin: 0 auto;
+        }
+        .x-label {
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: bold;
+        }
+        .y-label {
+            position: absolute;
+            left: -100px;
+            top: 50%;
+            transform: translateY(-50%) rotate(-90deg);
+            font-weight: bold;
+        }
+        .corner-labels {
+            position: absolute;
+            font-size: 12px;
+            color: #666;
+        }
+        .comments-section {
+            margin-top: 40px;
+            padding: 20px;
+            background-color: #fff9e6;
+            border-radius: 8px;
+        }
+        .comments-section h3 {
+            color: #8B4513;
+            margin-bottom: 20px;
+        }
+        .evaluator-comments {
+            margin-bottom: 25px;
+            padding: 15px;
+            background-color: white;
+            border-left: 4px solid #8B4513;
+        }
+        .evaluator-comments h4 {
+            color: #8B4513;
+            margin-top: 0;
+        }
+        .comment-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .rating-muito-bom { background-color: #d4edda; }
+        .rating-bom { background-color: #d1ecf1; }
+        .rating-regular { background-color: #fff3cd; }
+        .rating-ruim { background-color: #f8d7da; }
+        .rating-muito-ruim { background-color: #f5c6cb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RELATÓRIO COMPLETO DE AVALIAÇÃO HEURÍSTICA</h1>
+        
+        <div class="evaluator-info">
+            <p><strong>Tempo total:</strong> 8h aprox. 2h por avaliador</p>
+            <p><strong>Número de avaliadores:</strong> 4</p>
+            <p><strong>Problemas detectados:</strong> Diversos problemas de usabilidade identificados</p>
+            <p><strong>Metodologia:</strong> Avaliação Heurística de Nielsen + Princípios de Norman</p>
+        </div>
+
+        <h2>Informações dos Avaliadores</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Avaliador</th>
+                    <th>Data de Avaliação</th>
+                    <th>Tempo de Avaliação</th>
+                    <th>Hardware e Software utilizados</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>A01</td>
+                    <td>08/07/2002</td>
+                    <td>1h e 20min</td>
+                    <td>Processador: 366MHz, Memória: 160MB RAM, Vídeo: 8E, Monitor: 17", Resolução: 1024x768, 60Hz, Browser: 800x600</td>
+                </tr>
+                <tr>
+                    <td>A02</td>
+                    <td>08/07/2002</td>
+                    <td>1h</td>
+                    <td>Processador: 366MHz, Memória: 160MB RAM, Vídeo: 8E, Monitor: 17", Resolução: 1024x768, 60Hz, Browser: 800x600</td>
+                </tr>
+                <tr>
+                    <td>A03</td>
+                    <td>15/07/2002</td>
+                    <td>2h</td>
+                    <td>Processador: 500MHz, Memória: 256MB RAM, Monitor: 19", Resolução: 1280x1024, Browser: 1024x768</td>
+                </tr>
+                <tr>
+                    <td>A04</td>
+                    <td>16/07/2002</td>
+                    <td>1h e 45min</td>
+                    <td>Processador: 450MHz, Memória: 192MB RAM, Monitor: 17", Resolução: 1024x768, Browser: 800x600</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Experiência dos Avaliadores</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Avaliador</th>
+                    <th>Experiência no uso de aplicações web</th>
+                    <th>Experiência em usabilidade</th>
+                    <th>Experiência em desenvolvimento</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>A01</td>
+                    <td>Regular</td>
+                    <td>Regular</td>
+                    <td>Boa</td>
+                </tr>
+                <tr>
+                    <td>A02</td>
+                    <td>Nenhuma</td>
+                    <td>Boa</td>
+                    <td>Regular</td>
+                </tr>
+                <tr>
+                    <td>A03</td>
+                    <td>Boa</td>
+                    <td>Muito Boa</td>
+                    <td>Regular</td>
+                </tr>
+                <tr>
+                    <td>A04</td>
+                    <td>Boa</td>
+                    <td>Regular</td>
+                    <td>Boa</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Problemas Detectados por Avaliador</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Avaliador</th>
+                    <th>Número de Problemas Detectados</th>
+                    <th>Relação entre Porcentagem de Problemas e o Total Detectado</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>A01</td>
+                    <td class="numero">23</td>
+                    <td class="porcentagem">35%</td>
+                </tr>
+                <tr>
+                    <td>A02</td>
+                    <td class="numero">15</td>
+                    <td class="porcentagem">23%</td>
+                </tr>
+                <tr>
+                    <td>A03</td>
+                    <td class="numero">18</td>
+                    <td class="porcentagem">27%</td>
+                </tr>
+                <tr>
+                    <td>A04</td>
+                    <td class="numero">10</td>
+                    <td class="porcentagem">15%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Heurísticas de Nielsen - Resumo dos Problemas</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 60%;">Heurística</th>
+                    <th style="width: 20%;">Número de Problemas Associados</th>
+                    <th style="width: 20%;">Porcentagem do Total de Problemas</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="heuristica">1. Visibilidade do Status do Sistema</td>
+                    <td class="numero">8</td>
+                    <td class="porcentagem">12%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">2. Compatibilidade do Sistema com o Mundo Real</td>
+                    <td class="numero">6</td>
+                    <td class="porcentagem">9%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">3. Controle do Usuário e Liberdade</td>
+                    <td class="numero">7</td>
+                    <td class="porcentagem">11%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">4. Consistência e Padrões</td>
+                    <td class="numero">12</td>
+                    <td class="porcentagem">18%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">5. Prevenção de Erros</td>
+                    <td class="numero">9</td>
+                    <td class="porcentagem">14%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">6. Reconhecimento ao invés de lembrança</td>
+                    <td class="numero">8</td>
+                    <td class="porcentagem">12%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">7. Flexibilidade e Eficiência de Uso</td>
+                    <td class="numero">6</td>
+                    <td class="porcentagem">9%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">8. Estética e Projeto Minimalista</td>
+                    <td class="numero">5</td>
+                    <td class="porcentagem">8%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">9. Ajuda aos Usuários a Reconhecer, Diagnosticar e Corrigir Erros</td>
+                    <td class="numero">3</td>
+                    <td class="porcentagem">4%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">10. Ajuda e Documentação</td>
+                    <td class="numero">2</td>
+                    <td class="porcentagem">3%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Princípios de Norman - Resumo dos Problemas</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 60%;">Princípio</th>
+                    <th style="width: 20%;">Número de Problemas Associados</th>
+                    <th style="width: 20%;">Porcentagem do Total de Problemas</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="heuristica">1. Visibilidade</td>
+                    <td class="numero">9</td>
+                    <td class="porcentagem">18%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">2. Feedback</td>
+                    <td class="numero">8</td>
+                    <td class="porcentagem">16%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">3. Affordance</td>
+                    <td class="numero">7</td>
+                    <td class="porcentagem">14%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">4. Mapeamento</td>
+                    <td class="numero">6</td>
+                    <td class="porcentagem">12%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">5. Restrições</td>
+                    <td class="numero">8</td>
+                    <td class="porcentagem">16%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">6. Consistência</td>
+                    <td class="numero">12</td>
+                    <td class="porcentagem">24%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Avaliações Detalhadas por Avaliador</h2>
+        
+        <h3>Avaliação A03 - Princípios de Norman</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Princípio</th>
+                    <th>Avaliação</th>
+                    <th>Comentários</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1. Visibilidade</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Ícones e cores do app deixam claro do que se trata</td>
+                </tr>
+                <tr>
+                    <td>2. Feedback</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Sistema mostra que algo está acontecendo</td>
+                </tr>
+                <tr>
+                    <td>3. Affordance</td>
+                    <td class="rating-regular">Regular</td>
+                    <td>Nem sempre é claro o que pode ser clicado/arrastado</td>
+                </tr>
+                <tr>
+                    <td>4. Mapeamento</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Ações têm respostas claras e previsíveis</td>
+                </tr>
+                <tr>
+                    <td>5. Restrições</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Sistema evita erros com limitações úteis</td>
+                </tr>
+                <tr>
+                    <td>6. Consistência</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Elementos funcionam do mesmo jeito</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Avaliação A04 - Heurísticas de Nielsen</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Heurística</th>
+                    <th>Avaliação</th>
+                    <th>Comentários</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1. Visibilidade do status do sistema</td>
+                    <td class="rating-regular">Regular</td>
+                    <td>Barra irregular, não mostra progresso adequadamente</td>
+                </tr>
+                <tr>
+                    <td>2. Correspondência com o mundo real</td>
+                    <td class="rating-bom">Bom</td>
+                    <td>Linguagem adequada e intuitiva</td>
+                </tr>
+                <tr>
+                    <td>3. Liberdade e controle do usuário</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Usuário pode desfazer ações facilmente</td>
+                </tr>
+                <tr>
+                    <td>4. Consistência e padrões</td>
+                    <td class="rating-bom">Bom</td>
+                    <td>Elementos visuais seguem padrão adequado</td>
+                </tr>
+                <tr>
+                    <td>5. Prevenção de erros</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Sistema evita erros efetivamente</td>
+                </tr>
+                <tr>
+                    <td>6. Reconhecer em vez de lembrar</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Sistema mostra opções claramente</td>
+                </tr>
+                <tr>
+                    <td>7. Flexibilidade e eficiência</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Sistema é rápido para usuários experientes</td>
+                </tr>
+                <tr>
+                    <td>8. Design estético e minimalista</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Interface limpa e funcional</td>
+                </tr>
+                <tr>
+                    <td>9. Ajudar a reconhecer e corrigir erros</td>
+                    <td class="rating-muito-bom">Muito bom</td>
+                    <td>Mensagens de erro são claras</td>
+                </tr>
+                <tr>
+                    <td>10. Ajuda e documentação</td>
+                    <td class="rating-muito-ruim">Muito ruim</td>
+                    <td>Falta ajuda acessível e visível</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="chart-container">
+            <h3>Gráfico de Distribuição de Problemas</h3>
+            <div class="chart-labels">
+                <div class="chart">
+                    <svg viewBox="0 0 500 400">
+                        <!-- Eixos -->
+                        <line x1="50" y1="350" x2="450" y2="350" stroke="#333" stroke-width="2"/>
+                        <line x1="50" y1="50" x2="50" y2="350" stroke="#333" stroke-width="2"/>
+                        
+                        <!-- Grade -->
+                        <g stroke="#ddd" stroke-width="1">
+                            <line x1="125" y1="50" x2="125" y2="350"/>
+                            <line x1="200" y1="50" x2="200" y2="350"/>
+                            <line x1="275" y1="50" x2="275" y2="350"/>
+                            <line x1="350" y1="50" x2="350" y2="350"/>
+                            <line x1="425" y1="50" x2="425" y2="350"/>
+                            
+                            <line x1="50" y1="110" x2="450" y2="110"/>
+                            <line x1="50" y1="170" x2="450" y2="170"/>
+                            <line x1="50" y1="230" x2="450" y2="230"/>
+                            <line x1="50" y1="290" x2="450" y2="290"/>
+                        </g>
+                        
+                        <!-- Pontos de dados (avaliadores) -->
+                        <g fill="#8B4513">
+                            <!-- A01 - 23 problemas -->
+                            <circle cx="100" cy="80" r="6" fill="#e74c3c"/>
+                            <text x="110" y="85" font-size="10">A01</text>
+                            
+                            <!-- A02 - 15 problemas -->
+                            <circle cx="180" cy="150" r="6" fill="#f39c12"/>
+                            <text x="190" y="155" font-size="10">A02</text>
+                            
+                            <!-- A03 - 18 problemas -->
+                            <circle cx="150" cy="120" r="6" fill="#3498db"/>
+                            <text x="160" y="125" font-size="10">A03</text>
+                            
+                            <!-- A04 - 10 problemas -->
+                            <circle cx="220" cy="200" r="6" fill="#27ae60"/>
+                            <text x="230" y="205" font-size="10">A04</text>
+                        </g>
+                        
+                        <!-- Labels dos eixos -->
+                        <text x="250" y="385" text-anchor="middle" font-size="14" font-weight="bold">Número de Problemas Detectados</text>
+                        <text x="25" y="200" text-anchor="middle" font-size="14" font-weight="bold" transform="rotate(-90 25 200)">Severidade dos Problemas</text>
+                        
+                        <!-- Escala X -->
+                        <text x="50" y="370" text-anchor="middle" font-size="10">0</text>
+                        <text x="150" y="370" text-anchor="middle" font-size="10">10</text>
+                        <text x="250" y="370" text-anchor="middle" font-size="10">15</text>
+                        <text x="350" y="370" text-anchor="middle" font-size="10">20</text>
+                        <text x="450" y="370" text-anchor="middle" font-size="10">25</text>
+                        
+                        <!-- Escala Y -->
+                        <text x="40" y="350" text-anchor="end" font-size="10">Baixa</text>
+                        <text x="40" y="250" text-anchor="end" font-size="10">Média</text>
+                        <text x="40" y="150" text-anchor="end" font-size="10">Alta</text>
+                        <text x="40" y="60" text-anchor="end" font-size="10">Crítica</text>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="comments-section">
+            <h3>Comentários Detalhados dos Avaliadores</h3>
+            
+            <div class="evaluator-comments">
+                <h4>Avaliador A01 - Comentários Adicionais:</h4>
+                
+                <div class="comment-item">
+                    <strong>Observações gerais:</strong> "A decorar título na tela de coleção. Aumentar botão de voltar e home na parte da página. Na barra de coleção, mudar de cor para 'seu collection'. Nas análises, usar duas botões ao invés de um que alterna. Mudar cor da confirmação do delete (não deixar vermelha). Talvez uma âncora para mudar de coleção na tela de coleção."
+                </div>
+            </div>
+
+            <div class="evaluator-comments">
+                <h4>Avaliador A02 - Comentários Originais:</h4>
+                
+                <div class="comment-item">
+                    <strong>1. Visibilidade do status do sistema:</strong> "Indicação de loading muito ruim. Talvez indicação na etapa do processo me localize ou margem objeto não sei botão de voltar ou 'finalizar' ou novo upload para acompanhar o processo"
+                </div>
+                
+                <div class="comment-item">
+                    <strong>2. Correspondência com o mundo real:</strong> "Email não está 'muito bom' (as os elementos são muito parecidos e intuitivos"
+                </div>
+                
+                <div class="comment-item">
+                    <strong>4. Consistência e padrões:</strong> "Não vou se objeta delete/falta padronização mais/ou. Não lembraram o ver objetivo dos/outros termos azuis. Alguns botões de confirmar a ação são vermelhodos ou até mesmo cinza"
+                </div>
+            </div>
+
+            <div class="evaluator-comments">
+                <h4>Avaliador A03 - Análise dos Princípios de Norman:</h4>
+                
+                <div class="comment-item">
+                    <strong>Pontos Fortes:</strong> "O sistema apresenta boa visibilidade geral, com ícones claros e feedback adequado. A consistência entre elementos é mantida na maior parte da interface."
+                </div>
+                
+                <div class="comment-item">
+                    <strong>Pontos de Melhoria:</strong> "A affordance precisa ser melhorada - nem sempre fica claro quais elementos são interativos. Algumas áreas da interface poderiam ser mais intuitivas."
+                </div>
+            </div>
+
+            <div class="evaluator-comments">
+                <h4>Avaliador A04 - Análise das Heurísticas de Nielsen:</h4>
+                
+                <div class="comment-item">
+                    <strong>Problema Principal:</strong> "O maior problema identificado é a falta de documentação e ajuda. O sistema funciona bem para usuários experientes, mas pode ser confuso para iniciantes."
+                </div>
+                
+                <div class="comment-item">
+                    <strong>Aspectos Positivos:</strong> "A interface é limpa e minimalista. O controle do usuário é adequado, permitindo desfazer ações facilmente. A prevenção de erros funciona bem."
+                </div>
+                
+                <div class="comment-item">
+                    <strong>Recomendação:</strong> "Implementar sistema de ajuda contextual e melhorar a barra de progresso para melhor indicação de status."
+                </div>
+            </div>
+        </div>
+
+        <div class="summary">
+            <h3>Resumo Consolidado da Avaliação:</h3>
+            <p><strong>Total de problemas identificados:</strong> 66 problemas únicos detectados pelos 4 avaliadores</p>
+            <p><strong>Principais categorias de problemas encontrados:</strong></p>
+            <ul>
+                <li><strong>Consistência e Padrões (18%):</strong> Falta de padronização em cores, botões e elementos visuais em diferentes partes da interface</li>
+                <li><strong>Prevenção de Erros (14%):</strong> Necessidade de mais confirmações e avisos antes de ações destrutivas</li>
+                <li><strong>Visibilidade do Status (12%):</strong> Problemas com indicações de progresso e feedback do sistema</li>
+                <li><strong>Reconhecimento vs. Lembrança (12%):</strong> Interface poderia ser mais autoexplicativa</li>
+                <li><strong>Controle do Usuário (11%):</strong> Algumas ações irreversíveis precisam de mais opções de cancelamento</li>
+            </ul>
+            
+            <p><strong>Recomendações prioritárias:</strong></p>
+            <ul>
+                <li>Padronizar esquema de cores e estilos de botões em toda a aplicação</li>
+                <li>Implementar sistema de ajuda contextual e documentação</li>
+                <li>Melhorar indicadores de progresso e feedback visual</li>
+                <li>Adicionar confirmações para ações destrutivas</li>
+                <li>Revisar affordances para tornar elementos interativos mais óbvios</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

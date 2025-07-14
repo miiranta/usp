@@ -1,0 +1,11 @@
+@startwbs UC004
+* 0. Remove photo from collection
+** 1. Locate photo
+*** 1.1 Click "See Collection"\nthen scroll
+** 2. Start removal
+*** 2.1 Click checkbox to uncheck
+*** 2.2 Confirm popup
+** 3. Confirm removal
+*** 3.1 Click "Continue"
+** 4. View confirmation
+@endwbs

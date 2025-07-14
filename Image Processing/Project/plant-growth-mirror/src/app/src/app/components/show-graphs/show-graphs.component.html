@@ -1,0 +1,89 @@
+<div class="graphs-container">
+  @if (hasData) {
+    <div class="charts-grid">
+      <div class="chart-container" *ngIf="hasHeightData">
+        <div class="chart-header">
+          <h3>Plant Height Over Time</h3>
+          <div class="toggle-container">
+            <label class="toggle-label">Date Spacing:</label>
+            <div class="toggle-group">
+              <button
+                class="toggle-option"
+                [class.active]="heightDateMode === 'equal'"
+                (click)="setHeightDateMode('equal')"
+              >
+                Equal Spacing
+              </button>
+              <button
+                class="toggle-option"
+                [class.active]="heightDateMode === 'real'"
+                (click)="setHeightDateMode('real')"
+              >
+                Real Distance
+              </button>
+            </div>
+          </div>
+        </div>
+        <canvas #heightChart></canvas>
+      </div>
+
+      <div class="chart-container" *ngIf="hasWidthData">
+        <div class="chart-header">
+          <h3>Plant Width Over Time</h3>
+          <div class="toggle-container">
+            <label class="toggle-label">Date Spacing:</label>
+            <div class="toggle-group">
+              <button
+                class="toggle-option"
+                [class.active]="widthDateMode === 'equal'"
+                (click)="setWidthDateMode('equal')"
+              >
+                Equal Spacing
+              </button>
+              <button
+                class="toggle-option"
+                [class.active]="widthDateMode === 'real'"
+                (click)="setWidthDateMode('real')"
+              >
+                Real Distance
+              </button>
+            </div>
+          </div>
+        </div>
+        <canvas #widthChart></canvas>
+      </div>
+
+      <div class="chart-container" *ngIf="hasAreaData">
+        <div class="chart-header">
+          <h3>Plant Area Over Time</h3>
+          <div class="toggle-container">
+            <label class="toggle-label">Date Spacing:</label>
+            <div class="toggle-group">
+              <button
+                class="toggle-option"
+                [class.active]="areaDateMode === 'equal'"
+                (click)="setAreaDateMode('equal')"
+              >
+                Equal Spacing
+              </button>
+              <button
+                class="toggle-option"
+                [class.active]="areaDateMode === 'real'"
+                (click)="setAreaDateMode('real')"
+              >
+                Real Distance
+              </button>
+            </div>
+          </div>
+        </div>
+        <canvas #areaChart></canvas>
+      </div>
+    </div>
+  } @else {
+    <app-spinner
+      [showSpinner]="mightLoad"
+      [showText]="!hasData && !mightLoad"
+      spinnerText="No processed photo data available. Please ensure photos have been procesed."
+    ></app-spinner>
+  }
+</div>

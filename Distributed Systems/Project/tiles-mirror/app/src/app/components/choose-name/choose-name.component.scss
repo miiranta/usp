@@ -1,0 +1,131 @@
+.name-form h1 {
+  color: white;
+  margin: 0 0 20px 0;
+  font-size: 24px;
+  font-weight: 300;
+}
+
+.input-group {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+.input-group input {
+  padding: 12px 16px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  font-size: 16px;
+  outline: none;
+  transition:
+    border-color 0.3s ease,
+    background-color 0.2s ease;
+  min-width: 200px;
+}
+
+.input-group input:focus {
+  border-color: white;
+  background: rgba(255, 255, 255, 1);
+}
+
+.input-group input.available {
+  border-color: #4caf50;
+  background: rgba(255, 255, 255, 1);
+}
+
+.input-group input.taken {
+  border-color: #f44336;
+  background: rgba(255, 255, 255, 1);
+}
+
+.input-group input.exists {
+  border-color: #2196f3;
+  background: rgba(255, 255, 255, 1);
+}
+
+.input-group input.invalid {
+  border-color: #ff9800;
+  background: rgba(255, 255, 255, 1);
+}
+
+.input-group input.checking {
+  border-color: #2196f3;
+  background: rgba(255, 255, 255, 1);
+}
+
+.input-group input::placeholder {
+  color: #666;
+}
+
+.name-status {
+  font-size: 16px;
+  margin-top: 4px;
+  padding-left: 2px;
+  height: 16px;
+  width: 100%;
+  max-width: 230px;
+  text-align: left;
+}
+
+.name-status .available {
+  color: #4caf50;
+  font-weight: 500;
+}
+
+.name-status .taken {
+  color: #f44336;
+  font-weight: 500;
+}
+
+.name-status .exists {
+  color: #2196f3;
+  font-weight: 500;
+}
+
+.name-status .invalid {
+  color: #ff9800;
+  font-weight: 500;
+}
+
+.name-status .checking {
+  color: #2196f3;
+  font-weight: 500;
+}
+
+.input-group button {
+  padding: 12px 20px;
+  border: 2px solid white;
+  border-radius: 4px;
+  background: transparent;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.input-group button:hover:not(:disabled) {
+  background: white;
+  color: #333;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.input-group button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.input-group button:disabled:hover {
+  background: transparent;
+  color: white;
+  box-shadow: none;
+}

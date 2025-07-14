@@ -1,0 +1,8 @@
+@startwbs UC001
+* 0. Upload a single photo
+** 1. Open upload area
+*** 1.1 Click "Select Images"\nor drag photo
+** 2. Choose photo file
+** 3. Click "Upload All"
+** 4. View in gallery
+@endwbs

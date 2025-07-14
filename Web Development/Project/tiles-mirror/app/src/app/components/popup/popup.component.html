@@ -1,0 +1,16 @@
+<div class="popup-overlay" *ngIf="currentPopup" (click)="close()">
+  <div
+    class="popup-container"
+    (click)="$event.stopPropagation()"
+    [class]="'popup-' + currentPopup.type"
+  >
+    <div class="popup-header">
+      <div class="popup-icon" [class]="getIconClass()"></div>
+      <h3 class="popup-title">{{ currentPopup.title }}</h3>
+      <button class="popup-close" (click)="close()">&times;</button>
+    </div>
+    <div class="popup-content">
+      <p class="popup-message">{{ currentPopup.message }}</p>
+    </div>
+  </div>
+</div>

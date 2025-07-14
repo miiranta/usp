@@ -1,0 +1,12 @@
+@startwbs UC010
+* 0. View collection photos
+** 1. Locate collection
+*** 1.1 Scroll to find
+** 2. Open details
+*** 2.1 Click "See Collection"\nwait for page
+** 3. Browse photos
+*** 3.1 Scroll thumbnails
+*** 3.2 Click thumbnail\nfor details
+** 4. (Opt.) Edit all
+*** 4.1 Click "Open all in editor"
+@endwbs

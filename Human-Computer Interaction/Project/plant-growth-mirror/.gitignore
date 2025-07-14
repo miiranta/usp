@@ -1,0 +1,23 @@
+# Latex
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
+# VSCode
+.vscode/
+
+# Folders
+paper/build/
+out/
+temp/
+
+# Python
+.venv/
+python-portable/
+*.pth
+
+main.synctex(busy)

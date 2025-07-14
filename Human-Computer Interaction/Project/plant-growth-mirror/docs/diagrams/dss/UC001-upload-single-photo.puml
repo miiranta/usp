@@ -1,0 +1,18 @@
+@startuml UC001
+!theme plain
+
+actor User
+participant System
+participant Gallery
+
+User -> System : upload photo
+
+alt Valid image format
+    System -> System : extract metadata & create record
+    System -> Gallery : display photo
+    System --> User : photo ready for processing
+else Invalid format
+    System --> User : show error message
+end
+
+@enduml

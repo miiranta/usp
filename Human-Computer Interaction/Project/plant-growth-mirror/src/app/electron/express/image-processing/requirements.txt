@@ -1,0 +1,10 @@
+# Core dependencies with flexible versioning for better compatibility
+setuptools>=65.0.0
+wheel>=0.37.0
+
+# OpenCV with broader compatibility range
+opencv-python>=4.5.0,<5.0.0
+
+# NumPy with compatibility across Python versions
+numpy>=1.19.0,<2.0.0; python_version<="3.11"
+numpy>=1.21.0,<2.0.0; python_version>="3.12"

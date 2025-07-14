@@ -1,0 +1,14 @@
+@startwbs UC005
+* 0. Delete photo
+** 1. Locate photo
+*** 1.1 In gallery: scroll
+*** 1.2 In collection:\nclick "See Collection"\nthen scroll
+** 2. Open detail view
+*** 2.1 Click thumbnail
+** 3. Start deletion
+*** 3.1 Click "Delete"
+*** 3.2 Confirm popup
+** 4. Confirm deletion
+*** 4.1 Click "Continue"
+** 5. View confirmation
+@endwbs

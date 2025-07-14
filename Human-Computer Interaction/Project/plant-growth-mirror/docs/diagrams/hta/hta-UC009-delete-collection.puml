@@ -1,0 +1,9 @@
+@startwbs UC009
+* 0. Delete collection
+** 1. Locate collection
+*** 1.1 Scroll to find
+** 2. Start deletion
+*** 2.1 Click delete/trash\nconfirm popup
+** 3. Click "Continue"
+** 4. View removal
+@endwbs

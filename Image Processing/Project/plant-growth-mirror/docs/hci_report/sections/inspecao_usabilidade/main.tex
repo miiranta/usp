@@ -1,0 +1,170 @@
+\chapter{Inspeção de Usabilidade}
+
+\section{Informações Gerais}
+
+Tempo total esperado: 5h aprox. (~1h  por avaliador)
+
+Número de avaliadores: 5 avaliadores
+
+Avaliação Heurística de Nielsen + Princípios de Norman
+
+\section{Escolha dos Avaliadores}
+
+Os avaliadores foram escolhidos entre docentes e discentes do curso de Ciência da Computação da Universidade de São Paulo - Ribeirão Preto, familiares com o sistema de avaliação heurística.
+
+Levantamos o seguinte perfil aproximado:
+
+\input{sections/inspecao_usabilidade/avaliadores_perfil}
+
+\section{Avaliação Independente}
+
+Cada avaliador teve a oportunidade de se familiarizar com o sistema pelo tempo que julgasse necessário. Cada um foi instruído apenas com o objetivo final do sistema além de uma lista de tarefas a serem cumpridas:
+
+\input{sections/inspecao_usabilidade/lista_tarefas}
+
+Também foi fornecido a cada avaliador um formulário a ser preenchido. O formulário possui a seguinte estrutura:
+
+\begin{tiny}
+    \input{sections/inspecao_usabilidade/principios_norman}
+
+    \input{sections/inspecao_usabilidade/heuristicas_nielsen}
+\end{tiny}
+
+Quanto ao ambiente de avaliação, podemos apresentar algumas informações extras, como data, tempo e hardware/software utilizados por cada um a fim de melhorar a eficácia da avaliação final:
+
+\input{sections/inspecao_usabilidade/ambientes}
+
+\section{Coleta e Discussão}
+
+Aqui se busca a apresentação e agregação das avaliações individuais. Podemos a priori citar alguns dos comentários que julgamos mais únicos e relevantes de cada avaliador:
+
+\textbf{Avaliador A01}:
+\begin{enumerate}[parsep=0pt,itemsep=0pt]
+    \item \textit{Visibilidade}: "Às vezes é confuso sobre as cores"
+    \item \textit{Affordance}: "Quase certinho. Deve-se indicar o que cada botão faz para que apenas o ícone seja suficiente."
+    \item \textit{Mapeamento}: "Nem sempre é óbvio, como por exemplo o ícone que solta a foto. Para esses casos, usa-se indicações visuais como texto'"
+    \item \textit{Consistência}: "Botão de cancelar azul e deletar cinza é erro grave, não há consistência de cores. Alguns botões são ícones, outros são palavras"
+\end{enumerate}
+
+\textbf{Avaliador A02}:
+\begin{enumerate}[parsep=0pt,itemsep=0pt]
+    \item \textit{Visibilidade do status do sistema}: "Indicação de loading muito ruim, talvez a indicação na etapa do processo me localize. Botão de voltar ou 'finalizar'."
+    \item \textit{Controle e liberdade do usuário}: "Difícil de voltar ou cancelar uma ação depois de iniciada."
+    \item \textit{Consistência e padrões}: "Falta padronização. Não lembraram do objetivo. Alguns botões de confirmar a ação são vermelhos ou até mesmo cinza."
+    \item \textit{Prevenção de erros}: "Alguns campos podem ser confirmados vazios"
+    \item \textit{Flexibilidade e eficiência de uso}: "Não tem muito atalho."
+    \item \textit{Design estético e minimalista}: "Formulário um pouco limpo"
+\end{enumerate}
+
+\textbf{Avaliador A03}:
+\begin{enumerate}[parsep=0pt,itemsep=0pt]
+    \item \textit{Pontos Fortes}: "O sistema apresenta boa visibilidade geral, com ícones claros e feedback adequado. A consistência entre elementos é mantida na maior parte da interface."
+    \item \textit{Pontos de Melhoria}: "A affordance precisa ser melhorada - nem sempre fica claro quais elementos são interativos. Algumas áreas da interface poderiam ser mais intuitivas."
+\end{enumerate}
+
+\textbf{Avaliador A04}:
+\begin{enumerate}[parsep=0pt,itemsep=0pt]
+    \item \textit{Problema Principal}: "O maior problema identificado é a falta de documentação e ajuda. O sistema funciona bem para usuários experientes, mas pode ser confuso para iniciantes."
+    \item \textit{Recomendação}: "Melhorar as mensagens de erro para serem mais específicas e orientativas."
+\end{enumerate}
+
+\textbf{Avaliador A05}:
+\begin{enumerate}[parsep=0pt,itemsep=0pt]
+    \item \textit{Consistência e Padrões}: "Botões com cores inconsistentes em toda a interface, criando confusão visual. Alguns botões de ação são vermelhos, outros azuis, sem uma lógica clara de padronização."
+    \item \textit{Navegação}: "A navegação entre seções é confusa e não intuitiva. Falta uma hierarquia clara e indicadores visuais de onde o usuário está no sistema."
+    \item \textit{Padronização de Textos}: "Falta padronização na capitalização dos textos. Alguns títulos estão em maiúsculas, outros em minúsculas, criando inconsistência visual."
+    \item \textit{Feedback de Upload}: "O feedback durante o upload de múltiplos arquivos pode ser significativamente melhorado. Não há indicação clara de progresso e não há tratamento adequado para arquivos repetidos."
+    \item \textit{Indicador de Progresso}: "Falta feedback visual sobre quantos arquivos estão aguardando para upload, dificultando o planejamento do usuário."
+    \item \textit{Documentação}: "Falta texto explicativo dos conceitos técnicos para usuários não técnicos. A interface assume conhecimento prévio que pode não estar disponível."
+    \item \textit{Clareza de Ações}: "O botão 'edit' não tem significado claro. Deveria ser mais descritivo sobre qual ação será executada."
+    \item \textit{Funcionalidade de Gráficos}: "A função de esconder dados do gráfico deveria ser desabilitada ou melhor explicada, pois pode confundir usuários sobre a visualização dos dados."
+\end{enumerate}
+
+\input{sections/inspecao_usabilidade/problemas_avaliadores}
+
+Após a agregação, obtivemos alguns dados por heurística de Nielsen e por princípio de Norman:
+
+\input{sections/inspecao_usabilidade/problemas_heuristicos}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{../figures/hci/heatmaps_usabilidade.png}
+    \caption{Heatmaps das avaliações individuais e distribuição de problemas por heurística e princípio.}
+    \label{fig:heatmaps-usabilidade}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{../figures/hci/problemas_por_avaliador.png}
+    \caption{Distribuição do número de problemas detectados por avaliador.}
+    \label{fig:problemas-por-avaliador}
+\end{figure}
+
+\section{Atribuição da taxa de severidade}
+
+De acordo com a frequência de ocorrência, impacto e persistência do problema, podemos atribuir a cada situação encontrada uma taxa de severidade. A taxa é feita de 0 a 4, onde 0 é o menos severo e 4 é o mais severo. Os problemas que foram em média considerados 0 foram removidos após a análise por serem desconsiderados problemas de usabilidade. Os demais problemas de 1 a 4 foram plotados na seguinte tabela:
+
+\input{sections/inspecao_usabilidade/problemas_gravidade}
+
+\section{Conclusão}
+
+A inspeção de usabilidade realizada revelou uma aplicação sólida em termos de funcionalidade, mas com oportunidades significativas de melhoria na experiência do usuário. A análise identificou 82 problemas distribuídos em diferentes níveis de gravidade.
+
+\subsection{Principais Achados}
+
+\textbf{Pontos Fortes Identificados:}
+\begin{itemize}
+    \item \textbf{Funcionalidade Core}: A aplicação atende adequadamente aos objetivos principais de gerenciamento de fotos e análise de crescimento de plantas
+    \item \textbf{Boas Práticas Técnicas}: Ausência de erros de console e uso apropriado de APIs modernas
+    \item \textbf{Performance}: Tempos de carregamento e resposta satisfatórios na maioria das operações
+\end{itemize}
+
+\textbf{Áreas Críticas para Melhoria:}
+\begin{itemize}
+    \item \textbf{Consistência Visual}: Problemas de padronização de cores, posicionamento de botões e capitalização de textos
+    \item \textbf{Feedback do Sistema}: Falta de indicadores de progresso durante uploads e operações longas
+    \item \textbf{Navegação}: Estrutura de navegação confusa e falta de indicadores de localização
+    \item \textbf{Acessibilidade}: Problemas de contraste e falta de rótulos descritivos em elementos interativos
+\end{itemize}
+
+\subsection{Distribuição dos Problemas}
+
+A análise revelou que os problemas se concentram principalmente em:
+\begin{itemize}
+    \item \textbf{Consistência e Padrões} (22\%): Maior categoria, indicando necessidade de padronização visual
+    \item \textbf{Prevenção de Erros} (16\%): Falta de confirmações para ações destrutivas
+    \item \textbf{Visibilidade do Status} (15\%): Ausência de feedback adequado durante operações
+    \item \textbf{Reconhecimento vs. Lembrança} (15\%): Interface não autoexplicativa
+\end{itemize}
+
+\subsection{Recomendações Prioritárias e Impacto Esperado}
+
+\textbf{Alta Prioridade (Gravidade 4):}
+\begin{itemize}
+    \item Implementar confirmações para ações destrutivas (exclusão de itens)
+    \item Adicionar indicadores de progresso visíveis durante uploads e processamento
+    \item Corrigir mensagens de erro que desaparecem automaticamente
+\end{itemize}
+\textbf{Impacto}: Redução significativa de perda acidental de dados e melhor controle do usuário sobre operações críticas.
+
+\textbf{Média Prioridade (Gravidade 3):}
+\begin{itemize}
+    \item Padronizar cores e posicionamento de botões em toda a interface
+    \item Melhorar a estrutura de navegação com breadcrumbs e indicadores visuais
+    \item Adicionar rótulos descritivos para ícones e botões
+    \item Implementar feedback detalhado para uploads múltiplos
+\end{itemize}
+\textbf{Impacto}: Maior eficiência na execução de tarefas e redução do tempo de aprendizado da interface.
+
+\textbf{Baixa Prioridade (Gravidade 1-2):}
+\begin{itemize}
+    \item Melhorar contraste de cores em elementos de texto
+    \item Adicionar documentação contextual e sistema de ajuda
+    \item Revisar funcionalidades de gráficos para maior clareza
+\end{itemize}
+\textbf{Impacto}: Melhoria na acessibilidade e inclusão de usuários com diferentes necessidades visuais.
+
+A inspeção de usabilidade demonstrou que, embora a aplicação apresente uma base funcional sólida, há oportunidades de melhora através de melhor consistência visual, feedback adequado e navegação mais intuitiva. A implementação das recomendações identificadas transformará a aplicação em uma ferramenta mais profissional, acessível e eficiente para seus usuários.
+
+

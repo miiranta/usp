@@ -1,0 +1,15 @@
+<div class="thumb-loading">
+  @if (showSpinner) {
+    <div class="spinner-container">
+      <div class="thumb-spinner"></div>
+      @if (showProgress && showProgressText) {
+        <div class="progress-text">{{ roundProgress() }}%</div>
+      }
+    </div>
+  }
+  @if (showText) {
+    <div class="no-photos">
+      {{ spinnerText }}
+    </div>
+  }
+</div>

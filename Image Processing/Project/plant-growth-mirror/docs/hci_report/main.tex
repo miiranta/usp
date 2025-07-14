@@ -1,0 +1,70 @@
+\documentclass[
+	12pt,            % Tamanho da fonte
+	openright,       % Capítulos começam em páginas ímpares
+	oneside,         % Para impressão em uma face
+	a4paper,         % Tamanho do papel A4
+	english,         % Idioma secundário
+	brazil           % Idioma principal
+]{abntex2}
+
+\usepackage{graphicx}          % Para incluir imagens
+\usepackage[utf8]{inputenc}    % Codificação UTF-8
+\usepackage[T1]{fontenc}       % Encoding para fontes
+\usepackage{indentfirst}       % Indenta o primeiro parágrafo de cada seção
+\usepackage{microtype}         % Melhorias na justificação do texto
+\usepackage{hyperref}          % Links clicáveis
+\usepackage{amsmath,amssymb}   % Pacotes matemáticos
+\usepackage{wasysym}           % Para símbolos incluindo checkbox
+\usepackage{setspace}
+\usepackage{float}             % Controle preciso de posicionamento de floats
+\usepackage{xcolor}
+
+% Configurações de margens
+\usepackage{geometry}
+\usepackage{tabularx} % Coloque isso no preâmbulo
+
+% Configuração de numeração de seções
+\renewcommand{\thesection}{\arabic{section}}
+
+\geometry{
+	a4paper,
+	left=3cm,        % Margem esquerda
+	right=2cm,       % Margem direita
+	top=3cm,         % Margem superior
+	bottom=2cm       % Margem inferior
+}
+
+\setlength{\parindent}{1.25cm}  % Recuo da primeira linha do parágrafo
+\setlength{\parskip}{0.2cm}     % Espaço entre parágrafos
+
+\title{Análise de Crescimento de Plantas a Partir de Fotos Semanais}
+\author{
+    Lucas Cardoso dos Santos \\
+    Lucas Miranda Mendonça Rezende
+}
+\date{Ribeirão Preto\\2025}
+
+\begin{document}
+
+\input{title}
+
+\newpage
+\tableofcontents
+
+\input{sections/introducao/main}
+\input{sections/requerimentos/main}
+\input{sections/diretrizes/main}
+\input{sections/telas/main}
+\input{sections/casos_uso/main}
+\input{sections/inspecao_usabilidade/main}
+\input{sections/teste_usabilidade/main}
+\input{sections/testes_automaticos/main}
+\input{sections/conclusao/main}
+
+\appendix
+
+\input{sections/appendix/resultados_inspecao_usabilidade/main}
+\input{sections/appendix/questionario_teste_usabilidade}
+\input{sections/appendix/resultados_teste_usabilidade}
+
+\end{document}

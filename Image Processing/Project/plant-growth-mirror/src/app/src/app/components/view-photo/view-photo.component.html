@@ -1,0 +1,119 @@
+<div class="photo-visualizer">
+  @if (photo) {
+    <div class="header-row">
+      <h2>Photo Details</h2>
+      <div>
+        <button
+          class="delete-btn"
+          (click)="onDeletePhoto()"
+          [disabled]="deleting || !photo"
+          title="Delete this photo"
+        >
+          @if (!deleting) {
+            Delete this photo
+          }
+          <app-spinner
+            [showSpinner]="deleting"
+            [showProgressText]="false"
+          ></app-spinner>
+        </button>
+        <button class="edit-btn" (click)="onEditPhoto()">
+          Open this photo in editor
+        </button>
+      </div>
+    </div>
+
+    <div class="images-row">
+      <div class="image-block">
+        <h3>Original</h3>
+        <div>
+          <img [src]="photo.dataBase64 || ''" alt="Original" />
+        </div>
+      </div>
+      <div class="image-block">
+        <h3>Processed</h3>
+        @if (photo.dataProcessedBase64) {
+          <div>
+            <img [src]="photo.dataProcessedBase64" alt="Processed" />
+          </div>
+        } @else {
+          <div class="placeholder">Not processed yet</div>
+        }
+      </div>
+    </div>
+
+    <div class="info-section">
+      <div class="block-group">
+        <div class="info-block">
+          <h4>Identification</h4>
+          <p><strong>ID:</strong> {{ photo.id }}</p>
+          @if (photo.collectionId) {
+            <div class="collection-info">
+              <strong>Collection:&nbsp;</strong>
+
+              @if (collectionName) {
+                <p>
+                  <label
+                    class="collection-name"
+                    (click)="goToCollection(photo.collectionId)"
+                    >{{ collectionName }}
+                  </label>
+                </p>
+              } @else {
+                <p>
+                  <app-spinner [showSpinner]="true"></app-spinner>
+                </p>
+              }
+            </div>
+          }
+        </div>
+        <div class="info-block">
+          <h4>Timestamps</h4>
+          @if (photo.createdAt) {
+            <p>
+              <strong>Created:</strong> {{ photo.createdAt | date: "medium" }}
+            </p>
+          }
+          @if (photo.updatedAt) {
+            <p>
+              <strong>Updated:</strong> {{ photo.updatedAt | date: "medium" }}
+            </p>
+          }
+        </div>
+      </div>
+
+      @if (photo.params) {
+        <div class="block-group">
+          <div class="info-block">
+            <h4>Parameters</h4>
+            <p>
+              <strong>Granularity:</strong>
+              {{ photo.params.granularity ?? "—" }}
+            </p>
+            <p>
+              <strong>Threshold:</strong> {{ photo.params.threshold ?? "—" }}
+            </p>
+          </div>
+        </div>
+      }
+
+      @if (photo.result) {
+        <div class="block-group">
+          <div class="info-block analysis-result">
+            <h4>Analysis Result</h4>
+            <p><strong>Height:</strong> {{ photo.result.height ?? "—" }} px</p>
+            <p><strong>Width:</strong> {{ photo.result.width ?? "—" }} px</p>
+            <p><strong>Area:</strong> {{ photo.result.area ?? "—" }} px²</p>
+          </div>
+        </div>
+      }
+    </div>
+
+  } @else {
+    <app-spinner
+      [showSpinner]="enableLoadingSpinner"
+      [showText]="!enableLoadingSpinner"
+      [spinnerText]="'No photo selected.'"
+    ></app-spinner>
+  }
+</div>

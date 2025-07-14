@@ -1,0 +1,10 @@
+@startwbs UC008
+* 0. Rename collection
+** 1. Locate collection
+*** 1.1 Scroll to find
+** 2. Start rename
+*** 2.1 Click pencil/edit\nopen popup
+** 3. Enter new name
+** 4. Click "Save"
+** 5. View update
+@endwbs

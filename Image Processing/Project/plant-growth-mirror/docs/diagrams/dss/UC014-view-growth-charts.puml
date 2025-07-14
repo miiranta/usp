@@ -1,0 +1,24 @@
+@startuml UC014
+!theme plain
+
+actor User
+participant System
+
+User -> System : navigate to collection analysis view
+
+alt Collection has processed photos
+    System -> System : calculate growth metrics
+    System -> System : generate interactive charts
+    note right: Height, Width, Area over time
+    
+    User -> System : toggle between real-time/equal-spacing modes
+    System -> System : recalculate & update charts
+    
+    User -> System : interact with chart data points
+    System --> User : show trend lines & patterns
+    
+else Insufficient data
+    System --> User : show message "need more processed photos"
+end
+
+@enduml

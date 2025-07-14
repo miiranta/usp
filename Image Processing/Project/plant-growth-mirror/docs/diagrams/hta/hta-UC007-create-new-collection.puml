@@ -1,0 +1,10 @@
+@startwbs UC007
+* 0. Create new collection
+** 1. Open collections
+*** 1.1 Click "New Collection"
+** 2. Enter details
+*** 2.1 Fill name
+*** 2.2 (Opt.) description
+** 3. Click "Save"
+** 4. View in list
+@endwbs

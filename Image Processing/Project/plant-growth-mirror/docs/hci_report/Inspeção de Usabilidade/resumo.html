@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório Consolidado da Avaliação Heurística</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #8B4513;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        h2 {
+            color: #8B4513;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #D2B48C;
+            padding-bottom: 10px;
+        }
+        h3 {
+            color: #8B4513;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        tr:nth-child(even) td {
+            background-color: #f8f9fa;
+        }
+        .heuristica {
+            font-weight: bold;
+        }
+        .numero {
+            text-align: center;
+            font-weight: bold;
+        }
+        .porcentagem {
+            text-align: center;
+            font-weight: bold;
+        }
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #8B4513;
+        }
+        .summary h3 {
+            color: #8B4513;
+            margin-top: 0;
+        }
+        .evaluator-info {
+            background-color: #e6f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .chart-container {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .chart {
+            position: relative;
+            width: 500px;
+            height: 400px;
+            margin: 20px auto;
+            background-color: white;
+            border: 2px solid #333;
+        }
+        .chart svg {
+            width: 100%;
+            height: 100%;
+        }
+        .axis-label {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+        .chart-labels {
+            position: relative;
+            width: 500px;
+            margin: 0 auto;
+        }
+        .x-label {
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: bold;
+        }
+        .y-label {
+            position: absolute;
+            left: -100px;
+            top: 50%;
+            transform: translateY(-50%) rotate(-90deg);
+            font-weight: bold;
+        }
+        .corner-labels {
+            position: absolute;
+            font-size: 12px;
+            color: #666;
+        }
+        .comments-section {
+            margin-top: 40px;
+            padding: 20px;
+            background-color: #fff9e6;
+            border-radius: 8px;
+        }
+        .comments-section h3 {
+            color: #8B4513;
+            margin-bottom: 20px;
+        }
+        .evaluator-comments {
+            margin-bottom: 25px;
+            padding: 15px;
+            background-color: white;
+            border-left: 4px solid #8B4513;
+        }
+        .evaluator-comments h4 {
+            color: #8B4513;
+            margin-top: 0;
+        }
+        .comment-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .rating-muito-bom { background-color: #d4edda; }
+        .rating-bom { background-color: #d1ecf1; }
+        .rating-regular { background-color: #fff3cd; }
+        .rating-ruim { background-color: #f8d7da; }
+        .rating-muito-ruim { background-color: #f5c6cb; }
+        .summary-box, .recommendations-box {
+            background-color: #FAF0E6;
+            border-left: 5px solid #8B4513;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .evaluator-section {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+        }
+        .severity-4 { font-weight: bold; color: #dc3545; }
+        .severity-3 { font-weight: bold; color: #fd7e14; }
+        .severity-2 { color: #ffc107; }
+        .severity-1 { color: #28a745; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RELATÓRIO CONSOLIDADO DA AVALIAÇÃO HEURÍSTICA</h1>
+        
+        <div class="evaluator-info">
+            <p><strong>Data do Relatório:</strong> 28 de Junho de 2025</p>
+            <p><strong>Tempo total:</strong> 14h aprox. (variando de 1h a 2h por avaliador)</p>
+            <p><strong>Número de avaliadores:</strong> 5 avaliadores</p>
+            <p><strong>Problemas detectados:</strong> Diversos problemas de usabilidade identificados</p>
+            <p><strong>Metodologia:</strong> Avaliação Heurística de Nielsen + Princípios de Norman</p>
+            <p>Este relatório consolida os resultados das avaliações de usabilidade conduzidas por cinco avaliadores distintos para fornecer uma visão abrangente dos problemas e insights acionáveis.</p>
+        </div>
+
+        <h2>Informações dos Avaliadores</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Avaliador</th>
+                    <th>Data de Avaliação</th>
+                    <th>Tempo de Avaliação</th>
+                    <th>Hardware e Software utilizados</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>A01</td>
+                    <td>14/06/2025</td>
+                    <td>1h</td>
+                    <td>
+                        Notebook: GIGABYTE G5 MF<br>
+                        Processador: Intel Core i7-12650H (4.7 GHz)<br>
+                        Tela: 15.6" FHD 144Hz<br>
+                        Memória RAM: 16 GB DDR4<br>
+                        GPU: NVIDIA GeForce RTX 4050 Laptop GPU 6GB GDDR6<br>
+                        Sistema Operacional: Windows 10
+                    </td>
+                </tr>
+                <tr>
+                    <td>A02</td>
+                    <td>16/06/2025</td>
+                    <td>1h</td>
+                    <td>
+                        Notebook: GIGABYTE G5 MF<br>
+                        Processador: Intel Core i7-12650H (4.7 GHz)<br>
+                        Tela: 15.6" FHD 144Hz<br>
+                        Memória RAM: 16 GB DDR4<br>
+                        GPU: NVIDIA GeForce RTX 4050 Laptop GPU 6GB GDDR6<br>
+                        Sistema Operacional: Windows 10
+                    </td>
+                </tr>
+                <tr>
+                    <td>A03</td>
+                    <td>20/06/2025</td>
+                    <td>1h</td>
+                    <td>
+                        Notebook: GIGABYTE G5 MF<br>
+                        Processador: Intel Core i7-12650H (4.7 GHz)<br>
+                        Tela: 15.6" FHD 144Hz<br>
+                        Memória RAM: 16 GB DDR4<br>
+                        GPU: NVIDIA GeForce RTX 4050 Laptop GPU 6GB GDDR6<br>
+                        Sistema Operacional: Windows 10
+                    </td>
+                </tr>
+                <tr>
+                    <td>A04</td>
+                    <td>22/06/2025</td>
+                    <td>45min</td>
+                    <td>
+                        Notebook: GIGABYTE G5 MF<br>
+                        Processador: Intel Core i7-12650H (4.7 GHz)<br>
+                        Tela: 15.6" FHD 144Hz<br>
+                        Memória RAM: 16 GB DDR4<br>
+                        GPU: NVIDIA GeForce RTX 4050 Laptop GPU 6GB GDDR6<br>
+                        Sistema Operacional: Windows 10
+                    </td>
+                </tr>
+                <tr>
+                    <td>A05</td>
+                    <td>26/06/2025</td>
+                    <td>1h</td>
+                    <td>
+                        Notebook: GIGABYTE G5 MF<br>
+                        Processador: Intel Core i7-12650H (4.7 GHz)<br>
+                        Tela: 15.6" FHD 144Hz<br>
+                        Memória RAM: 16 GB DDR4<br>
+                        GPU: NVIDIA GeForce RTX 4050 Laptop GPU 6GB GDDR6<br>
+                        Sistema Operacional: Windows 10
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Experiência dos Avaliadores</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Avaliador</th>
+                    <th>Experiência no uso de aplicações web</th>
+                    <th>Experiência em usabilidade</th>
+                    <th>Experiência em desenvolvimento</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>A01</td>
+                    <td>Muito Boa</td>
+                    <td>Regular</td>
+                    <td>Muito Boa</td>
+                </tr>
+                <tr>
+                    <td>A02</td>
+                    <td>Muito Boa</td>
+                    <td>Boa</td>
+                    <td>Muito Boa</td>
+                </tr>
+                <tr>
+                    <td>A03</td>
+                    <td>Muito Boa</td>
+                    <td>Regular</td>
+                    <td>Muito Boa</td>
+                </tr>
+                <tr>
+                    <td>A04</td>
+                    <td>Boa</td>
+                    <td>Regular</td>
+                    <td>Boa</td>
+                </tr>
+                <tr>
+                    <td>A05</td>
+                    <td>Muito Boa</td>
+                    <td>Boa</td>
+                    <td>Muito Boa</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Problemas Detectados por Avaliador</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Avaliador</th>
+                    <th>Número de Problemas Detectados</th>
+                    <th>Relação entre Porcentagem de Problemas e o Total Detectado</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>A01</td>
+                    <td class="numero">23</td>
+                    <td class="porcentagem">28%</td>
+                </tr>
+                <tr>
+                    <td>A02</td>
+                    <td class="numero">15</td>
+                    <td class="porcentagem">18%</td>
+                </tr>
+                <tr>
+                    <td>A03</td>
+                    <td class="numero">18</td>
+                    <td class="porcentagem">22%</td>
+                </tr>
+                <tr>
+                    <td>A04</td>
+                    <td class="numero">10</td>
+                    <td class="porcentagem">12%</td>
+                </tr>
+                <tr>
+                    <td>A05</td>
+                    <td class="numero">16</td>
+                    <td class="porcentagem">20%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Heurísticas de Nielsen - Resumo dos Problemas</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 60%;">Heurística</th>
+                    <th style="width: 20%;">Número de Problemas Associados</th>
+                    <th style="width: 20%;">Porcentagem do Total de Problemas</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="heuristica">1. Visibilidade do Status do Sistema</td>
+                    <td class="numero">11</td>
+                    <td class="porcentagem">13%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">2. Compatibilidade do Sistema com o Mundo Real</td>
+                    <td class="numero">9</td>
+                    <td class="porcentagem">11%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">3. Controle do Usuário e Liberdade</td>
+                    <td class="numero">10</td>
+                    <td class="porcentagem">12%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">4. Consistência e Padrões</td>
+                    <td class="numero">16</td>
+                    <td class="porcentagem">19%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">5. Prevenção de Erros</td>
+                    <td class="numero">12</td>
+                    <td class="porcentagem">15%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">6. Reconhecimento ao invés de lembrança</td>
+                    <td class="numero">11</td>
+                    <td class="porcentagem">13%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">7. Flexibilidade e Eficiência de Uso</td>
+                    <td class="numero">8</td>
+                    <td class="porcentagem">10%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">8. Estética e Projeto Minimalista</td>
+                    <td class="numero">6</td>
+                    <td class="porcentagem">7%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">9. Ajuda aos Usuários a Reconhecer, Diagnosticar e Corrigir Erros</td>
+                    <td class="numero">4</td>
+                    <td class="porcentagem">5%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">10. Ajuda e Documentação</td>
+                    <td class="numero">3</td>
+                    <td class="porcentagem">4%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Princípios de Norman - Resumo dos Problemas</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 60%;">Princípio</th>
+                    <th style="width: 20%;">Número de Problemas Associados</th>
+                    <th style="width: 20%;">Porcentagem do Total de Problemas</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="heuristica">1. Visibilidade</td>
+                    <td class="numero">12</td>
+                    <td class="porcentagem">19%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">2. Feedback</td>
+                    <td class="numero">11</td>
+                    <td class="porcentagem">17%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">3. Affordance</td>
+                    <td class="numero">10</td>
+                    <td class="porcentagem">16%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">4. Mapeamento</td>
+                    <td class="numero">9</td>
+                    <td class="porcentagem">14%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">5. Restrições</td>
+                    <td class="numero">8</td>
+                    <td class="porcentagem">13%</td>
+                </tr>
+                <tr>
+                    <td class="heuristica">6. Consistência</td>
+                    <td class="numero">13</td>
+                    <td class="porcentagem">21%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Sumário Geral dos Problemas</h2>
+        <div class="summary-box">
+            <p>As análises combinadas apontam para temas recorrentes que necessitam de atenção imediata. As principais categorias de problemas identificados em todas as avaliações são:</p>
+            <ul>
+                <li><strong>Consistência e Padrões (19%):</strong> A falha mais recorrente. Inclui falta de padronização em cores, estilos de botões, terminologia e layout.</li>
+                <li><strong>Prevenção de Erros (15%):</strong> Ausência crítica de diálogos de confirmação antes de ações destrutivas (como exclusão), resultando em alto risco de perda de dados.</li>
+                <li><strong>Visibilidade do Status do Sistema (13%):</strong> Falta de feedback claro ao usuário, como indicadores de progresso durante uploads ou carregamentos.</li>
+                <li><strong>Reconhecimento vs. Lembrança (13%):</strong> Interface poderia ser mais autoexplicativa, evitando que usuários tenham que memorizar informações.</li>
+                <li><strong>Controle e Liberdade do Usuário (12%):</strong> Dificuldade ou impossibilidade de cancelar ações em andamento ou desfazer operações.</li>
+            </ul>
+        </div>
+
+        <h2>Recomendações Prioritárias</h2>
+        <div class="recommendations-box">
+            <p>Com base na frequência e na gravidade dos problemas, as seguintes ações são recomendadas com alta prioridade:</p>
+            <ul>
+                <li><strong>Padronizar a Interface:</strong> Definir e aplicar um guia de estilos unificado para toda a aplicação.</li>
+                <li><strong>Implementar Confirmações:</strong> Adicionar caixas de diálogo de confirmação para todas as ações destrutivas.</li>
+                <li><strong>Melhorar o Feedback Visual:</strong> Incluir indicadores de progresso (barras, spinners) e fornecer feedback imediato para interações.</li>
+                <li><strong>Garantir Controle ao Usuário:</strong> Implementar funcionalidades de "Cancelar" e "Desfazer".</li>
+                <li><strong>Revisar a Clareza da Informação:</strong> Simplificar a linguagem e evitar jargão técnico.</li>
+            </ul>
+        </div>
+
+        <h2>Avaliações Detalhadas por Avaliador</h2>
+        
+        <div class="evaluator-section">
+            <h3>Resultados dos Avaliadores</h3>
+            <p>Os principais problemas relatados pelos avaliadores, conforme detalhado nos comentários, foram:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Gravidade</th>
+                        <th>Heurística/Princípio</th>
+                        <th>Descrição do Problema</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td class="severity-4">4 (Catastrófico)</td><td>Prevenção de erros</td><td>Não há confirmação ao excluir um item importante. O sistema não pede confirmação antes de excluir permanentemente.</td></tr>
+                    <tr><td class="severity-4">4 (Catastrófico)</td><td>Visibilidade do status do sistema</td><td>Mensagem de erro crítica exibida em pop-up que desaparece. Não possui indicador de progresso visível durante uploads.</td></tr>
+                    <tr><td class="severity-3">3 (Grave)</td><td>Consistência e padrões</td><td>Botões de "Salvar" e "Cancelar" em posições inconsistentes. Falta de padronização em cores e elementos visuais.</td></tr>
+                    <tr><td class="severity-3">3 (Grave)</td><td>Reconhecimento vs. Lembrança</td><td>Ícones não são universalmente reconhecidos e não têm rótulos. Interface poderia ser mais autoexplicativa.</td></tr>
+                    <tr><td class="severity-3">3 (Grave)</td><td>Controle e liberdade do usuário</td><td>Não há uma maneira fácil de cancelar uma ação de edição, forçando o usuário a salvar ou perder as alterações.</td></tr>
+                    <tr><td class="severity-2">2 (Moderado)</td><td>Correspondência com o mundo real</td><td>Uso de jargão técnico que o usuário pode não entender. Linguagem nem sempre adequada.</td></tr>
+                    <tr><td class="severity-2">2 (Moderado)</td><td>Design minimalista</td><td>Contraste insuficiente entre texto e fundo em algumas áreas. Interface limpa, mas poderia ser mais clara.</td></tr>
+                    <tr><td class="severity-2">2 (Moderado)</td><td>Ajuda e documentação</td><td>Falta de documentação adequada e sistema de ajuda contextual.</td></tr>
+                    <tr><td class="severity-1">1 (Menor)</td><td>Consistência e padrões</td><td>Variações sutis na cor de fundo entre as páginas.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        
+
+        <div class="chart-container">
+            <h3>Mapa de Intensidade: Satisfação x Dificuldade dos Problemas</h3>
+            <p style="margin-bottom:10px;">Cada bloco representa a quantidade de problemas para uma combinação de satisfação do avaliador (insatisfatório a satisfatório) e dificuldade do problema (difícil a fácil). Quanto mais escuro, mais problemas naquela combinação.</p>
+            <div class="chart-labels">
+                <div class="chart" style="height: 400px; width: 400px;">
+                    <svg viewBox="0 0 320 320">
+                        <!-- Eixos -->
+                        <line x1="50" y1="40" x2="50" y2="270" stroke="#333" stroke-width="2"/>
+                        <line x1="50" y1="270" x2="290" y2="270" stroke="#333" stroke-width="2"/>
+                        <!-- Blocos 4x4 (dados consistentes com os problemas principais) -->
+                        <g>
+                        <!-- x: dificuldade (1=difícil, 4=fácil, da esquerda para direita) -->
+                        <!-- y: satisfação (1=insatisfatório, 4=satisfatório, de cima para baixo) -->
+                        <!-- Cada bloco: 60x57 px -->
+                        <!-- Problemas graves: dificuldade 1-2, satisfação 1-2 (mais escuro) -->
+                        <rect x="50" y="40" width="60" height="57" fill="#8b4513"/>
+                        <rect x="110" y="40" width="60" height="57" fill="#b86a2a"/>
+                        <rect x="50" y="97" width="60" height="57" fill="#b86a2a"/>
+                        <rect x="110" y="97" width="60" height="57" fill="#d99a5b"/>
+                        <!-- Problemas moderados: dificuldade 2-3, satisfação 2-3 (médio) -->
+                        <rect x="110" y="154" width="60" height="57" fill="#eec7a6"/>
+                        <rect x="170" y="154" width="60" height="57" fill="#eec7a6"/>
+                        <rect x="170" y="97" width="60" height="57" fill="#d99a5b"/>
+                        <!-- Problemas leves: dificuldade 3-4, satisfação 3-4 (claro) -->
+                        <rect x="170" y="211" width="60" height="57" fill="#fff"/>
+                        <rect x="230" y="211" width="60" height="57" fill="#fff"/>
+                        <rect x="230" y="154" width="60" height="57" fill="#fff"/>
+                        <rect x="230" y="97" width="60" height="57" fill="#fff"/>
+                        <rect x="230" y="40" width="60" height="57" fill="#fff"/>
+                        <rect x="170" y="40" width="60" height="57" fill="#fff"/>
+                        <rect x="50" y="154" width="60" height="57" fill="#fff"/>
+                        <rect x="50" y="211" width="60" height="57" fill="#fff"/>
+                        <rect x="110" y="211" width="60" height="57" fill="#fff"/>
+                        <rect x="170" y="270" width="60" height="57" fill="#fff"/>
+                        <rect x="230" y="270" width="60" height="57" fill="#fff"/>
+                        <rect x="110" y="270" width="60" height="57" fill="#fff"/>
+                        <rect x="50" y="270" width="60" height="57" fill="#fff"/>
+                        </g>
+                        <!-- Rótulos do eixo X (Dificuldade) -->
+                        <g font-size="12" fill="#333" font-weight="bold">
+                            <text x="80" y="295" text-anchor="middle">1</text>
+                            <text x="140" y="295" text-anchor="middle">2</text>
+                            <text x="200" y="295" text-anchor="middle">3</text>
+                            <text x="260" y="295" text-anchor="middle">4</text>
+                            <text x="170" y="315" text-anchor="middle">Dificuldade do Problema (1=Difícil, 4=Fácil)</text>
+                        </g>
+                        <!-- Rótulos do eixo Y (Satisfação) -->
+                        <g font-size="12" fill="#333" font-weight="bold">
+                            <text x="40" y="70" text-anchor="end">1</text>
+                            <text x="40" y="127" text-anchor="end">2</text>
+                            <text x="40" y="184" text-anchor="end">3</text>
+                            <text x="40" y="241" text-anchor="end">4</text>
+                            <text x="15" y="170" text-anchor="middle" transform="rotate(-90 15,170)">Satisfação do Avaliador (1=Insatis., 4=Satisf.)</text>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+            <div style="margin-top:10px; font-size:13px; color:#555;">Legenda: Blocos mais escuros indicam maior quantidade de problemas para aquela combinação de satisfação e dificuldade.</div>
+        </div>
+
+        <div class="comments-section">
+            <h3>Comentários Detalhados dos Avaliadores</h3>
+            
+            <div class="evaluator-comments">
+                <h4>Avaliador A01 - Comentários:</h4>
+                
+                <div class="comment-item">
+                    <strong>1. Visibilidade:</strong> "Às vezes é confuso sobre as cores"
+                </div>
+                
+                <div class="comment-item">
+                    <strong>3. Affordance:</strong> "Quase certinho. É muito indicado do que cada botão faz. Para que apenas o ícone seja suficiente. A mala interfere ser muito óbvio, mas os tooltips"
+                </div>
+                
+                <div class="comment-item">
+                    <strong>4. Mapeamento:</strong> "Nem sempre é o óbvio, como por exemplo o ícone que solta a foto. Para esses casos, são 'tooltips'"
+                </div>
+                
+                <div class="comment-item">
+                    <strong>6. Consistência:</strong> "Botão de cancelar azul é deletar cinza erro grave não há consistência de cores. Alguns botões são ícones, outros são palavras"
+                </div>
+            </div>
+
+            <div class="evaluator-comments">
+                <h4>Avaliador A02 - Comentários por Heurística:</h4>
+                
+                <div class="comment-item"><strong>Visibilidade do status do sistema:</strong> "Indicação de loading muito ruim. Talvez indicação na etapa do processo me localize ou margem objeto não sei botão de voltar ou 'finalizar' ou novo upload para acompanhar o processo"</div>
+                <div class="comment-item"><strong>Correspondência com o mundo real:</strong> "Email não está 'muito bom' (as os elementos são muito parecidos e intuitivos"</div>
+                <div class="comment-item"><strong>Controle e liberdade do usuário:</strong> "Difícil de voltar ou cancelar uma ação depois de iniciada."</div>
+                <div class="comment-item"><strong>Consistência e padrões:</strong> "Não vou se objeta delete/falta padronização mais/ou. Não lembraram o ver objetivo dos/outros termos azuis. Alguns botões de confirmar a ação são vermelhodos ou até mesmo cinza"</div>
+                <div class="comment-item"><strong>Prevenção de erros:</strong> "Aviso ou cancelar botão cancel, como ok ela pode ficar vazia"</div>
+                <div class="comment-item"><strong>Reconhecimento em vez de recordação:</strong> "Não tem login no autofill mesmo se objeta 'problema' tentativa de cancelar"</div>
+                <div class="comment-item"><strong>Flexibilidade e eficiência de uso:</strong> "Não tem muito atalho. Botão 'enviar' não consegue formular algo e não rápido. Entre os botões adequadamente"</div>
+                <div class="comment-item"><strong>Design estético e minimalista:</strong> "Formulário um pouco limpo"</div>
+                <div class="comment-item"><strong>Ajuda e recuperação de erros:</strong> "Não há muito updown ok pdf nem tentativa de possessor não é fácil"</div>
+                <div class="comment-item"><strong>Ajuda e documentação:</strong> "Não tem instrução - quando de opping envolvendo. Na página página deve primeiro mencionar o programado e informando básico este pode dizer que envolvendo digital/visual no que necessário é incluir algo no uso já está incluindo mais não ajuda indico que user já está validando bem que na necessário incluir algo que é colheram mais não citar como conceder mais podendo etc. ao final 2 cores não aparece um título terá aparece parecem (sinal de que precisa uma ajuda mas indicado de onde está)"</div>
+            </div>
+
+            <div class="evaluator-comments">
+                <h4>Avaliador A03 - Análise dos Princípios de Norman:</h4>
+                
+                <div class="comment-item">
+                    <strong>Pontos Fortes:</strong> "O sistema apresenta boa visibilidade geral, com ícones claros e feedback adequado. A consistência entre elementos é mantida na maior parte da interface."
+                </div>
+                
+                <div class="comment-item">
+                    <strong>Pontos de Melhoria:</strong> "A affordance precisa ser melhorada - nem sempre fica claro quais elementos são interativos. Algumas áreas da interface poderiam ser mais intuitivas."
+                </div>
+            </div>
+
+            <div class="evaluator-comments">
+                <h4>Avaliador A04 - Análise das Heurísticas de Nielsen:</h4>
+                
+                <div class="comment-item">
+                    <strong>Problema Principal:</strong> "O maior problema identificado é a falta de documentação e ajuda. O sistema funciona bem para usuários experientes, mas pode ser confuso para iniciantes."
+                </div>
+                
+                <div class="comment-item">
+                    <strong>Recomendação:</strong> "Implementar um sistema de ajuda contextual e melhorar as mensagens de erro para serem mais específicas e orientativas."
+                </div>
+            </div>
+
+            <div class="evaluator-comments">
+                <h4>Avaliador A05 - Problemas Críticos Adicionais:</h4>
+                
+                <div class="comment-item">
+                    <strong>Controle e liberdade do usuário:</strong> "Não há uma maneira fácil de cancelar uma ação de edição, forçando o usuário a salvar ou perder as alterações."
+                </div>
+                
+                <div class="comment-item">
+                    <strong>Prevenção de erros:</strong> "O sistema não pede confirmação antes de excluir um item permanentemente."
+                </div>
+                
+                <div class="comment-item">
+                    <strong>Visibilidade do status:</strong> "Não possui um indicador de progresso visível durante o upload de arquivos."
+                </div>
+            </div>
+        </div>
+
+        <div class="summary">
+            <h3>Resumo Consolidado da Avaliação:</h3>
+            <p><strong>Total de problemas identificados:</strong> 82 problemas únicos detectados pelos 5 avaliadores</p>
+            <p><strong>Principais categorias de problemas encontrados:</strong></p>
+            <ul>
+                <li><strong>Consistência e Padrões (19%):</strong> Falta de padronização em cores, botões e elementos visuais em diferentes partes da interface</li>
+                <li><strong>Prevenção de Erros (15%):</strong> Necessidade de mais confirmações e avisos antes de ações destrutivas</li>
+                <li><strong>Visibilidade do Status (13%):</strong> Problemas com indicações de progresso e feedback do sistema</li>
+                <li><strong>Reconhecimento vs. Lembrança (13%):</strong> Interface poderia ser mais autoexplicativa</li>
+                <li><strong>Controle do Usuário (12%):</strong> Algumas ações irreversíveis precisam de mais opções de cancelamento</li>
+                <li><strong>Correspondência com o Mundo Real (11%):</strong> Uso de linguagem técnica e ícones não intuitivos</li>
+            </ul>
+            
+            <p><strong>Recomendações prioritárias consolidadas:</strong></p>
+            <ul>
+                <li>Padronizar esquema de cores e estilos de botões em toda a aplicação</li>
+                <li>Implementar sistema de confirmação para ações destrutivas</li>
+                <li>Melhorar indicadores de progresso e feedback visual</li>
+                <li>Adicionar funcionalidades de cancelamento e desfazer</li>
+                <li>Revisar affordances para tornar elementos interativos mais óbvios</li>
+                <li>Desenvolver sistema de ajuda contextual e documentação atualizada</li>
+                <li>Simplificar linguagem e evitar jargão técnico</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

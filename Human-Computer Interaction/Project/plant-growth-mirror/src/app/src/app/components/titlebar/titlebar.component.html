@@ -1,0 +1,132 @@
+<div class="titlebar">
+  <!-- Ripple wave container -->
+  <div class="ripple-wave" #rippleContainer></div>
+
+  <div class="titlebar-drag-region" (dblclick)="maximizeWindow()">
+    <!-- Left section with navigation buttons -->
+    <div class="titlebar-left">
+      <button
+        *ngIf="canGoBack"
+        class="nav-btn back-btn"
+        (click)="goBack()"
+        title="Go Back"
+        tabindex="-1"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M19 12H5M12 19l-7-7 7-7"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+      <button
+        *ngIf="!isAtHome"
+        class="nav-btn home-btn"
+        (click)="navigateToHomeWithRipple()"
+        title="Home"
+        tabindex="-1"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M3 9.5L12 2l9 7.5v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M9 22V12h6v10"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Center title and breadcrumb navigation -->
+    <div class="titlebar-center">
+      <div class="breadcrumb-container">
+        <span
+          *ngFor="let breadcrumb of breadcrumbs; let i = index"
+          class="breadcrumb-item"
+        >
+          <span
+            class="breadcrumb-link"
+            [class.active]="i === breadcrumbs.length - 1"
+            (click)="navigateToBreadcrumb(breadcrumb)"
+            [title]="breadcrumb.fullName"
+          >
+            {{ breadcrumb.name }}
+          </span>
+          <span *ngIf="i < breadcrumbs.length - 1" class="breadcrumb-separator"
+            >›</span
+          >
+        </span>
+      </div>
+    </div>
+
+    <!-- Right section with window controls -->
+    <div class="titlebar-controls">
+      <button
+        class="control-btn minimize-btn"
+        (click)="minimizeWindow()"
+        title="Minimize"
+        tabindex="-1"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <path d="M0 5h10" stroke="currentColor" stroke-width="1" />
+        </svg>
+      </button>
+
+      <button
+        class="control-btn maximize-btn"
+        (click)="maximizeWindow()"
+        [title]="isMaximized ? 'Restore' : 'Maximize'"
+        tabindex="-1"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" *ngIf="!isMaximized">
+          <path
+            d="M0 0h10v10H0z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+          />
+        </svg>
+        <svg width="10" height="10" viewBox="0 0 10 10" *ngIf="isMaximized">
+          <path
+            d="M2 0h8v8H2z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+          />
+          <path
+            d="M0 2h8v8H0z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+          />
+        </svg>
+      </button>
+
+      <button
+        class="control-btn close-btn"
+        (click)="closeWindow()"
+        title="Close"
+        tabindex="-1"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <path
+            d="M0 0l10 10M0 10L10 0"
+            stroke="currentColor"
+            stroke-width="1"
+          />
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>

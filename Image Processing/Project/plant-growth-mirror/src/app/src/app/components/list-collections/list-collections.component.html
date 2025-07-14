@@ -1,0 +1,99 @@
+<div class="list-collections-container">
+  @if (mightLoad || noPhotosAvailable) {
+    <app-spinner
+      [showSpinner]="mightLoad"
+      [showText]="noPhotosAvailable && !mightLoad"
+      spinnerText="No photos available."
+    ></app-spinner>
+
+  } @else {
+    <h3 class="list-collections-title">Your photos and collections</h3>
+    <!-- Row #1: Photos without any collection -->
+    @if (photosWithoutCollection.length > 0) {
+      <div class="row-container">
+        <div class="row-title">Unassigned Photos</div>
+        <div class="photo-row">
+          @for (photo of photosWithoutCollection; track photo.id) {
+            <div class="photo-thumb-container">
+              <div class="photo-checkbox">
+                <input
+                  type="checkbox"
+                  [checked]="isPhotoSelected(photo)"
+                  (change)="onPhotoCheckboxChange(photo, $event)"
+                />
+              </div>
+              <div class="photo-thumb" (click)="goToPhotoPage(photo)">
+                <img
+                  [src]="photo.dataBase64"
+                  alt="Unassigned photo thumbnail"
+                />
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+    <!-- Subsequent rows: each collection and its photos -->
+    @for (collection of allCollections; track collection.id) {
+      @if (
+        photosPerCollection[collection.id] &&
+        photosPerCollection[collection.id].length > 0
+      ) {
+        <div class="row-container">
+          <div class="row-title-container">
+            <div class="row-title">
+              {{ collection.name }}
+            </div>
+            <button
+              class="see-collection-btn"
+              (click)="goToCollectionPage(collection)"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M7 17L17 7" />
+                <polyline points="7 7 17 7 17 17" />
+              </svg>
+              See Collection
+            </button>
+          </div>
+          <div class="photo-row">
+            @for (photo of photosPerCollection[collection.id]; track photo.id) {
+              <div class="photo-thumb-container">
+                <div class="photo-checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="isPhotoSelected(photo)"
+                    (change)="onPhotoCheckboxChange(photo, $event)"
+                  />
+                </div>
+                <div class="photo-thumb" (click)="goToPhotoPage(photo)">
+                  <img [src]="photo.dataBase64" alt="Photo thumbnail" />
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    }
+  }
+  <!-- Collection Selector Modal -->
+  @if (showCollectionSelector && selectedPhotoForCollection) {
+    <app-collection-selector
+      [collections]="allCollections"
+      [photo]="selectedPhotoForCollection"
+      [photosPerCollection]="photosPerCollection"
+      (collectionSelected)="onCollectionSelected($event)"
+      (cancelled)="onCollectionSelectorCancelled()"
+      (createNewCollectionRequested)="onCreateNewCollectionRequested()"
+    ></app-collection-selector>
+  }
+</div>

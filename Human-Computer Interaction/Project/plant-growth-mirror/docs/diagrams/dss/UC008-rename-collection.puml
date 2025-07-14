@@ -1,0 +1,19 @@
+@startuml UC008
+!theme plain
+
+actor User
+participant System
+
+User -> System : select collection
+User -> System : click rename/edit
+System -> System : show edit dialog with current name
+User -> System : modify name
+
+alt Valid name
+    System -> System : update collection
+    System --> User : collection renamed successfully
+else Invalid name
+    System --> User : show validation error
+end
+
+@enduml

@@ -1,0 +1,129 @@
+\chapter{Análise dos Testes de Usabilidade}
+
+\section{Objetivos}
+O objetivo deste teste é avaliar a usabilidade do sistema, considerando a facilidade com que os usuários conseguem enviar imagens de plantas, configurar o processamento, compreender os resultados apresentados e realizar o gerenciamento de coleções. Pretende-se identificar eventuais obstáculos relacionados à compreensão, ao uso e à satisfação geral durante a interação com o sistema, além de reunir dados quantitativos e qualitativos que permitam avaliar seu desempenho e orientar futuras melhorias na interface.
+
+\section{Sessões de Teste}
+Os testes foram conduzidos presencialmente em laboratórios da universidade ou em salas de aula equipadas com computadores, ou de forma remota, conforme disponibilidade dos participantes. Cada sessão teve duração estimada entre 30 minutos e 1 hora. Para a realização adequada dos testes, os computadores dispunham de um navegador web com acesso à internet, além de um documento resumido contendo a descrição das tarefas que o participante deveria executar no sistema. Durante toda a sessão, o participante foi acompanhado por um avaliador.
+
+O sistema foi previamente iniciado, com o banco de dados limpo e imagens de teste disponíveis para que os usuários pudessem interagir com as funcionalidades. Devido à limitação da equipe, os avaliadores foram os próprios desenvolvedores do sistema, o que pode introduzir viés de observação. Buscou-se minimizar esse efeito mantendo postura neutra e seguindo rigorosamente o protocolo de observação. Os participantes foram alunos da Universidade de São Paulo que simularam o papel de usuários finais, sendo previstas pelo menos cinco pessoas voluntárias para a realização dos testes.
+
+\section{Metodologia dos Testes}
+Durante o teste de usabilidade, todas as ações foram realizadas pelos próprios usuários, sem qualquer interferência direta dos avaliadores. Foi aplicada a técnica de Think Aloud, na qual os participantes foram incentivados a verbalizar seus pensamentos enquanto utilizavam o sistema. Essa abordagem permitiu compreender os raciocínios por trás de suas decisões e identificar eventuais dificuldades ao longo da interação.
+
+No contexto do teste, os usuários deveriam ser capazes de executar tarefas representativas do uso real do sistema, como:
+\begin{itemize}
+    \item Adicionar imagem ao sistema
+    \item Processar uma imagem
+    \item Remover uma imagem do sistema
+    \item Editar uma imagem
+    \item Criar uma coleção
+    \item Renomear uma coleção
+    \item Associar uma imagem a uma coleção
+    \item Desassociar uma imagem de uma coleção
+    \item Excluir uma coleção
+\end{itemize}
+
+Considerou-se que uma tarefa foi concluída com sucesso quando o participante conseguiu realizá-la integralmente, sem cometer erros e dentro de um intervalo de tempo razoável. A análise dos resultados levou em conta tanto a completude quanto a fluidez da execução de cada tarefa.
+
+\section{Avaliação do Teste de Usabilidade}
+Durante a execução dos testes de usabilidade, foram coletados diferentes tipos de dados, agrupados em duas categorias principais:
+\begin{itemize}
+    \item \textbf{Quantitativos}: tempo necessário para concluir cada tarefa, número de erros cometidos e quantidade de tarefas efetivamente concluídas.
+    \item \textbf{Qualitativos}: dificuldades relatadas durante a técnica de Think Aloud, feedback fornecido ao final da sessão e respostas ao questionário final com escala Likert (1 a 5) de satisfação.
+\end{itemize}
+Com base nessas informações, foi possível comparar os tempos de execução entre os usuários, identificar padrões de erros, agrupar dificuldades recorrentes e sintetizar sugestões e impressões gerais sobre o sistema.
+
+Para avaliar o sucesso da interface, foram adotados os seguintes critérios: 60\% das tarefas concluídas corretamente, média de tempo por tarefa dentro de valores considerados aceitáveis, feedback majoritariamente positivo na sessão final e ao menos 80\% dos usuários classificando o sistema como “fácil de usar”.
+
+\section{Etapas do Teste}
+A execução do teste foi organizada em quatro etapas distintas:
+\begin{enumerate}
+    \item \textbf{Preparação}: verificar se o sistema está estável e devidamente configurado para uso.
+    \item \textbf{Introdução}: o avaliador apresenta ao participante o propósito do teste de usabilidade, descreve as tarefas que serão realizadas e explica a mecânica da técnica Think Aloud.
+    \item \textbf{Teste}: o participante executa as tarefas propostas enquanto verbaliza suas ações e pensamentos. O avaliador acompanha o processo incentivando a comunicação, mas sem oferecer assistência direta.
+    \item \textbf{Sessão final}: ao término das tarefas, o avaliador solicita comentários gerais sobre a experiência, pergunta por sugestões de melhoria e aplica o questionário de satisfação.
+\end{enumerate}
+
+\section{Perfil dos Participantes}
+
+Os participantes foram selecionados entre estudantes de graduação e usuários com familiaridade com aplicações web. A diversidade de experiências técnicas contribuiu para identificar pontos de atrito tanto para usuários iniciantes quanto intermediários.
+
+\begin{itemize}
+    \item Todos os participantes utilizam computadores regularmente.
+    \item A maioria tem experiência com ferramentas de organização de arquivos e edição básica de imagens.
+    \item Apenas um dos participantes possuía experiência prévia com ferramentas de análise visual de dados experimentais.
+\end{itemize}
+
+\section{Execução das Tarefas}
+
+As tarefas propostas aos usuários foram executadas com diferentes níveis de sucesso. Abaixo, um resumo agregado por tarefa:
+
+\begin{itemize}
+    \item \textbf{Adicionar imagem ao sistema}: 5 de 5 participantes conseguiram concluir. Um participante tentou colar imagem via atalho de teclado (Ctrl+V), outro enfrentou problema com o formato AVIF, mas compreendeu o funcionamento posteriormente.
+    
+    \item \textbf{Processar imagem}: 4 de 5 participantes entenderam corretamente a necessidade de abrir a imagem no editor para realizar o processamento. Um participante não clicou no botão "Done" para finalizar e acabou descaratando o processamento sem querer.
+
+    \item \textbf{Remover imagem do sistema}: Todos os 5 participantes executaram corretamente.
+
+    \item \textbf{Editar imagem}: 3 participantes conseguiram realizar a edição sem grandes problemas. Fluxo foi considerado confuso por outros dois participantes.
+
+    \item \textbf{Criar coleção}: Todos os participantes conseguiram completar a tarefa. No entanto, um deles seguiu um fluxo menos convencional, criando ao atribuir uma coleção a uma imagem.
+
+    \item \textbf{Renomear coleção}: Tarefa bem-sucedida por todos os participantes, embora um tenha demorado para localizar o botão correspondente.
+
+    \item \textbf{Associar imagem a coleção}: 4 participantes concluíram a ação com sucesso. Um deles tentou utilizar drag-and-drop, não suportado no sistema, e depois usou o método correto.
+
+    \item \textbf{Desassociar imagem de coleção}: 4 participantes executaram corretamente. Um participante pensou que iria remover a imagem apenas da coleção, mas acabou removendo do sistema.
+
+    \item \textbf{Excluir coleção}: Todos os usuários realizaram a ação com sucesso. Um deles parabenizou a clareza do alerta de confirmação antes da exclusão.
+\end{itemize}
+
+\section{Resultados do Questionário Final}
+
+A seguir, apresentamos a média das avaliações fornecidas pelos participantes para cada afirmação do questionário, em escala de 1 (discordo totalmente) a 5 (concordo totalmente):
+
+\input{sections/teste_usabilidade/medias_questionario}
+
+\textit{Obs.: A pergunta 7 ("Dificuldade para concluir as tarefas") é uma afirmação negativa, portanto, valores menores indicam melhor usabilidade. Para as demais perguntas, quanto maior o valor, melhor a avaliação.}
+
+Vale ressaltar que a própria estrutura do questionário pode ter influenciado alguns resultados. Em especial, a descrição da tarefa de "Editar imagem" gerou dúvidas em parte dos participantes durante a execução, o que pode ter impactado negativamente a avaliação dessa funcionalidade no questionário. Recomenda-se, em futuras aplicações, revisar e detalhar melhor as instruções e descrições das tarefas para garantir maior clareza e precisão nas respostas.
+
+Nas questões abertas, os pontos mais citados foram:
+
+\begin{itemize}
+    \item \textbf{Aspectos positivos}: organização por coleções, aparência limpa, possibilidade de personalização da análise.
+    \item \textbf{Dificuldades relatadas}: falta de feedback após o processamento, ações em lote limitadas.
+    \item \textbf{Sugestões de melhoria}: incluir textos descritivos nos botões, melhorar indicações visuais de progresso, facilitar navegação entre telas.
+\end{itemize}
+
+\section{Análise Consolidada}
+
+A análise geral dos cinco testes evidencia que o sistema está funcional e permite a execução das tarefas esperadas, ainda que com dificuldades recorrentes em pontos específicos da interface. Os seguintes padrões foram observados:
+
+\begin{itemize}
+    \item \textbf{Clareza do fluxo de ações}: A necessidade de abrir imagens no editor para processá-las não foi evidente para alguns participantes, o que prejudicou o entendimento da funcionalidade central do sistema.
+    
+    \item \textbf{Interação e affordance}: Botões representados apenas por ícones causaram incerteza em relação às suas funções, especialmente em ações como editar ou desassociar imagens.
+
+    \item \textbf{Feedback}: A ausência de mensagens claras sobre o andamento e o resultado de ações (como uploads ou processamentos) gerou insegurança nos usuários.
+
+    \item \textbf{Consistência visual}: Alguns elementos da interface não seguem uma padronização evidente, o que compromete a previsibilidade.
+
+    \item \textbf{Navegação}: A posição de botões como “voltar” foi criticada por estar pouco visível ou distante do fluxo principal de tarefas.
+\end{itemize}
+
+\section{Conclusão}
+
+Os testes revelam que a aplicação oferece uma base sólida de funcionalidades, mas ainda carece de aprimoramentos na usabilidade. Os pontos fortes incluem a organização visual e a coerência entre as principais funções. Contudo, ajustes específicos são necessários para que o sistema atenda melhor às expectativas e habilidades de seus usuários.
+
+\subsection*{Recomendações Prioritárias}
+
+\begin{itemize}
+    \item Exibir mensagens claras de conclusão ou erro após operações como processamento ou upload.
+    \item Padronizar estilo e posição de botões para garantir consistência.
+    \item Tornar mais evidente o caminho de ações principais (ex.: abrir no editor para processar).
+    \item Incluir suporte a ações em lote e seleção múltipla.
+\end{itemize}
+
+A adoção dessas recomendações deve melhorar a fluidez da experiência do usuário e reduzir os erros ou incertezas durante o uso do sistema.

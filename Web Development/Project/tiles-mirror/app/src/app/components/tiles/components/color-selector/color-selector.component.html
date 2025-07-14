@@ -1,0 +1,21 @@
+<div class="colors-container">
+  @for (color of colors; track color) {
+    @if (color == selectedColor) {
+      <div
+        class="color selected"
+        [ngStyle]="{ 'background-color': color }"
+        (click)="selectColor(color)"
+      >
+        <span>{{ color }}</span>
+      </div>
+    } @else {
+      <div
+        class="color"
+        [ngStyle]="{ 'background-color': color }"
+        (click)="selectColor(color)"
+      >
+        <span>{{ color }}</span>
+      </div>
+    }
+  }
+</div>

@@ -1,0 +1,26 @@
+@startuml UC002
+!theme plain
+
+actor User
+participant System
+participant Gallery
+
+User -> System : select multiple files
+
+loop For each file
+    alt Valid file
+        System -> System : extract metadata & create record
+        System -> System : update progress
+    else Invalid file
+        System --> User : report error
+    end
+end
+
+alt Upload completed
+    System -> Gallery : display all photos
+    Gallery --> User : option to assign to collection
+else Upload interrupted
+    System --> User : save successfully uploaded photos
+end
+
+@enduml

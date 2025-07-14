@@ -1,0 +1,38 @@
+<div class="collection-selector-overlay">
+  <div class="collection-selector-container">
+    <div class="collection-selector-header">
+      <h3>Select a Collection</h3>
+      <p>Choose which collection to add this photo to:</p>
+    </div>
+
+    <div class="collections-list">
+      @if (collections.length === 0) {
+        <div class="no-collections">
+          <p>No collections available.</p>
+          <button class="btn-create-new" (click)="createNewCollection()">
+            Create New Collection
+          </button>
+        </div>
+      } @else {
+        @for (collection of collections; track collection.id) {
+          <div class="collection-item" (click)="selectCollection(collection)">
+            <span>{{ collection.name }}</span>
+            <div class="photo-count">
+              {{ getPhotoCount(collection.id) }} photos
+            </div>
+          </div>
+        }
+        <div
+          class="collection-item create-new-item"
+          (click)="createNewCollection()"
+        >
+          <span>+ Create New Collection</span>
+          <div class="new-collection-text"></div>
+        </div>
+      }
+    </div>
+    <div class="actions">
+      <button class="btn-cancel" (click)="cancel()">Cancel</button>
+    </div>
+  </div>
+</div>

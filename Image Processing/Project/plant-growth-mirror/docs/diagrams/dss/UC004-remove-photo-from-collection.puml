@@ -1,0 +1,20 @@
+@startuml UC004
+!theme plain
+
+actor User
+participant System
+
+User -> System : locate photo in collection
+User -> System : click remove from collection
+System -> System : show confirmation dialog
+
+alt Confirm removal
+    User -> System : confirm
+    System -> System : remove from collection
+    System --> User : photo unassigned (still in system)
+else Cancel
+    User -> System : cancel
+    System --> User : no changes
+end
+
+@enduml

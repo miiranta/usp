@@ -1,0 +1,25 @@
+@startuml UC012
+!theme plain
+
+actor User
+participant System
+
+User -> System : select multiple photos/open collection editor
+User -> System : enable "Process All" mode
+User -> System : set global parameters
+User -> System : click "Process All"
+System -> System : show progress indicator
+
+loop For each photo
+    alt Processing successful
+        System -> System : process photo with same parameters
+        System -> System : update progress & display result
+    else Processing error
+        System -> System : continue with remaining photos
+        System --> User : report error for failed photo
+    end
+end
+
+System --> User : all results displayed
+
+@enduml

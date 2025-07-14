@@ -1,0 +1,227 @@
+<div class="edit-photos-container">
+  @if (photos.length > 1) {
+    <div class="index-row">
+      Photo {{ currentIndex + 1 }} of {{ photos.length }}
+    </div>
+
+    <div class="thumbnails-row">
+      @for (photo of photos; track photos.indexOf(photo)) {
+        <div
+          class="thumbnail"
+          [class.selected]="photos.indexOf(photo) === currentIndex"
+          [class.not-processed]="isPhotoProcessed(photo) === false"
+          (click)="selectThumbnail(photos.indexOf(photo))"
+        >
+          <div class="thumb-index">{{ photos.indexOf(photo) + 1 }}</div>
+          <img
+            src="{{ photo.dataProcessedBase64 || photo.dataBase64 }}"
+            alt="Thumbnail"
+          />
+          @if (photoLoading[photo.id]) {
+            <div class="thumb-loading">
+              <app-spinner
+                #thumbnailSpinner
+                [showSpinner]="true"
+                [showProgress]="true"
+                [showProgressText]="true"
+              >
+              </app-spinner>
+            </div>
+          }
+        </div>
+      } @empty {
+        <div class="no-thumbnails">No photos available.</div>
+      }
+    </div>
+  }
+
+  <div class="main-content">
+    <div class="photo-editor">
+      <div class="photo-container">
+        <div class="side-by-side">
+          <div class="orig-box">
+            <p>Original</p>
+            <div>
+              <img
+                src="{{ photos[currentIndex].dataBase64 }}"
+                alt="Original Photo"
+              />
+            </div>
+          </div>
+          <div class="processed-box">
+            <p>Processed</p>
+            @if (photos[currentIndex].dataProcessedBase64) {
+              <div>
+                <img
+                  src="{{ photos[currentIndex].dataProcessedBase64 }}"
+                  alt="Processed Photo"
+                />
+              </div>
+            } @else {
+              <div class="not-processed">Not processed yet.</div>
+            }
+            @if (photoLoading[photos[currentIndex].id]) {
+              <div class="photo-loading">
+                <app-spinner
+                  #mainPhotoSpinner
+                  [showSpinner]="true"
+                  [showProgress]="true"
+                  [showProgressText]="true"
+                >
+                </app-spinner>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+      <div #controls class="controls">
+        @if (photos.length > 1) {
+          <div class="mode-toggle">
+            <label>
+              <input
+                type="radio"
+                name="processMode"
+                [value]="false"
+                [(ngModel)]="processAllMode"
+              />
+              Process Selected
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="processMode"
+                [value]="true"
+                [(ngModel)]="processAllMode"
+              />
+              Process All
+            </label>
+          </div>
+        }
+
+        <div class="form-group">
+          <label>
+            Granularity:
+            {{
+              processAllMode
+                ? globalGranularity
+                : photoParams[photos[currentIndex].id].granularity
+            }}
+          </label>
+          <small class="param-explanation">
+            Controls the size of analysis regions. Lower values create smaller,
+            more detailed segments for precise detection. Higher values create
+            larger regions for faster processing but less detail.
+          </small>
+          <input
+            type="range"
+            min="1"
+            max="100"
+            step="1"
+            [ngModel]="
+              processAllMode
+                ? globalGranularity
+                : photoParams[photos[currentIndex].id].granularity
+            "
+            (ngModelChange)="
+              processAllMode
+                ? (globalGranularity = $event)
+                : (photoParams[photos[currentIndex].id].granularity = $event)
+            "
+          />
+        </div>
+        <div class="form-group">
+          <label>
+            Threshold:
+            {{
+              processAllMode
+                ? globalThreshold
+                : photoParams[photos[currentIndex].id].threshold
+            }}
+          </label>
+          <small class="param-explanation">
+            Sets the sensitivity for detecting green vegetation. Lower values
+            detect more subtle green colors but may include non-plant elements.
+            Higher values require stronger green signals but improve accuracy.
+          </small>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            [ngModel]="
+              processAllMode
+                ? globalThreshold
+                : photoParams[photos[currentIndex].id].threshold
+            "
+            (ngModelChange)="
+              processAllMode
+                ? (globalThreshold = $event)
+                : (photoParams[photos[currentIndex].id].threshold = $event)
+            "
+          />
+        </div>
+        @if (!processAllMode) {
+          <div class="form-group">
+            <label>Created At</label>
+            <input
+              type="datetime-local"
+              [(ngModel)]="photoParams[photos[currentIndex].id].createdAt"
+            />
+          </div>
+        }
+        <div class="button-row">
+          @if (processAllMode) {
+            <button (click)="editAll()" [disabled]="globalOperationInProgress">
+              Process All
+            </button>
+            <button (click)="undoAll()" [disabled]="globalOperationInProgress">
+              Undo All
+            </button>
+            <button (click)="redoAll()" [disabled]="globalOperationInProgress">
+              Redo All
+            </button>
+          } @else {
+            <button
+              (click)="editPhoto(photos[currentIndex])"
+              [disabled]="photoLoading[photos[currentIndex].id] || autoedit"
+            >
+              Process
+            </button>
+            <button
+              (click)="undoPhoto(photos[currentIndex])"
+              [disabled]="
+                photoLoading[photos[currentIndex].id] ||
+                photoBackups[photos[currentIndex].id].length === 0
+              "
+            >
+              Undo
+            </button>
+            <button
+              (click)="redoPhoto(photos[currentIndex])"
+              [disabled]="
+                photoLoading[photos[currentIndex].id] ||
+                photoRedos[photos[currentIndex].id].length === 0
+              "
+            >
+              Redo
+            </button>
+            <div class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="autoedit" />
+              <label>Auto process</label>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="done-row">
+    <button
+      class="done-btn"
+      [ngClass]="{ 'not-processed': !arePhotosAllProcessed() }"
+      (click)="done()"
+    >
+      Done
+    </button>
+  </div>
+</div>

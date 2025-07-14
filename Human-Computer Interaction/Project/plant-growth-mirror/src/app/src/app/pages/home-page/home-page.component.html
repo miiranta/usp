@@ -1,0 +1,32 @@
+<div class="title">
+  <h1>Plant Growth Analyzer</h1>
+</div>
+
+<div class="upload-container">
+  <app-upload (upload)="onUpload($event)"></app-upload>
+  <h3>Files will be added to:</h3>
+  <app-manage-collections
+    (selectionChange)="onCollectionSelectionChange($event)"
+    (collectionCreated)="onCollectionCreated($event)"
+  >
+  </app-manage-collections>
+</div>
+
+<app-list-collections
+  (createNewCollectionRequested)="onCreateNewCollectionRequested()"
+></app-list-collections>
+
+<div class="credits">
+  <p>
+    Project created by
+    <br />
+    Lucas Cardoso dos Santos (<a href="https://github.com/cardoso42">github</a>,
+    <a href="https://www.linkedin.com/in/cardoso42">linkedin</a>)
+    <br />
+    Lucas Miranda Mendonça Rezende (<a href="https://github.com/miiranta"
+      >github</a
+    >, <a href="https://www.linkedin.com/in/miiranta">linkedin</a>)
+    <br />
+    All rights reserved.
+  </p>
+</div>

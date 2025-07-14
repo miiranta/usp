@@ -1,0 +1,17 @@
+<div class="home-container">
+  <div class="home-form">
+    <app-choose-name
+      *ngIf="!showPasswordComponent"
+      (passwordNeeded)="onPasswordNeeded($event)"
+    >
+    </app-choose-name>
+
+    <app-password
+      *ngIf="showPasswordComponent"
+      [playerName]="playerName"
+      [isNewPlayer]="isNewPlayer"
+      (backToChooseName)="onBackToChooseName()"
+    >
+    </app-password>
+  </div>
+</div>

@@ -1,0 +1,93 @@
+<div class="collection-selector-container">
+  <div class="selector-row">
+    <div
+      class="custom-dropdown"
+      [class.open]="dropdownOpen"
+      (click)="toggleDropdown()"
+    >
+      <div class="selected-option">
+        @if (loadingCollections) {
+          <app-spinner
+            class="selected-spinner"
+            [showSpinner]="true"
+          ></app-spinner>
+        } @else {
+          {{ selectedCollectionName() }}
+        }
+      </div>
+
+      <div
+        class="dropdown-menu"
+        *ngIf="dropdownOpen"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="dropdown-item" (click)="selectCollection(null, $event)">
+          @if (loadingCollections) {
+            <app-spinner [showSpinner]="true"></app-spinner>
+          } @else {
+            <span>No Collection</span>
+          }
+        </div>
+
+        <div
+          class="dropdown-item"
+          *ngFor="let c of collections"
+          (click)="selectCollection(c.id, $event)"
+        >
+          @if (!hideRedirectButton) {
+            <button
+              class="redirect-button"
+              title="Details"
+              (click)="openDetails(c.id, $event)"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M7 17L17 7" />
+                <polyline points="7 7 17 7 17 17" />
+              </svg>
+              See Collection
+            </button>
+          }
+          <span>{{ c.name }}</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="add-btn" (click)="openPopup()">New Collection</button>
+  </div>
+
+  @if (showPopup) {
+    <div class="popup-backdrop" (click)="closePopup()">
+      <div class="popup-content" (click)="$event.stopPropagation()">
+        <h3>Create New Collection</h3>
+        <input
+          #newCollectionInput
+          class="popup-input"
+          type="text"
+          placeholder="Collection Name"
+          [(ngModel)]="newCollectionName"
+          (keydown)="onInputKeyDown($event)"
+        />
+        <div class="popup-actions">
+          <button
+            class="popup-save"
+            (click)="createAndSelect()"
+            [disabled]="!newCollectionName.trim()"
+          >
+            Save
+          </button>
+          <button class="popup-cancel" (click)="closePopup()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

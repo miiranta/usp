@@ -1,0 +1,21 @@
+@startuml UC005
+!theme plain
+
+actor User
+participant System
+
+User -> System : select photo
+User -> System : click delete
+System -> System : show warning dialog
+
+alt Confirm deletion
+    User -> System : confirm
+    System -> System : remove from collections
+    System -> System : delete from database
+    System --> User : photo permanently deleted
+else Cancel
+    User -> System : cancel
+    System --> User : no deletion
+end
+
+@enduml

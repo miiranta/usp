@@ -1,0 +1,147 @@
+app-spinner {
+  padding-top: 30px;
+}
+
+h3 {
+  margin-top: 48px;
+  margin-bottom: 0;
+  font-weight: 600;
+}
+
+.list-collections-container {
+  max-width: 1000px;
+  margin: 2rem auto;
+  font-family: "Segoe UI", sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+
+  border: 1px solid #aaaaaa;
+  border-radius: 8px;
+  padding: 30px;
+  padding-top: 0;
+
+  box-shadow: 2px 2px 20px 8px rgba(0, 0, 0, 0.1);
+
+  .row-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    border: 1px solid #c1c1c1;
+    border-radius: 8px;
+    padding: 25px;
+    padding-top: 15px;
+
+    overflow: hidden;
+
+    .row-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #333;
+      padding-bottom: 10px;
+    }
+
+    .row-title-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 10px;
+
+      .row-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #333;
+        padding-bottom: 0;
+      }
+
+      .see-collection-btn {
+        background: none;
+        border: 1px solid #4caf50;
+        border-radius: 6px;
+        color: #4caf50;
+        font-size: 1rem;
+        cursor: pointer;
+        padding: 0.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        text-wrap: nowrap;
+        gap: 0.25rem;
+
+        &:hover {
+          background-color: rgba(76, 175, 80, 0.3);
+          border-color: #388e3c;
+          color: #388e3c;
+        }
+
+        svg {
+          width: 16px;
+          height: 16px;
+        }
+      }
+    }
+
+    .row-title-clickable {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #4d47ff;
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.2s;
+      text-decoration: underline;
+      padding-bottom: 10px;
+
+      &:hover {
+        color: #003163;
+      }
+    }
+
+    .photo-row {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+
+      .photo-thumb-container {
+        position: relative;
+        flex: 0 0 auto;
+
+        .photo-checkbox {
+          position: absolute;
+          top: 4px;
+          left: 4px;
+          z-index: 1;
+
+          input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #1976d2;
+          }
+        }
+
+        .photo-thumb {
+          width: 120px;
+          height: 90px;
+          border: 2px solid transparent;
+          border-radius: 4px;
+          overflow: hidden;
+          cursor: pointer;
+          transition: border-color 0.2s;
+
+          img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+
+          &:hover {
+            border-color: #1976d2;
+          }
+        }
+      }
+    }
+  }
+}

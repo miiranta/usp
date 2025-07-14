@@ -1,0 +1,14 @@
+@startwbs UC006
+* 0. View photo details
+** 1. Locate photo
+*** 1.1 In gallery: scroll
+*** 1.2 In collection:\nclick "See Collection"\nthen scroll
+** 2. Open detail view
+*** 2.1 Click thumbnail
+** 3. Review info
+*** 3.1 View original image
+*** 3.2 View processed image/results
+*** 3.3 Read metadata/params
+** 4. (Optional) Edit photo
+*** 4.1 Click "Open in editor"
+@endwbs
