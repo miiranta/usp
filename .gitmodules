@@ -10,3 +10,15 @@
 [submodule "Computer Networks/Project/TrabRedes"]
 	path = Computer Networks/Project/TrabRedes
 	url = https://github.com/angelopra/TrabRedes
+[submodule "Web Development/Project/tiles"]
+	path = Web Development/Project/tiles
+	url = https://github.com/miiranta/tiles
+[submodule "Distributed Systems/Project/tiles"]
+	path = Distributed Systems/Project/tiles
+	url = https://github.com/miiranta/tiles
+[submodule "Human-Computer Interaction/Project/plant-growth"]
+	path = Human-Computer Interaction/Project/plant-growth
+	url = https://github.com/cardoso42/plant-growth
+[submodule "Image Processing/Project/plant-growth"]
+	path = Image Processing/Project/plant-growth
+	url = https://github.com/cardoso42/plant-growth
