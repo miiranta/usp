@@ -34,7 +34,9 @@
     \newpage
     \pagenumbering{arabic}
         \vspace*{\fill}
-            \abstract{resumo}
+            \begin{abstract}
+                This research proposal investigates the relationship between neural network complexity measures and their inference capabilities. With the rapid advancement of Large Language Models (LLMs) and the increasing computational costs associated with scaling, understanding the complexity-performance relationship becomes crucial for efficient model development and deployment. This study aims to validate the hypothesis that model complexity and inference capability are meaningfully related, establish quantitative relationships between these measures, and explore their implications for model optimization and design. The research will analyze publicly available models using established complexity metrics and benchmark performance data, employing statistical methods to characterize the relationships discovered. Expected outcomes include theoretical insights into model behavior, practical guidelines for model selection and optimization, and foundations for future research in complexity-aware machine learning approaches.
+            \end{abstract}
         \vspace*{\fill}
 
     \newpage
@@ -47,12 +49,12 @@
     \input{sections/materials_and_methods}
 
     \newpage
-    \input{sections/expected_results}
-
-    \newpage
     \input{sections/planning}
 
     \newpage
-    \input{sections/references}
+    \input{sections/expected_results}
+
+    \newpage
+    \bibliography{refs}
 
 \end{document}

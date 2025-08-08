@@ -1,4 +1,59 @@
 \section{Materials and Methods}
 
-\subsection{Technical and Mathematical Details}
-\subsection{Explanation of Each Activity and What Will Be Done}
+    \subsection{Model Complexity}
+
+        The complexity measure used in this study is based on the López-Ruiz-Mancini-Calbet (LMC) statistical complexity measure~\cite{lopez1995statistical, martin2003statistical}, following recent research that demonstrates the relationship between complexity and inference performance~\cite{murta2025complexity}. For a neural network with weight parameters $\theta = \{\theta_1, \theta_2, \ldots, \theta_n\}$, we define the complexity measure as follows:
+
+        \textbf{Statistical Complexity of Model Weights:}
+        The LMC complexity $C_{LMC}(\theta)$ of a model's weight configuration is defined as:
+
+        \begin{equation}
+            C_{LMC}(\theta) = H(\theta) \times D(\theta)
+        \end{equation}
+
+        where $H(\theta)$ is the normalized Shannon entropy and $D(\theta)$ is the disequilibrium measure. The normalized Shannon entropy is computed as:
+
+        \begin{equation}
+            H(\theta) = -\frac{1}{\log_2 n} \sum_{i=1}^{n} p_i \log_2 p_i
+        \end{equation}
+
+        and the disequilibrium is defined as:
+
+        \begin{equation}
+            D(\theta) = \sum_{i=1}^{n} \left(p_i - \frac{1}{n}\right)^2
+        \end{equation}
+
+        where $p_i$ represents the normalized probability distribution of weight bins obtained by discretizing the weight space, and $n$ is the number of bins. This measure captures both the information content (entropy) and the degree of structure (disequilibrium) in the weight distribution.
+
+        The computation will be implemented using tools provided by frameworks like PyTorch~\cite{paszke2019pytorch}. The chosen discretization approach and bin selection strategy will be explained in the final presentation.
+
+    \subsection{Inference Capability}
+
+        Inference capability will be assessed using standardized benchmarks and evaluation metrics commonly used in the machine learning community~\cite{liang2022holistic, wang2019superglue}. This requires careful investigation of comparison methodologies since benchmarks often become obsolete quickly due to rapid model improvements~\cite{raji2021ai}.
+
+    \subsection{Methodology}
+
+        The research will follow the following step-by-step approach:
+
+        \textbf{Step 1 - Model Selection}
+        \begin{itemize}
+            \item Select publicly available open-source models with accessible weights. Models available through platforms like HuggingFace
+        \end{itemize}
+
+        \textbf{Step 2 - Literature Review and Benchmark Data Collection}
+        \begin{itemize}
+            \item Search for existing benchmark results for the selected models
+            \item Conduct literature review on model evaluation methodologies
+            \item Determine the most appropriate inference measures based on data availability
+        \end{itemize}
+
+        \textbf{Step 3 - Complexity Measure Extraction}
+        \begin{itemize}
+            \item Utilize tools such as PyTorch~\cite{paszke2019pytorch} to extract and calculate the model complexity measure from model weights
+        \end{itemize}
+
+        \textbf{Step 4 - Statistical Analysis and Relationship Modeling}
+        \begin{itemize}
+            \item Structure results of the relationship between complexity and model performance
+            \item Include measures of statistical significance (correlation analysis, regression modeling, confidence intervals...)
+        \end{itemize}

@@ -1,6 +1,19 @@
 \section{Introduction}
 
-\subsection{Background Story}
-\subsection{Thesis}
-\subsection{Objective}
-\subsection{Scope}
+    Since the creation of Transformers and the Large Language Models (LLMs) based on this technique~\cite{vaswani2017attention}, there has been a veritable gold rush within the machine learning world. The exponential growth in AI investments and research has led to increasingly sophisticated models with remarkable capabilities~\cite{brown2020language, bubeck2023sparks}.
+
+    However, over time, the need for more and more data to train increasingly larger models has become an impediment to the progress of these models' inference performance due to cost considerations~\cite{kaplan2020scaling, hoffmann2022training}. The scaling laws for neural language models demonstrate that performance improvements require exponentially increasing computational resources and training data, making further advancement increasingly expensive and resource-intensive.
+
+    This creates the need for new advances that do not depend on adding more data but are instead improvements to the method itself, similar to what occurred with the creation of transformers~\cite{vaswani2017attention}. New methods to be created are generally based on observations of measures and relationships in the model weights.
+
+    One such measure was investigated in recent research that explores the relationship between the well-known measure of model complexity and inference capability~\cite{murta2025complexity}. Understanding this relationship could provide insights into model efficiency and performance optimization without requiring massive increases in training data or computational resources.
+
+    \subsection{Objective}
+
+        \textbf{Work thesis}: There exists a relationship between model complexity and its inference capability~\cite{murta2025complexity}.
+
+        The primary objectives of this work are to:
+        \begin{itemize}
+            \item Validate the hypothesis that model complexity and inference capability are related
+            \item Measure and define the specific relationship that exists between these two measures, investigating whether complexity measures can serve as predictors of model performance across different architectures and tasks
+        \end{itemize}

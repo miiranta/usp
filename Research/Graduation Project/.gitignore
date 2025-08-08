@@ -4,3 +4,8 @@
 *.fls
 *.fdb_latexmk
 *.toc
+*.blg
+*.bbl
+
+papers-and-books
+examples
