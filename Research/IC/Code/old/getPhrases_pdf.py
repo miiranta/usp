@@ -56,7 +56,7 @@ def break_into_sentences(pages):
     for page in pages:
         
         # Break text into sentences (separated by periods, exclamation marks, or question marks)
-        page_sentences = re.split(r'(?<=[.!?]) +', page)
+        page_sentences = re.split(r'(?<=[.!?;]) +', page)
         sentences.extend(page_sentences)
         
     return sentences
