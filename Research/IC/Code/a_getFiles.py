@@ -1,7 +1,8 @@
 import os
 import re
 import time
-from urllib.parse import urljoin
+import requests
+from urllib.parse import urljoin, urlparse
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -37,7 +38,13 @@ def collect_meeting_urls(driver):
     print(f'Collected {len(meetings)} meeting URLs.')
     return meetings
 
-def download_meeting_page(driver, wait, url, out_path):
+def download_meeting_page(driver, wait, url, date_folder, date):
+    out_path = os.path.join(date_folder, f'{date}.html')
+    
+    if os.path.exists(out_path):
+        print(f'Skipping {date} (already downloaded)')
+        return
+    
     try:
         driver.get(url)
         wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
@@ -47,10 +54,53 @@ def download_meeting_page(driver, wait, url, out_path):
         except:
             pass
         
+        time.sleep(8)
         html = driver.page_source
         with open(out_path, 'w', encoding='utf-8') as f:
             f.write(html)
         return len(html)
+    except Exception as e:
+        raise e
+
+def download_pdf(driver, date_folder, date):
+    try:
+        pdf_links = driver.find_elements(By.XPATH, "//a[contains(translate(@href, 'PDF', 'pdf'), '.pdf')]")
+
+        filtered = []
+        for link in pdf_links:
+            href = link.get_attribute('href')
+            if not href:
+                continue
+            if not href.lower().startswith('http'):
+                href = urljoin('https://www.bcb.gov.br', href)
+            if re.search(r"/content/copom/atascopom/[^/]+\.pdf$", href, re.IGNORECASE):
+                filtered.append(href)
+
+        total_files = len(filtered)
+        if total_files == 0:
+            return
+
+        for i, url in enumerate(filtered, start=1):
+            try:
+                parsed_url = urlparse(url)
+                filename = os.path.basename(parsed_url.path)
+                
+                filepath = os.path.join(date_folder, filename)
+                
+                if os.path.exists(filepath):
+                    continue
+                
+                response = requests.get(url, timeout=30)
+                response.raise_for_status()
+                
+                with open(filepath, 'wb') as f:
+                    f.write(response.content)
+                
+                print(f"Downloaded pdf {filename}")
+                
+            except Exception as e:
+                print(f"Failed to download pdf {filename}: {e}")
+                
     except Exception as e:
         raise e
 
@@ -79,16 +129,17 @@ def main():
 
         for i, date in enumerate(dates, start=1):
             url = meetings[date]
-            out_path = os.path.join(OUTPUT_FOLDER, f'{date}.html')
-            if os.path.exists(out_path):
-                print(f'[{i}/{len(dates)}] Skipping {date} (already downloaded)')
-                continue
+            date_folder = os.path.join(OUTPUT_FOLDER, date)
+            os.makedirs(date_folder, exist_ok=True)
             
             try:
                 print(f'[{i}/{len(dates)}] Loading {url}')
-                download_meeting_page(driver, wait, url, out_path)
+                download_meeting_page(driver, wait, url, date_folder, date)
+                download_pdf(driver, date_folder, date)
+                
             except Exception as e:
-                print(f'Error loading {url}:', e)
+                print(f'Error loading {url}: {e}')
+                
             time.sleep(0.25)
     
     finally:
