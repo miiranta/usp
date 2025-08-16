@@ -15,6 +15,10 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 PROMPT = """
+DEFINITION OF OPTIMISM:
+
+DEFINITION OF PESSIMISM:
+
 EVALUATE THE SENTENCE AS
 O for OPTIMISTIC
 N for NEUTRAL
@@ -38,7 +42,7 @@ class Evaluation:
         self.date = date
         self.sentence = sentence
         self.model = ""
-        self.grade = -3
+        self.grade = -2
         
     def string_grade_to_int(self):
         if self.grade == "O":
@@ -143,6 +147,10 @@ def main():
                     evaluation = Evaluation(text_file.date, sentence)
                     evaluation.evaluate(model)
                     evaluations.append(evaluation)
+                    
+                    if evaluation.grade == -2:
+                        print("Some error occurred during evaluation (grade -2).")
+                        return
                     
                     # Sleep to avoid rate limits
                     time.sleep(0.15)
