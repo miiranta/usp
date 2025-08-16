@@ -25,7 +25,6 @@ THE SENTENCE IS:
 """
 
 MODELS = [
-    "gpt-3.5-turbo",
     "gpt-4o"
 ]
 
@@ -33,22 +32,14 @@ class File:
     def __init__(self, file, date):
         self.file = file
         self.date = date
-        
-    def order_time_s(self):
-        day, month, year = map(int, self.date.split('/'))
-        return (year * 365 + month * 30 + day) * 24 * 60 * 60
 
 class Evaluation:
     def __init__(self, date, sentence):
         self.date = date
         self.sentence = sentence
         self.model = ""
-        self.grade = 0
+        self.grade = -3
         
-    def order_time_s(self):
-        day, month, year = map(int, self.date.split('/'))
-        return (year * 365 + month * 30 + day) * 24 * 60 * 60
-
     def string_grade_to_int(self):
         if self.grade == "O":
             self.grade = 1
@@ -72,6 +63,11 @@ class Evaluation:
             self.string_grade_to_int()
             print(f" -> {self.grade}")
             
+        elif model == "gpt-5":
+            self.evaluate_openai_gpt5(model)
+            self.string_grade_to_int()
+            print(f" -> {self.grade}")
+            
         else:
             print("Model not recognized.")
             
@@ -87,7 +83,24 @@ class Evaluation:
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
             return
- 
+        
+    def evaluate_openai_gpt5(self, model):
+        try:
+            response = openai_client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": PROMPT + self.sentence}],
+                max_completion_tokens=1
+            )
+            self.grade = response.choices[0].message.content.upper()
+            return
+        except Exception as e:
+            print(f"Error evaluating with {model}: {e}")
+            return
+
+def _date_key(d):
+    day, month, year = map(int, d.split('/'))
+    return (year, month, day)
+
 def main():
     if not os.path.exists(INPUT_FOLDER):
         print("Input folder does not exist.")
@@ -107,12 +120,17 @@ def main():
         date = f"{date[:2]}/{date[2:4]}/{date[4:8]}"
         text_files.append(File(text_file, date))
         
-    text_files.sort(key=lambda f: f.order_time_s())
+    text_files.sort(key=lambda f: _date_key(f.date))
 
     for model in MODELS:
-
-        evaluations = []
         for text_file in text_files:
+            
+            output_file_path = os.path.join(OUTPUT_FOLDER, f"{model}_{text_file.date.replace('/', '')}.csv")
+            if os.path.exists(output_file_path):
+                print(f"Output file for {model} on {text_file.date} already exists. Skipping...")
+                continue
+            
+            evaluations = []
             with open(os.path.join(INPUT_FOLDER, text_file.file), 'r', encoding='utf-8') as f:
                 sentences = f.readlines()
             
@@ -129,19 +147,16 @@ def main():
                     # Sleep to avoid rate limits
                     time.sleep(0.15)
                         
-        evaluations.sort(key=lambda e: (e.model, e.order_time_s()))
-        output_file_path = os.path.join(OUTPUT_FOLDER, f"{model}.csv")
-
-        with open(output_file_path, 'w', encoding='utf-8-sig', newline='') as f:
-            writer = csv.writer(f, delimiter="|")
-            writer.writerow(["Date", "Model", "Grade", "Sentence"])
-            for evaluation in evaluations:
-                writer.writerow([
-                    evaluation.date,
-                    evaluation.model,
-                    evaluation.grade,
-                    evaluation.sentence
-                ])
+            with open(output_file_path, 'w', encoding='utf-8-sig', newline='') as f:
+                writer = csv.writer(f, delimiter="|")
+                writer.writerow(["Date", "Model", "Grade", "Sentence"])
+                for evaluation in evaluations:
+                    writer.writerow([
+                        evaluation.date,
+                        evaluation.model,
+                        evaluation.grade,
+                        evaluation.sentence
+                    ])
 
 if __name__ == "__main__":
     main()

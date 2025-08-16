@@ -9,6 +9,10 @@ OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "info_and_graphs")
 
 ##
 
+def _date_key(d):
+    day, month, year = map(int, d.split('/'))
+    return (year, month, day)
+
 def read_csv(file_path):
     data = []
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -33,10 +37,23 @@ def get_appended_csvs():
             header = csv_data[0]
             csv_data = csv_data[1:]
             result_csv_data.extend(csv_data)
-            
+       
+    result_csv_data.sort(key=lambda row: (row[1], _date_key(row[0])))
+    
+    # Check if any grade values are invalid (anything other than -1, 0, 1)
+    valid_grades = {-1, 0, 1}
+    for row in result_csv_data:
+        try:
+            grade = int(row[2])
+            if grade not in valid_grades:
+                print(f"Warning: Invalid grade value '{grade}' found in row: {row}\n")
+        except ValueError:
+            print(f"Warning: Non-integer grade value '{row[2]}' found in row: {row}\n")
+    
+       
     if header:
         result_csv_data.insert(0, header)
-    
+
     return result_csv_data
 
 ##
@@ -128,10 +145,6 @@ def get_grade_frequency_model(result_csv_data, model):
 ## 
 
 def plot_average_by_date_and_model(result_csv_data):
-    def _date_key(d):
-        day, month, year = map(int, d.split('/'))
-        return (year, month, day)
-
     dates_set = {row[0].strip() for row in result_csv_data[1:]}
     if not dates_set:
         print("No date rows to plot.")
