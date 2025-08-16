@@ -10,7 +10,7 @@ SENTENCES_WHITELIST = [ # Select sentences that contain these phrases
     "inflação",
 ]
 
-SETENCES_BLACKLIST = [ # Select sentences that should not be included, overrides the whitelist
+SENTENCES_BLACKLIST = [ # Select sentences that should not be included, overrides the whitelisted phrases
     "Presentes:",
     "do cenário básico para a inflação",
     "Avaliação prospectiva das tendências da inflação"
@@ -101,10 +101,6 @@ def trim(text):
     # A bunch of dots become a single dot
     cleaned_text = re.sub(r'\.{2,}', '.', cleaned_text)
     
-    
-    
-    
-
     return cleaned_text
 
 def break_into_sentences(text):
@@ -129,7 +125,7 @@ def select_sentences(sentences):
     for sentence in filtered_sentences[:]:
         
         # Remove sentences that contain any blacklisted phrases
-        if any(phrase.lower() in sentence.lower() for phrase in SETENCES_BLACKLIST):
+        if any(phrase.lower() in sentence.lower() for phrase in SENTENCES_BLACKLIST):
             filtered_sentences.remove(sentence)
             
     # Remove single words or single numbers 
