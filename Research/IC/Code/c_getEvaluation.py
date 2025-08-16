@@ -8,7 +8,6 @@ SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "csvs")
-OUTPUT_FILE = "gpt-3.5-turbo.csv"
 
 load_dotenv(os.path.join(SCRIPT_FOLDER, '.env'))
 
@@ -27,6 +26,7 @@ THE SENTENCE IS:
 
 MODELS = [
     "gpt-3.5-turbo",
+    "gpt-4o"
 ]
 
 class File:
@@ -63,6 +63,11 @@ class Evaluation:
         self.model = model
         
         if model == "gpt-3.5-turbo":
+            self.evaluate_openai(model)
+            self.string_grade_to_int()
+            print(f" -> {self.grade}")
+            
+        elif model == "gpt-4o":
             self.evaluate_openai(model)
             self.string_grade_to_int()
             print(f" -> {self.grade}")
@@ -104,16 +109,17 @@ def main():
         
     text_files.sort(key=lambda f: f.order_time_s())
 
-    evaluations = []
-    for text_file in text_files:
-        with open(os.path.join(INPUT_FOLDER, text_file.file), 'r', encoding='utf-8') as f:
-            sentences = f.readlines()
-        
-        sentences_amount = len(sentences)
-        for i, sentence in enumerate(sentences):
-            sentence = sentence.strip()
-            if sentence:
-                for model in MODELS:
+    for model in MODELS:
+
+        evaluations = []
+        for text_file in text_files:
+            with open(os.path.join(INPUT_FOLDER, text_file.file), 'r', encoding='utf-8') as f:
+                sentences = f.readlines()
+            
+            sentences_amount = len(sentences)
+            for i, sentence in enumerate(sentences):
+                sentence = sentence.strip()
+                if sentence:
                     print(f"[{text_file.date} | {model}] {i + 1}/{sentences_amount}: {sentence}")
                     
                     evaluation = Evaluation(text_file.date, sentence)
@@ -122,20 +128,20 @@ def main():
                     
                     # Sleep to avoid rate limits
                     time.sleep(0.15)
-                    
-    evaluations.sort(key=lambda e: (e.model, e.order_time_s()))
-    output_file_path = os.path.join(OUTPUT_FOLDER, OUTPUT_FILE)
+                        
+        evaluations.sort(key=lambda e: (e.model, e.order_time_s()))
+        output_file_path = os.path.join(OUTPUT_FOLDER, f"{model}.csv")
 
-    with open(output_file_path, 'w', encoding='utf-8-sig', newline='') as f:
-        writer = csv.writer(f, delimiter="|")
-        writer.writerow(["Date", "Model", "Grade", "Sentence"])
-        for evaluation in evaluations:
-            writer.writerow([
-                evaluation.date,
-                evaluation.model,
-                evaluation.grade,
-                evaluation.sentence
-            ])
+        with open(output_file_path, 'w', encoding='utf-8-sig', newline='') as f:
+            writer = csv.writer(f, delimiter="|")
+            writer.writerow(["Date", "Model", "Grade", "Sentence"])
+            for evaluation in evaluations:
+                writer.writerow([
+                    evaluation.date,
+                    evaluation.model,
+                    evaluation.grade,
+                    evaluation.sentence
+                ])
 
 if __name__ == "__main__":
     main()
