@@ -14,7 +14,10 @@ SENTENCES_BLACKLIST = [ # Select sentences that should not be included, override
     "Presentes:",
     "do cenário básico para a inflação",
     "Avaliação prospectiva das tendências da inflação"
-    "Chefe da Secretaria de Governança, Articulação e Monitoramento Estratégico"
+    "Chefe da Secretaria de Governança, Articulação e Monitoramento Estratégico",
+    "Chefe do Departamento de Regulação do Sistema Financeiro",
+    "Diretor de Política Econômica",
+    "Diretor de Fiscalização",
 ]
 
 def read_pdf_text(pdf_path):
