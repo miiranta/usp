@@ -1,5 +1,6 @@
 import csv
 import os
+import math
 import matplotlib.pyplot as plt
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
@@ -156,8 +157,9 @@ def plot_average_by_date_and_model(result_csv_data):
     if not models:
         print("No models found to plot.")
         return
-
-    plt.figure(figsize=(12, 6))
+    
+    fig, ax = plt.subplots(figsize=(24, 6))
+    x_positions = list(range(len(dates_sorted)))
 
     for model in models:
         series = []
@@ -167,18 +169,31 @@ def plot_average_by_date_and_model(result_csv_data):
                 series.append(sum(grades) / len(grades))
             else:
                 series.append(float('nan'))
-        plt.plot(dates_sorted, series, marker='o', label=model)
-    
-    plt.xlabel('Date')
-    plt.ylabel('Average Grade')
-    plt.title('Average Grade by Date and Model')
-    plt.xticks(rotation=45)
-    plt.legend()
-    plt.tight_layout()
-    
+        ax.plot(x_positions, series, marker='o', label=model)
+
+    ax.axhline(0, color='gray', linestyle='--', linewidth=1, zorder=0)
+
+    num_date_labels = 80
+    display_indices = list(range(0, len(dates_sorted), max(1, len(dates_sorted) // num_date_labels)))
+
+    tick_positions = [x_positions[i] for i in display_indices]
+    tick_labels = [dates_sorted[i] for i in display_indices]
+
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, rotation=60, ha='right')
+    ax.tick_params(axis='x', pad=12)
+
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Average Grade')
+    ax.set_title('Average Grade by Date and Model')
+
+    ax.legend()
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.35)
+
     output_file_path = os.path.join(OUTPUT_FOLDER, "average_by_date_and_model.png")
-    plt.savefig(output_file_path)
-    plt.close()
+    fig.savefig(output_file_path)
+    plt.close(fig)
 
 ##
 

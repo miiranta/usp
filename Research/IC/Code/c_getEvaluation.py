@@ -33,7 +33,8 @@ A FRASE É:
 """
 
 MODELS = [
-    "gpt-4o"
+    #"gpt-4o",
+    "gpt-5"
 ]
 
 class File:
@@ -56,6 +57,7 @@ class Evaluation:
         elif self.grade == "P":
             self.grade = -1
         else:
+            print(f"Unexpected grade: {self.grade}. Setting to -2.")
             self.grade = -2
 
     def evaluate(self, model):
@@ -97,7 +99,7 @@ class Evaluation:
             response = openai_client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": PROMPT + self.sentence}],
-                max_completion_tokens=1
+                max_completion_tokens=5000
             )
             self.grade = response.choices[0].message.content.upper()
             return
