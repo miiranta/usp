@@ -167,7 +167,7 @@ def main():
                                 retries_left -= 1
                             
                         if retries_left == 0:
-                            print("Max retries reached. Skipping this sentence.")
+                            print("Max retries reached. Stopping.")
                             return
                                 
                     # Sleep to avoid rate limits
