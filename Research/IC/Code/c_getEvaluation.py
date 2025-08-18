@@ -16,8 +16,12 @@ openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 PROMPT = """
 DEFINIÇÃO DE OTIMISMO:
+Ocorre quando as projeções indicam que a inflação ficará abaixo da meta ou dentro do intervalo de tolerância com folga. 
+Isso pode sinalizar que o Banco Central vê espaço para reduzir juros ou manter uma política monetária mais acomodatícia. 
 
 DEFINIÇÃO DE PESSIMISMO:
+Ocorre quando as projeções apontam para inflação acima da meta ou próxima do teto do intervalo de tolerância. 
+Isso sugere preocupação com pressões inflacionárias e pode justificar uma política monetária mais restritiva.
 
 AVALIE A FRASE COMO
 O para OTIMISTA
