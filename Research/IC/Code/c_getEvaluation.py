@@ -33,9 +33,12 @@ A FRASE É:
 """
 
 MODELS = [
-    #"gpt-4o",
+    "gpt-3.5-turbo",
+    "gpt-4o",
     "gpt-5"
 ]
+
+RETRIES = 3
 
 class File:
     def __init__(self, file, date):
@@ -154,10 +157,19 @@ def main():
                     evaluation.evaluate(model)
                     evaluations.append(evaluation)
                     
-                    if evaluation.grade == -2:
-                        print("Some error occurred during evaluation (grade -2).")
-                        return
-                    
+                    retries_left = RETRIES
+                    if retries_left > 0 and evaluation.grade == -2:
+                        while retries_left > 0 and evaluation.grade == -2:
+                            print("Some error occurred during evaluation (grade -2).")
+                            print(f"Retrying... {retries_left} retries left.")
+                            evaluation.evaluate(model)
+                            if evaluation.grade == -2:
+                                retries_left -= 1
+                            
+                        if retries_left == 0:
+                            print("Max retries reached. Skipping this sentence.")
+                            return
+                                
                     # Sleep to avoid rate limits
                     time.sleep(0.15)
                         

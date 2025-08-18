@@ -169,7 +169,14 @@ def plot_average_by_date_and_model(result_csv_data):
                 series.append(sum(grades) / len(grades))
             else:
                 series.append(float('nan'))
-        ax.plot(x_positions, series, marker='o', label=model)
+        line, = ax.plot(x_positions, series, marker='o', label=model)
+
+        try:
+            avg = get_grade_avarage_model(result_csv_data, model)
+            if avg is not None:
+                ax.axhline(avg, color=line.get_color(), linestyle=':', linewidth=1, alpha=0.8, zorder=0)
+        except Exception:
+            pass
 
     ax.axhline(0, color='gray', linestyle='--', linewidth=1, zorder=0)
 
@@ -185,13 +192,13 @@ def plot_average_by_date_and_model(result_csv_data):
 
     ax.set_xlabel('Date')
     ax.set_ylabel('Average Grade')
-    ax.set_title('Average Grade by Date and Model')
+    ax.set_title('Average Grade by Date')
 
     ax.legend()
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.35)
 
-    output_file_path = os.path.join(OUTPUT_FOLDER, "average_by_date_and_model.png")
+    output_file_path = os.path.join(OUTPUT_FOLDER, "average_grade_by_date.png")
     fig.savefig(output_file_path)
     plt.close(fig)
 
