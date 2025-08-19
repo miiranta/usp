@@ -130,6 +130,10 @@ def main():
         for i, date in enumerate(dates, start=1):
             url = meetings[date]
             date_folder = os.path.join(OUTPUT_FOLDER, date)
+
+            if os.path.exists(date_folder):
+                print(f'[{i}/{len(dates)}] Skipping {date} (folder already exists)')
+                continue
             os.makedirs(date_folder, exist_ok=True)
             
             try:

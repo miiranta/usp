@@ -143,6 +143,47 @@ def get_grade_frequency_model(result_csv_data, model):
     
     return grade_frequency
 
+def get_grade_standard_deviation_global(result_csv_data):
+    grades = []
+    
+    for row in result_csv_data[1:]:
+        try:
+            grade = int(row[2])
+            grades.append(grade)
+        except ValueError:
+            print(f"Invalid grade value in row: {row}")
+    
+    if not grades:
+        print("No valid grades found.")
+        return None
+    
+    mean = sum(grades) / len(grades)
+    variance = sum((x - mean) ** 2 for x in grades) / (len(grades) - 1)
+    std_dev = math.sqrt(variance)
+    
+    return std_dev
+
+def get_grade_standard_deviation_model(result_csv_data, model):
+    grades = []
+    
+    for row in result_csv_data[1:]:
+        if row[1].strip() == model:
+            try:
+                grade = int(row[2])
+                grades.append(grade)
+            except ValueError:
+                print(f"Invalid grade value in row: {row}")
+    
+    if not grades:
+        print(f"No valid grades found for model: {model}")
+        return None
+    
+    mean = sum(grades) / len(grades)
+    variance = sum((x - mean) ** 2 for x in grades) / (len(grades) - 1)
+    std_dev = math.sqrt(variance)
+    
+    return std_dev
+
 ## 
 
 def plot_average_by_date_and_model(result_csv_data):
@@ -269,6 +310,19 @@ def main():
                     f.write(f"[{grade}]: {frequency} ")
                 f.write("\n")
                 
+        # Standard Deviation
+        
+        std_dev = get_grade_standard_deviation_global(result_csv_data)
+        
+        if std_dev is not None:
+            f.write(f"Standard Deviation (global): {std_dev:.64f}\n")
+            
+        for model in available_model:
+            std_dev_model = get_grade_standard_deviation_model(result_csv_data, model)
+            if std_dev_model is not None:
+                f.write(f" > Standard Deviation for {model}: {std_dev_model:.64f}")
+            f.write("\n")
+            
         f.write("--------\n")
     
     print("Processing completed.")
