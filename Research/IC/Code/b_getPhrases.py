@@ -139,12 +139,17 @@ def select_sentences(sentences):
 def main():
     folders = [f for f in os.listdir(INPUT_FOLDER) if os.path.isdir(os.path.join(INPUT_FOLDER, f))]
     
+    total_phrases = 0
+    
     if not folders:
         print("No folders found in the input directory.")
         return
     
     for folder in folders:
         print(f"Processing folder: {folder}")
+        
+        html_sentences = []
+        pdf_sentences = []
         
         html_files = [f for f in os.listdir(os.path.join(INPUT_FOLDER, folder)) if f.endswith('.html')]
         if html_files:
@@ -165,9 +170,11 @@ def main():
         final_sentences = []
         if len(html_sentences) < len(pdf_sentences) * 0.5:
             final_sentences = pdf_sentences
+            total_phrases += len(pdf_sentences)
             print(" > > Using PDF sentences.")
         else:
             final_sentences = html_sentences
+            total_phrases += len(html_sentences)
             print(" > > Using HTML sentences.")
             
         if not os.path.exists(OUTPUT_FOLDER):
@@ -177,6 +184,8 @@ def main():
         with open(output_file_path, 'w', encoding='utf-8') as output_file:
             for sentence in final_sentences:
                 output_file.write(sentence + "\n")
+                
+    print(f"Total phrases extracted: {total_phrases}")
 
 if __name__ == "__main__":
     main()
