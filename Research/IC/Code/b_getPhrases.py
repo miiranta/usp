@@ -7,17 +7,193 @@ INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "atas")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences")
 
 SENTENCES_WHITELIST = [ # Select sentences that contain these phrases
-    "inflação",
+    "inflação", 
+    "deflação",
+    "índice de preços",
+    "ipca",
+    "igp-m",
+    "cesta básica",
+    "custo de vida",
+    "inflação acumulada",
+    "pressão inflacionária",
+
+    "crescimento",
+    "retração",
+    "expansão",
+    "contração",
+    "atividade econômica",
+    "desaceleração",
+    "aquecimento",
+    "recessão",
+    "recuperação econômica",
+    "estagnação",
+
+    "expectativa",
+    "tendência",
+    "projeção",
+    "perspectiva",
+    "estimativa",
+    "previsão",
+    "indicador",
+    "cenário",
+    "horizonte",
+    "curto prazo",
+    "médio prazo",
+    "longo prazo",
+
+    "produtividade",
+    "performance",
+    "eficiência",
+    "competitividade",
+    "capacidade instalada",
+
+    "produto interno bruto",
+    "pib",
+    "pib per capita",
+    "pib nominal",
+    "pib real",
+    "economia real",
+
+    "juros",
+    "taxa",
+    "selic",
+    "spread bancário",
+    "crédito",
+    "endividamento",
+    "financiamento",
+    "política monetária",
+    "política fiscal",
+    "meta de inflação",
+
+    "exportação",
+    "importação",
+    "balança comercial",
+    "balanço de pagamentos",
+    "indústria",
+    "produção",
+    "consumo",
+    "investimento",
+    "agropecuária",
+    "serviços",
+    "setor externo",
+
+    "emprego",
+    "desemprego",
+    "mercado de trabalho",
+    "renda",
+    "salário",
+    "massa salarial",
+    "poder de compra",
+    "ocupação",
+    "informalidade",
+
+    "dívida pública",
+    "superavit",
+    "déficit",
+    "arrecadação",
+    "tributo",
+    "receita",
+    "gasto público",
+    "orçamento",
+    "ajuste fiscal",
+
+    "câmbio",
+    "dólar",
+    "real",
+    "euro",
+    "reservas internacionais",
+    "moeda",
+    "desvalorização",
+    "valorização",
+    "volatilidade cambial",
+
+    "bolsa de valores",
+    "b3",
+    "ações",
+    "mercado acionário",
+    "ibovespa",
+    "dividendos",
+    "derivativos",
+    "mercado futuro",
+    "títulos públicos",
+    "renda fixa",
+    "renda variável",
+    "fundos de investimento",
+    "capital estrangeiro",
+
+    "índice de confiança",
+    "clima econômico",
+    "risco-país",
+    "rating",
+    "agência de classificação",
+    "economia global",
+    "comércio internacional",
+    "política cambial",
+    "conta corrente",
+    "transações correntes",
 ]
 
 SENTENCES_BLACKLIST = [ # Select sentences that should not be included, overrides the whitelisted phrases
     "Presentes:",
+    "Material suplementar a estas Notas",
+    "Atas do Comitê de Política Monetária",
+    "Informações da reunião",
+    "zelar por um sistema financeiro sólido",
+    "conforme estabelecido no Calendário das Reuniões",
+    "Valor foi obtido pelo procedimento",
+
     "do cenário básico para a inflação",
-    "Avaliação prospectiva das tendências da inflação"
+    "Avaliação prospectiva das tendências da inflação",
+    
+    "Chefes de Departamento",
+    "Chefe de Gabinete",
+    "Chefe Adjunto",
+    "Assessora",
+    "Assessor",
     "Chefe da Secretaria de Governança, Articulação e Monitoramento Estratégico",
     "Chefe do Departamento de Regulação do Sistema Financeiro",
     "Diretor de Política Econômica",
     "Diretor de Fiscalização",
+    
+    "Departamento de Operações",
+    "Departamento de Reservas Internacionais",
+    "Departamento das Reservas Internacionais",
+    
+    "http: //www.",
+    "cookies",
+    
+    "A)", "B)", "C)", "D)", "E)", "F)", "G)", "H)", "I)", "J)", "K)", "L)", "M)", "N)", "O)", "P)", "Q)", "R)", "S)", "T)", "U)", "V)", "W)", "X)", "Y)", "Z)",
+    
+    "Adiantamento de Contrato de Câmbio.",
+    "Confederação Nacional da Indústria.",
+    "Índice de Preços por Atacado.",
+    "Índice de Preços por Atacado-Disponibilidade Interna.",
+    "Índice de Preços ao Consumidor-Brasil.",
+    "Índice de Preços ao Consumidor Amplo.",
+    "Produto Interno Bruto.",
+    "Pesquisa Mensal do Emprego-IBGE.",
+    "Índice de Preços ao Consumidor.",
+    "Índice de Preços ao Consumidor Harmonizado.",
+    "Índice de Preços ao Produtor.",
+    "Imposto sobre a Renda.",
+    "Índice de Renda Fixa de Mercado.",
+    "Imposto sobre a Renda Retido na Fonte.",
+    "Operações Bancárias e de Sistema de Pagamentos",
+    "de Operações de Mercado Aberto.",
+    "Banco Central Europeu.",
+    "Índice de Preços ao Consumidor da Fundação Instituto de Pesquisas.",
+    "Implementação da política monetária.",
+    "Atividade econômica.",
+    "Mercado de trabalho.",
+    "Crédito e inadimplência.",
+    "Comércio exterior e reservas internacionais.",
+    "Mercado monetário e operações de mercado aberto.",
+    "Expectativas e sondagens.",
+    "Projeções de inflação no cenário de referência.",
+    "Variação do IPCA acumulada em quatro trimestres (%).",
+    "Índice de preços.",
+    "IPCA livres.",
+    "IPCA administrados.",
 ]
 
 def read_pdf_text(pdf_path):
@@ -117,19 +293,22 @@ def break_into_sentences(text):
 
 def select_sentences(sentences):
     filtered_sentences = []
-    for sentence in sentences:
-        
-        # Check if the sentence contains any whitelisted phrases
-        # Should not consider spaces or punctuation
-        # Should not be case-sensitive
-        if any(phrase.lower() in sentence.lower() for phrase in SENTENCES_WHITELIST):
-            filtered_sentences.append(sentence)
+    
+    if len(SENTENCES_WHITELIST) == 0:
+        filtered_sentences = sentences
+    else:
+        for sentence in sentences:
             
-    for sentence in filtered_sentences[:]:
-        
-        # Remove sentences that contain any blacklisted phrases
-        if any(phrase.lower() in sentence.lower() for phrase in SENTENCES_BLACKLIST):
-            filtered_sentences.remove(sentence)
+            # Check if the sentence contains any whitelisted phrases
+            if any(phrase.lower() in sentence.lower() for phrase in SENTENCES_WHITELIST):
+                filtered_sentences.append(sentence)
+            
+    if len(SENTENCES_BLACKLIST) != 0:
+        for sentence in filtered_sentences[:]:
+            
+            # Remove sentences that contain any blacklisted phrases
+            if any(phrase.lower() in sentence.lower() for phrase in SENTENCES_BLACKLIST):
+                filtered_sentences.remove(sentence)
             
     # Remove single words or single numbers 
     filtered_sentences = [s for s in filtered_sentences if len(s.split()) > 1]
