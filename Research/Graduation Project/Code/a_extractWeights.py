@@ -209,10 +209,11 @@ def main():
 	model_name = "openai/gpt-oss-20b"
 	model = AutoModel.from_pretrained(
 		model_name,
-		device_map = device,
+		device_map = "auto",
+		max_memory = {"cuda:0": "12GiB", "cpu": "100GiB"},
 		offload_folder=":auto",
 		low_cpu_mem_usage=True,
-		torch_dtype='auto'
+		dtype="auto"
 	)
  
 	# Initialize separate trackers for weights and biases
