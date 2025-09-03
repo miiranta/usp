@@ -1,6 +1,10 @@
 import os
 import re
-import PyPDF2
+import math
+import subprocess
+import spacy
+from spacy_layout import spaCyLayout
+from pdfminer.high_level import extract_text
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "atas")
@@ -12,26 +16,22 @@ SENTENCES_WHITELIST = [ # Select sentences that contain these phrases
 SENTENCES_BLACKLIST = [ # Select sentences that should not be included, overrides the whitelisted phrases
 ]
 
+try:
+    nlp = spacy.load("pt_core_news_lg")
+    layout = spaCyLayout(nlp)
+except OSError:
+    subprocess.run(["python", "-m", "spacy", "download", "pt_core_news_lg"])
+    nlp = spacy.load("pt_core_news_lg")
+    layout = spaCyLayout(nlp)
+
 def read_pdf_text(pdf_path):
     try:
-        with open(pdf_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
-            num_pages = len(pdf_reader.pages)
-
-            pages = list() 
-            for page_num in range(num_pages):
-                page = pdf_reader.pages[page_num]
-                page_text = page.extract_text()
-                pages.append(page_text)
- 
-            full_text = "\n".join(pages)
-            
-            # SPECIFIC FILTERS FOR THE PDF FILES
-            
-            # Convert br word to a space
-            full_text = re.sub(r'\bbr\b', ' ', full_text, flags=re.IGNORECASE)
-            
-            return full_text
+        doc = layout(pdf_path)
+        full_text = doc.text
+        
+        # SPECIFIC FILTERS FOR THE PDF FILES
+        
+        return full_text
         
     except Exception as e:
         return ""
@@ -69,7 +69,6 @@ def read_html_text(html_path):
         return ""
     
 def trim(text):
-    
     # Remove newlines, tabs and &nbsp;
     cleaned_text = re.sub(r'\n+', ' ', text)
     cleaned_text = re.sub(r'\t+', ' ', cleaned_text)
@@ -99,13 +98,39 @@ def trim(text):
     return cleaned_text
 
 def break_into_sentences(text):
-    sentences = []
-
-    # Break text into sentences (separated by periods, exclamation marks, or question marks)
-    page_sentences = re.split(r'(?<=[.!?]) +', text)
-    sentences.extend(page_sentences)
+    doc = nlp(text)
+    cleaned_sentences = []
+    
+    for sent in doc.sents:
+        cleaned_sentences.append(sent.text.strip())
         
-    return sentences
+    return cleaned_sentences
+
+def trim_phrases(phrases):
+    sigma_threshold = 2
+    sigma_offset = 2
+    cleaned_phrases = []
+    
+    # Remove phares that do not end in ., !, ?
+    for phrase in phrases:
+        if re.search(r'[.!?]$', phrase):
+            cleaned_phrases.append(phrase)
+            
+    # Remove phrases that are too short
+    if not cleaned_phrases:
+        return cleaned_phrases
+    
+    lengths = [len(phrase) for phrase in cleaned_phrases]
+    mean = sum(lengths) / len(lengths)
+    variance = sum((l - mean) ** 2 for l in lengths) / len(lengths)
+    sd = math.sqrt(variance)
+    
+    mean_corrected = sum(lengths) / len(lengths) + sigma_offset * sd
+    lower_threshold = mean_corrected - sigma_threshold * sd
+    
+    cleaned_phrases = [phrase for phrase in cleaned_phrases if len(phrase) >= lower_threshold]
+    
+    return cleaned_phrases
 
 def select_sentences(sentences):
     filtered_sentences = []
@@ -151,25 +176,27 @@ def main():
             html_extracted = read_html_text(os.path.join(INPUT_FOLDER, folder, html_files[0]))
             html_trimmed = trim(html_extracted)
             html_sentences = break_into_sentences(html_trimmed)
-            html_sentences = select_sentences(html_sentences)
-            print(f" > Found {len(html_sentences)} sentences in HTML file.")
+            html_sentences_trimmed = trim_phrases(html_sentences)
+            html_sentences_final = select_sentences(html_sentences_trimmed)
+            print(f" > Found {len(html_sentences_final)} sentences in HTML file.")
             
         pdf_files = [f for f in os.listdir(os.path.join(INPUT_FOLDER, folder)) if f.endswith('.pdf')]
         if pdf_files:
             pdf_extracted = read_pdf_text(os.path.join(INPUT_FOLDER, folder, pdf_files[0]))
             pdf_trimmed = trim(pdf_extracted)
             pdf_sentences = break_into_sentences(pdf_trimmed)
-            pdf_sentences = select_sentences(pdf_sentences)
-            print(f" > Found {len(pdf_sentences)} sentences in PDF file.")
+            pdf_sentences_trimmed = trim_phrases(pdf_sentences)
+            pdf_sentences_final = select_sentences(pdf_sentences_trimmed)
+            print(f" > Found {len(pdf_sentences_final)} sentences in PDF file.")
         
         final_sentences = []
-        if len(html_sentences) < len(pdf_sentences) * 0.5:
-            final_sentences = pdf_sentences
+        if len(html_sentences_final) < len(pdf_sentences_final):
+            final_sentences = pdf_sentences_final
             total_phrases += len(pdf_sentences)
             print(" > > Using PDF sentences.")
         else:
-            final_sentences = html_sentences
-            total_phrases += len(html_sentences)
+            final_sentences = html_sentences_final
+            total_phrases += len(html_sentences)    
             print(" > > Using HTML sentences.")
             
         if not os.path.exists(OUTPUT_FOLDER):
