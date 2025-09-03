@@ -14,7 +14,7 @@ class ModelWeights:
   
 		self.sum = 0
 		self.sum_sq = 0
-		self.remove_outliers_sd = 3 #0 for no filter
+		self.remove_outliers_std = 3 #0 for no filter
 
 		self.max_weight = None
 		self.min_weight = None
@@ -32,9 +32,7 @@ class ModelWeights:
 		self.desequilibrium_calc = False
   
 		self.lmc_complexity = 0
-  
-		self.count_outside_ranges = dict()
-		
+
 		self.weight_arrays = []
 
 	def set_bins(self):
@@ -79,9 +77,6 @@ class ModelWeights:
 		for p in self.bins_probabilities:
 			self.desequilibrium += (p - 1 / self.bins) ** 2
    
-			#if p == 0:
-				#print_and_write(model_name,"Warning: Probability is zero.")
-    
 		self.desequilibrium_calc = True
     
 	def calculate_lmc_complexity(self):
@@ -118,51 +113,24 @@ class ModelWeights:
 		else:
 			self.max_weight = max(self.max_weight, torch.max(weights).item())
    
-		# Count weights outside certain ranges for debugging
-		ranges_to_check = [3, 5, 10, 50, 100, 300, 500, 1000, 2000, 3000]
-		for r in ranges_to_check:
-			if torch.max(weights) > r or torch.min(weights) < -r:
-				outside_range = torch.sum((weights > r) | (weights < -r)).item()
-				if r not in self.count_outside_ranges:
-					self.count_outside_ranges[r] = 0
-				self.count_outside_ranges[r] += outside_range
-   
-	def add_weights_histogram(self, weights):
-		if weights.numel() == 0:
-			return
-
-		# Convert to numpy if it's a tensor
-		if isinstance(weights, torch.Tensor):
-			weights = weights.numpy()
-
-		if self.remove_outliers_sd > 0 and self.std > 0:
-			sigma = self.remove_outliers_sd
-			lower = self.mean - sigma * self.std
-			upper = self.mean + sigma * self.std
-			mask = (weights >= lower) & (weights <= upper)
-			filtered_weights = weights[mask]
-		else:
-			filtered_weights = weights
-			
-		counts, _ = np.histogram(filtered_weights, bins=self.bins, range=(self.min_weight, self.max_weight), density=False)
-		self.histogram += counts
-
 	def build_histogram_from_stored_arrays(self):
 		if not self.weight_arrays:
 			return
 			
-		for weights in self.weight_arrays:
-			if self.remove_outliers_sd > 0 and self.std > 0:
-				sigma = self.remove_outliers_sd
-				lower = self.mean - sigma * self.std
-				upper = self.mean + sigma * self.std
-				mask = (weights >= lower) & (weights <= upper)
-				filtered_weights = weights[mask]
-			else:
-				filtered_weights = weights
-				
-			counts, _ = np.histogram(filtered_weights, bins=self.bins, range=(self.min_weight, self.max_weight), density=False)
-			self.histogram += counts
+		all_weights = np.concatenate(self.weight_arrays)
+		
+		if self.remove_outliers_std > 0 and self.std > 0:
+			print(f"Removing outliers beyond {self.remove_outliers_std} standard deviations for {self.param_type}.")
+			sigma = self.remove_outliers_std
+			lower = self.mean - sigma * self.std
+			upper = self.mean + sigma * self.std
+			mask = (all_weights >= lower) & (all_weights <= upper)
+			filtered_weights = all_weights[mask]
+		else:
+			filtered_weights = all_weights
+			
+		counts, _ = np.histogram(filtered_weights, bins=self.bins, range=(self.min_weight, self.max_weight), density=False)
+		self.histogram = counts
 
 	def plot_histogram(self):
 		if self.count == 0:
@@ -197,7 +165,7 @@ class ModelWeights:
 		plt.tight_layout(rect=[0, 0.03, 1, 0.95])
   
 		SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-		plt.savefig(os.path.join(SCRIPT_DIR, f"{self.name}_{self.param_type}_{self.remove_outliers_sd}_histogram.png"))
+		plt.savefig(os.path.join(SCRIPT_DIR, f"{self.name}_{self.param_type}_{self.remove_outliers_std}_histogram.png"))
 		plt.close()
 
 def param_to_tensor(param):
@@ -291,7 +259,6 @@ def main():
 	print_and_write(model_name, f"Weights Desequilibrium: {modelWeights.desequilibrium}")
 	print_and_write(model_name, f"Weights LMC Complexity: {modelWeights.lmc_complexity}")
 	print_and_write(model_name, f"Weights histogram: {modelWeights.histogram}")
-	print_and_write(model_name, f"Weights count outside range: {modelWeights.count_outside_ranges}")
 	
 	# Print biases information
 	print_and_write(model_name, "\n=== BIASES INFORMATION ===")
@@ -305,7 +272,6 @@ def main():
 	print_and_write(model_name, f"Biases Desequilibrium: {modelBiases.desequilibrium}")
 	print_and_write(model_name, f"Biases LMC Complexity: {modelBiases.lmc_complexity}")
 	print_and_write(model_name, f"Biases histogram: {modelBiases.histogram}")
-	print_and_write(model_name, f"Biases count outside range: {modelBiases.count_outside_ranges}")
  
 def test():
 	model_name = "test"
