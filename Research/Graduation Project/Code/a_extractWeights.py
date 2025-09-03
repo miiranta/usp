@@ -170,11 +170,12 @@ class ModelWeights:
 		plt.tight_layout(rect=[0, 0.03, 1, 0.95])
   
 		SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-		plt.savefig(os.path.join(SCRIPT_DIR, f"{self.name}_{self.param_type}_histogram.png"))
+		plt.savefig(os.path.join(SCRIPT_DIR, f"{self.name}_{self.param_type}_{self.remove_outliers_sd}_histogram.png"))
 		plt.close()
 
-def get_device_map() -> str:
-    return 'cuda' if torch.cuda.is_available() else 'cpu'
+def get_device_map():
+    return "cpu"
+    #return 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def param_to_numpy(param):
 	if param is None:
