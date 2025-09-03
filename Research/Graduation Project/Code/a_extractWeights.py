@@ -1,4 +1,5 @@
 import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 from transformers import AutoModel
@@ -238,6 +239,11 @@ def main():
 			modelBiases.add_weights_histogram(array_of_params)
 		else:
 			modelWeights.add_weights_histogram(array_of_params)
+	
+	# Delete model to free memory
+	del model
+	if torch.cuda.is_available():
+		torch.cuda.empty_cache()
 	
 	# Plot histograms
 	modelWeights.plot_histogram()
