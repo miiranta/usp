@@ -1,5 +1,4 @@
 import os
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 from transformers import AutoModel
@@ -63,7 +62,8 @@ class ModelWeights:
      
 		self.shannon_information = 0
 		for p in self.bins_probabilities:
-			self.shannon_information += p * np.log2(p)
+			if p > 0:
+				self.shannon_information += p * np.log2(p)
 
 		self.shannon_information *= (-1) * self.shannon_information_k
   
@@ -90,47 +90,48 @@ class ModelWeights:
 		self.lmc_complexity = self.shannon_information * self.desequilibrium
 		
 	def add_weights(self, weights):
-		if weights.size == 0:
+		if weights.numel() == 0:
 			return
      
 		# Count weights
-		self.count += weights.size
-		self.sum += np.sum(weights)
-		self.sum_sq += np.sum(weights**2)
+		self.count += weights.numel()
+		self.sum += torch.sum(weights).item()
+		self.sum_sq += torch.sum(weights**2).item()
 
 		# Update min and max weights
 		if self.min_weight is None:
-			self.min_weight = np.min(weights)
+			self.min_weight = torch.min(weights).item()
 		else:
-			self.min_weight = min(self.min_weight, np.min(weights))
+			self.min_weight = min(self.min_weight, torch.min(weights).item())
 
 		if self.max_weight is None:
-			self.max_weight = np.max(weights)
+			self.max_weight = torch.max(weights).item()
 		else:
-			self.max_weight = max(self.max_weight, np.max(weights))
+			self.max_weight = max(self.max_weight, torch.max(weights).item())
    
 		# Count weights outside certain ranges for debugging
 		ranges_to_check = [3, 5, 10, 50, 100, 300, 500, 1000, 2000, 3000]
 		for r in ranges_to_check:
-			if np.max(weights) > r or np.min(weights) < -r:
-				outside_range = np.sum((weights > r) | (weights < -r))
+			if torch.max(weights) > r or torch.min(weights) < -r:
+				outside_range = torch.sum((weights > r) | (weights < -r)).item()
 				if r not in self.count_outside_ranges:
 					self.count_outside_ranges[r] = 0
 				self.count_outside_ranges[r] += outside_range
    
 	def add_weights_histogram(self, weights):
-		if weights.size == 0:
+		if weights.numel() == 0:
 			return
+
+		# Convert to numpy if it's a tensor
+		if isinstance(weights, torch.Tensor):
+			weights = weights.numpy()
 
 		if self.remove_outliers_sd > 0 and self.std > 0:
 			sigma = self.remove_outliers_sd
 			lower = self.mean - sigma * self.std
 			upper = self.mean + sigma * self.std
-			filtered_weights = []
-			for w in weights:
-				if lower <= w <= upper:
-					filtered_weights.append(w)
-			filtered_weights = np.array(filtered_weights)
+			mask = (weights >= lower) & (weights <= upper)
+			filtered_weights = weights[mask]
 		else:
 			filtered_weights = weights
 			
@@ -173,23 +174,15 @@ class ModelWeights:
 		plt.savefig(os.path.join(SCRIPT_DIR, f"{self.name}_{self.param_type}_{self.remove_outliers_sd}_histogram.png"))
 		plt.close()
 
-def get_device_map():
-    return "cpu"
-    #return 'cuda' if torch.cuda.is_available() else 'cpu'
-
-def param_to_numpy(param):
+def param_to_tensor(param):
 	if param is None:
-		return np.array([])
+		return torch.tensor([])
 	t = param.detach()
 	if t.numel() == 0:
-		return np.array([])
+		return torch.tensor([])
 	if t.dtype in (torch.bfloat16, torch.float16):
 		t = t.to(torch.float32)
-	if t.device.type != 'cpu':
-		arr = t.view(-1).cpu().numpy()
-	else:
-		arr = t.view(-1).numpy()
-	return arr
+	return t.view(-1)
  
 def print_and_write(filename, text):
 	print(text)
@@ -201,21 +194,14 @@ def print_and_write(filename, text):
 
 	with open(filepath, "a") as f:
 		f.write(str(text) + "\n")
-    
+  
 def main():
-	device = get_device_map()
-	print(f"Using device: {device}")
-    
 	# Load model
 	print("Loading model...")
 	model_name = "openai/gpt-oss-20b"
 	model = AutoModel.from_pretrained(
 		model_name,
-		device_map = get_device_map(),
-		max_memory = {0: "10GiB", "cpu": "100GiB"},
-		offload_folder=":auto",
-		low_cpu_mem_usage=True,
-		dtype="auto"
+		device_map = "cpu",
 	)
  
 	# Initialize separate trackers for weights and biases
@@ -226,7 +212,7 @@ def main():
 	# Extract weights and biases separately
 	print("Extracting weights and biases...")
 	for name, param in model.named_parameters():
-		array_of_params = param_to_numpy(param)
+		array_of_params = param_to_tensor(param)
 		
 		if 'bias' in name.lower():
 			modelBiases.add_weights(array_of_params)
@@ -241,24 +227,19 @@ def main():
 	# Build histograms for weights
 	print("Extracting weights and biases (step 2)...")
 	for name, param in model.named_parameters():
-		array_of_params = param_to_numpy(param)
+		array_of_params = param_to_tensor(param)
 		
 		if 'bias' in name.lower():
 			modelBiases.add_weights_histogram(array_of_params)
 		else:
 			modelWeights.add_weights_histogram(array_of_params)
 	
-	# Delete model to free memory
-	del model
-	if torch.cuda.is_available():
-		torch.cuda.empty_cache()
-	
 	# Plot histograms
 	print("Plotting histograms...")
 	modelWeights.plot_histogram()
 	modelBiases.plot_histogram()
  
- 	# Calculate information theory metrics for weights
+	# Calculate information theory metrics for weights
 	print("Calculating information theory metrics...")
 	modelWeights.calculate_bins_probabilities()
 	modelWeights.calculate_shannon_information()
@@ -310,9 +291,9 @@ def test():
 	modelWeights = ModelWeights(model_name, "weights")
 	modelBiases = ModelWeights(model_name, "bias")
 	
-	weights = np.array([-1, 0, 1, 0, 0])
-	weights2 = np.array([-2, 0, 2])
-	biases = np.array([0.1, -0.1, 0.05])
+	weights = torch.tensor([-1, 0, 1, 0, 0], dtype=torch.float32)
+	weights2 = torch.tensor([-2, 0, 2], dtype=torch.float32)
+	biases = torch.tensor([0.1, -0.1, 0.05], dtype=torch.float32)
  
 	modelWeights.add_weights(weights)
 	modelWeights.add_weights(weights2)
