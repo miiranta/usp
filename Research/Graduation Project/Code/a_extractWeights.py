@@ -210,7 +210,7 @@ def main():
 	model = AutoModel.from_pretrained(
 		model_name,
 		device_map = "auto",
-		max_memory = {0: "12GiB", "cpu": "100GiB"},
+		max_memory = {0: "10GiB", "cpu": "100GiB"},
 		offload_folder=":auto",
 		low_cpu_mem_usage=True,
 		dtype="auto"
