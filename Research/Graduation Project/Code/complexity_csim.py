@@ -33,7 +33,11 @@ class ModelWeights:
   
 		self.lmc_complexity = 0
 
-		self.weight_arrays = []
+		self.all_weights = []
+		
+		self.filtered_min = None
+		self.filtered_max = None
+		self.num_filtered_out = 0
 
 	def set_bins(self):
 		if self.count > 0:
@@ -90,12 +94,15 @@ class ModelWeights:
 		if weights.numel() == 0:
 			return
      
-		# Convert to numpy and store for later use
 		if isinstance(weights, torch.Tensor):
 			numpy_weights = weights.numpy()
 		else:
 			numpy_weights = weights
-		self.weight_arrays.append(numpy_weights)
+		
+		if len(self.all_weights) == 0:
+			self.all_weights = numpy_weights.flatten()
+		else:
+			self.all_weights = np.concatenate([self.all_weights, numpy_weights.flatten()])
 		
 		# Count weights
 		self.count += weights.numel()
@@ -114,23 +121,47 @@ class ModelWeights:
 			self.max_weight = max(self.max_weight, torch.max(weights).item())
    
 	def build_histogram_from_stored_arrays(self):
-		if not self.weight_arrays:
+		if len(self.all_weights) == 0:
 			return
-			
-		all_weights = np.concatenate(self.weight_arrays)
+		
+		print(f" > Processing {len(self.all_weights)} {self.param_type} values...")
+		print(f" > Original range: [{self.min_weight:.6f}, {self.max_weight:.6f}]")
+		print(f" > Mean: {self.mean:.6f}, Std: {self.std:.6f}")
 		
 		if self.remove_outliers_std > 0 and self.std > 0:
 			print(f"Removing outliers beyond {self.remove_outliers_std} standard deviations for {self.param_type}.")
 			sigma = self.remove_outliers_std
 			lower = self.mean - sigma * self.std
 			upper = self.mean + sigma * self.std
-			mask = (all_weights >= lower) & (all_weights <= upper)
-			filtered_weights = all_weights[mask]
-		else:
-			filtered_weights = all_weights
+			print(f" > Filtering range: [{lower:.6f}, {upper:.6f}]")
 			
-		counts, _ = np.histogram(filtered_weights, bins=self.bins, range=(self.min_weight, self.max_weight), density=False)
-		self.histogram = counts
+			mask = (self.all_weights >= lower) & (self.all_weights <= upper)
+			filtered_weights = self.all_weights[mask]
+			
+			self.num_filtered_out = len(self.all_weights) - len(filtered_weights)
+			self.filtered_min = np.min(filtered_weights) if len(filtered_weights) > 0 else self.min_weight
+			self.filtered_max = np.max(filtered_weights) if len(filtered_weights) > 0 else self.max_weight
+			
+			print(f" >> Filtered out {self.num_filtered_out} outliers ({self.num_filtered_out/len(self.all_weights)*100:.2f}%)")
+			print(f" >> Filtered range: [{self.filtered_min:.6f}, {self.filtered_max:.6f}]")
+			
+			# Use filtered min/max for histogram range
+			histogram_range = (self.filtered_min, self.filtered_max)
+		else:
+			print(f" >> No outlier removal (remove_outliers_std = {self.remove_outliers_std}, std = {self.std:.6f})")
+			filtered_weights = self.all_weights
+			histogram_range = (self.min_weight, self.max_weight)
+			
+			self.num_filtered_out = 0
+			self.filtered_min = self.min_weight
+			self.filtered_max = self.max_weight
+			
+		# Compute histogram on filtered data
+		if len(filtered_weights) > 0:
+			counts, _ = np.histogram(filtered_weights, bins=self.bins, range=histogram_range, density=False)
+			self.histogram = counts
+		else:
+			self.histogram = np.zeros(self.bins, dtype=int)
 
 	def plot_histogram(self):
 		if self.count == 0:
@@ -254,6 +285,11 @@ def main():
 	print_and_write(model_name, f"Std weight: {modelWeights.std}")
 	print_and_write(model_name, f"Min weight: {modelWeights.min_weight}")
 	print_and_write(model_name, f"Max weight: {modelWeights.max_weight}")
+	print_and_write(model_name, f"Filtered min weight: {modelWeights.filtered_min}")
+	print_and_write(model_name, f"Filtered max weight: {modelWeights.filtered_max}")
+	print_and_write(model_name, f"Number of weights filtered out: {modelWeights.num_filtered_out}")
+	if len(modelWeights.all_weights) > 0:
+		print_and_write(model_name, f"Percentage of weights filtered: {modelWeights.num_filtered_out/len(modelWeights.all_weights)*100:.2f}%")
 	print_and_write(model_name, f"Weights bins probabilities: {modelWeights.bins_probabilities}")
 	print_and_write(model_name, f"Weights Shannon information: {modelWeights.shannon_information}")
 	print_and_write(model_name, f"Weights Desequilibrium: {modelWeights.desequilibrium}")
@@ -267,6 +303,11 @@ def main():
 	print_and_write(model_name, f"Std bias: {modelBiases.std}")
 	print_and_write(model_name, f"Min bias: {modelBiases.min_weight}")
 	print_and_write(model_name, f"Max bias: {modelBiases.max_weight}")
+	print_and_write(model_name, f"Filtered min bias: {modelBiases.filtered_min}")
+	print_and_write(model_name, f"Filtered max bias: {modelBiases.filtered_max}")
+	print_and_write(model_name, f"Number of biases filtered out: {modelBiases.num_filtered_out}")
+	if len(modelBiases.all_weights) > 0:
+		print_and_write(model_name, f"Percentage of biases filtered: {modelBiases.num_filtered_out/len(modelBiases.all_weights)*100:.2f}%")
 	print_and_write(model_name, f"Biases bins probabilities: {modelBiases.bins_probabilities}")
 	print_and_write(model_name, f"Biases Shannon information: {modelBiases.shannon_information}")
 	print_and_write(model_name, f"Biases Desequilibrium: {modelBiases.desequilibrium}")
