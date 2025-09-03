@@ -207,6 +207,7 @@ def main():
 	print(f"Using device: {device}")
     
 	# Load model
+	print("Loading model...")
 	model_name = "openai/gpt-oss-20b"
 	model = AutoModel.from_pretrained(
 		model_name,
@@ -223,6 +224,7 @@ def main():
 	modelBiases = ModelWeights(model_name_clean, "bias")
  
 	# Extract weights and biases separately
+	print("Extracting weights and biases...")
 	for name, param in model.named_parameters():
 		array_of_params = param_to_numpy(param)
 		
@@ -232,10 +234,12 @@ def main():
 			modelWeights.add_weights(array_of_params)
   
 	# Set bins
+	print("Setting bins...")
 	modelWeights.set_bins()
 	modelBiases.set_bins()
 	
 	# Build histograms for weights
+	print("Extracting weights and biases (step 2)...")
 	for name, param in model.named_parameters():
 		array_of_params = param_to_numpy(param)
 		
@@ -250,10 +254,12 @@ def main():
 		torch.cuda.empty_cache()
 	
 	# Plot histograms
+	print("Plotting histograms...")
 	modelWeights.plot_histogram()
 	modelBiases.plot_histogram()
  
  	# Calculate information theory metrics for weights
+	print("Calculating information theory metrics...")
 	modelWeights.calculate_bins_probabilities()
 	modelWeights.calculate_shannon_information()
 	modelWeights.calculate_desequilibrium()
