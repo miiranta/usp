@@ -210,7 +210,7 @@ def main():
 	model_name = "openai/gpt-oss-20b"
 	model = AutoModel.from_pretrained(
 		model_name,
-		device_map = "auto",
+		device_map = get_device_map(),
 		max_memory = {0: "10GiB", "cpu": "100GiB"},
 		offload_folder=":auto",
 		low_cpu_mem_usage=True,
