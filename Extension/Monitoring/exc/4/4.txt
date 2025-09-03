@@ -1,0 +1,4 @@
+Implemente um programa que conte de 1 até 5 usando um loop.
+A cada iteração, armazene o valor atual na variável CONTADOR.
+
+Este exercício ensina: loops básicos, comparações e desvios condicionais (JN).

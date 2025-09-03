@@ -1,0 +1,5 @@
+Implemente um programa que verifique se um número é par ou ímpar.
+O número está armazenado na variável NUMERO.
+Armazene 1 na variável RESULTADO se for par, ou 0 se for ímpar.
+
+Este exercício ensina: operações lógicas (AND) e desvios condicionais (JZ).

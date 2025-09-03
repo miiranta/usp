@@ -1,0 +1,5 @@
+Implemente um programa que some dois números armazenados na memória.
+Os números estão nas variáveis NUM1 e NUM2.
+O resultado deve ser armazenado na variável RESULTADO.
+
+Este exercício ensina: operações aritméticas básicas e uso do modo direto.

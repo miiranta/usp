@@ -1,0 +1,2 @@
+Implemente um contador para a sequência de Fibonacci sem utilizar a pilha, ou seja, não utilize as instruções POP e PUSH. 
+Não é necessário implementar um limite para a contagem.

@@ -1,0 +1,5 @@
+Implemente um programa que use operações lógicas para mascarar bits.
+Aplique uma máscara (AND) no número armazenado em NUMERO.
+A máscara está em MASCARA. Armazene o resultado em RESULTADO.
+
+Este exercício ensina: operações lógicas bit a bit (AND).

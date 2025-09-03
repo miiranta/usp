@@ -1,0 +1,5 @@
+Implemente um programa que use XOR para alternar bits.
+Aplique XOR entre NUMERO e MASCARA_XOR.
+O resultado deve ser armazenado em RESULTADO.
+
+Este exercício ensina: operação XOR para manipulação de bits.

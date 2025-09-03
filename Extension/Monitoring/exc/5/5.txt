@@ -1,0 +1,5 @@
+Implemente um programa que use endereçamento indireto para copiar um valor.
+O endereço de origem está na variável PONTEIRO.
+Copie o valor apontado para a variável DESTINO.
+
+Este exercício ensina: endereçamento indireto (@).

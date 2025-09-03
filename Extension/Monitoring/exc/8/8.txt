@@ -1,0 +1,5 @@
+Implemente um programa que use subtração com carry (SBC).
+Subtraia NUM2 de NUM1 considerando um "empréstimo" inicial.
+Primeiro, defina o carry, depois use SBC.
+
+Este exercício ensina: operações com carry (SBC) e manipulação de flags.

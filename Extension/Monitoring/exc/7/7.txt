@@ -1,0 +1,5 @@
+Implemente um programa que use deslocamento de bits para multiplicar por 2.
+Use a instrução SHL para deslocar o valor à esquerda.
+O número está em NUMERO e o resultado deve ir para RESULTADO.
+
+Este exercício ensina: operações de deslocamento (SHL).

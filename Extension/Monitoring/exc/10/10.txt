@@ -1,0 +1,5 @@
+Implemente um programa que use a pilha (PUSH e POP).
+Empilhe o valor de VALOR_A, depois carregue VALOR_B no acumulador.
+Em seguida, desempilhe VALOR_A e some com VALOR_B.
+
+Este exercício ensina: uso da pilha com PUSH e POP.
