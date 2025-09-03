@@ -210,7 +210,9 @@ def main():
 	model = AutoModel.from_pretrained(
 		model_name,
 		device_map = device,
-		offload_folder=":auto"
+		offload_folder=":auto",
+		low_cpu_mem_usage=True,
+		torch_dtype='auto'
 	)
  
 	# Initialize separate trackers for weights and biases
