@@ -12,10 +12,11 @@ from selenium.webdriver.support import expected_conditions as EC
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, 'atas')
 
+if not os.path.exists(OUTPUT_FOLDER):
+    os.makedirs(OUTPUT_FOLDER)
+
 START_URL = 'https://www.bcb.gov.br/publicacoes/atascopom/cronologicos'
 TIMEOUT = 60
-
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 def collect_meeting_urls(driver):
     meetings = {}

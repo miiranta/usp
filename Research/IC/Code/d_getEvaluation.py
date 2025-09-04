@@ -6,8 +6,15 @@ from dotenv import load_dotenv
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
-INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences")
+INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences_selected")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "csvs")
+
+if not os.path.exists(INPUT_FOLDER):
+    print("Input folder does not exist.")
+    exit(1)
+
+if not os.path.exists(OUTPUT_FOLDER):
+    os.makedirs(OUTPUT_FOLDER)
 
 load_dotenv(os.path.join(SCRIPT_FOLDER, '.env'))
 
@@ -115,13 +122,6 @@ def _date_key(d):
     return (year, month, day)
 
 def main():
-    if not os.path.exists(INPUT_FOLDER):
-        print("Input folder does not exist.")
-        return
-    
-    if not os.path.exists(OUTPUT_FOLDER):
-        os.makedirs(OUTPUT_FOLDER)
-    
     raw_text_files = [f for f in os.listdir(INPUT_FOLDER) if f.endswith('.txt')]
     if not raw_text_files:
         print("No text files found in the input directory.")

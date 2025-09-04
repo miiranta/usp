@@ -4,10 +4,16 @@ import math
 import matplotlib.pyplot as plt
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
-
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "csvs")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "info_and_graphs")
 
+if not os.path.exists(INPUT_FOLDER):
+    print("Input folder does not exist.")
+    exit(1)
+
+if not os.path.exists(OUTPUT_FOLDER):
+    os.makedirs(OUTPUT_FOLDER)
+    
 ##
 
 def _date_key(d):
@@ -246,13 +252,6 @@ def plot_average_by_date_and_model(result_csv_data):
 ##
 
 def main():
-    if not os.path.exists(INPUT_FOLDER):
-        print("Input folder does not exist.")
-        return
-    
-    if not os.path.exists(OUTPUT_FOLDER):
-        os.makedirs(OUTPUT_FOLDER)
-    
     # Append CSVs
 
     result_csv_data = get_appended_csvs()

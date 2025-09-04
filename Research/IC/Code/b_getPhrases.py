@@ -10,6 +10,13 @@ SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "atas")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences")
 
+if not os.path.exists(INPUT_FOLDER):
+    print("Input folder does not exist.")
+    exit(1)
+
+if not os.path.exists(OUTPUT_FOLDER):
+    os.makedirs(OUTPUT_FOLDER)
+
 SIGMA_THRESHOLD = 2
 SIGMA_OFFSET = 2
 
@@ -166,16 +173,13 @@ def main():
         final_sentences = []
         if len(html_sentences_final) < len(pdf_sentences_final):
             final_sentences = pdf_sentences_final
-            total_phrases += len(pdf_sentences)
+            total_phrases += len(pdf_sentences_final)
             print(" > > Using PDF sentences.")
         else:
             final_sentences = html_sentences_final
-            total_phrases += len(html_sentences)    
+            total_phrases += len(html_sentences_final)    
             print(" > > Using HTML sentences.")
-            
-        if not os.path.exists(OUTPUT_FOLDER):
-            os.makedirs(OUTPUT_FOLDER)
-            
+              
         output_file_path = os.path.join(OUTPUT_FOLDER, f"{folder}.txt")
         with open(output_file_path, 'w', encoding='utf-8') as output_file:
             for sentence in final_sentences:
