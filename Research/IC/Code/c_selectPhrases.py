@@ -2,6 +2,7 @@
 # https://github.com/mtarcinalli
 
 import os
+import torch
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
@@ -57,11 +58,17 @@ def vetorize():
     df = pd.DataFrame(dados)
     df["data"] = pd.to_datetime(df["data"], format="%d%m%Y", errors="coerce")
     
-    print('Quantidade inicial de sentenças:', len(df), '\n')
+    print('Quantidade inicial de sentenças:', len(df))
 
     # 
-    embeddings = HuggingFaceEmbeddings(model_name="Qwen/Qwen3-Embedding-0.6B")
-
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f'Using device: {device}')
+    
+    embeddings = HuggingFaceEmbeddings(
+        model_name="Qwen/Qwen3-Embedding-0.6B",
+        model_kwargs={'device': device}
+    )
+    
     # 
     vetor_inflacao = embeddings.embed_query(WORD_TO_SEARCH)
 
