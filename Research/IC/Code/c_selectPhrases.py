@@ -37,7 +37,7 @@ def calcular_distancia(sentenca, vetor_referencia, embeddings):
     distancia = 1 - similaridade
     return distancia
 
-def vetorize():
+def vectorize():
     dados = []
     
     # Loading dataset
@@ -91,7 +91,7 @@ def save():
                 output_file.write(sentence + "\n")
 
 def main():
-    vetorize()
+    vectorize()
     select()
     save()
 
