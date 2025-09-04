@@ -25,6 +25,7 @@ BLACKLIST = [
     "cookies",
     "expand_less",
     "content_copy",
+    "Garantir a estabilidade do poder de compra da moeda,",
 ]
 
 try:
