@@ -5,6 +5,7 @@ from transformers import AutoModel
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 class ModelWeights:
 	def __init__(self, name, param_type="weights"):
@@ -33,11 +34,12 @@ class ModelWeights:
   
 		self.lmc_complexity = 0
 
-		self.all_weights = []
+		self.weight_arrays_list = []
 		
 		self.filtered_min = None
 		self.filtered_max = None
 		self.num_filtered_out = 0
+		self.filtered_count = 0
 
 	def set_bins(self):
 		if self.count > 0:
@@ -55,8 +57,10 @@ class ModelWeights:
 	def calculate_bins_probabilities(self):
 		if self.count == 0:
 			return
+		if self.filtered_count == 0:
+			return
 		for n in range(self.bins):
-			self.bins_probabilities[n] = self.histogram[n] / self.count
+			self.bins_probabilities[n] = self.histogram[n] / self.filtered_count
    
 		self.bins_probabilities_calc = True
 
@@ -99,10 +103,7 @@ class ModelWeights:
 		else:
 			numpy_weights = weights
 		
-		if len(self.all_weights) == 0:
-			self.all_weights = numpy_weights.flatten()
-		else:
-			self.all_weights = np.concatenate([self.all_weights, numpy_weights.flatten()])
+		self.weight_arrays_list.append(numpy_weights.flatten())
 		
 		# Count weights
 		self.count += weights.numel()
@@ -121,10 +122,13 @@ class ModelWeights:
 			self.max_weight = max(self.max_weight, torch.max(weights).item())
    
 	def build_histogram_from_stored_arrays(self):
-		if len(self.all_weights) == 0:
+		if not self.weight_arrays_list:
 			return
 		
-		print(f" > Processing {len(self.all_weights)} {self.param_type} values...")
+		# Concatenate all arrays at once (much more efficient)
+		all_weights = np.concatenate(self.weight_arrays_list)
+		
+		print(f" > Processing {len(all_weights)} {self.param_type} values...")
 		print(f" > Original range: [{self.min_weight:.6f}, {self.max_weight:.6f}]")
 		print(f" > Mean: {self.mean:.6f}, Std: {self.std:.6f}")
 		
@@ -135,33 +139,45 @@ class ModelWeights:
 			upper = self.mean + sigma * self.std
 			print(f" > Filtering range: [{lower:.6f}, {upper:.6f}]")
 			
-			mask = (self.all_weights >= lower) & (self.all_weights <= upper)
-			filtered_weights = self.all_weights[mask]
+			mask = (all_weights >= lower) & (all_weights <= upper)
+			filtered_weights = all_weights[mask]
 			
-			self.num_filtered_out = len(self.all_weights) - len(filtered_weights)
+			self.num_filtered_out = len(all_weights) - len(filtered_weights)
+			self.filtered_count = len(filtered_weights)
 			self.filtered_min = np.min(filtered_weights) if len(filtered_weights) > 0 else self.min_weight
 			self.filtered_max = np.max(filtered_weights) if len(filtered_weights) > 0 else self.max_weight
-			
-			print(f" >> Filtered out {self.num_filtered_out} outliers ({self.num_filtered_out/len(self.all_weights)*100:.2f}%)")
+   
+			print(f" >> Filtered out {self.num_filtered_out} outliers ({self.num_filtered_out/len(all_weights)*100:.2f}%)")
 			print(f" >> Filtered range: [{self.filtered_min:.6f}, {self.filtered_max:.6f}]")
 			
 			# Use filtered min/max for histogram range
 			histogram_range = (self.filtered_min, self.filtered_max)
 		else:
 			print(f" >> No outlier removal (remove_outliers_std = {self.remove_outliers_std}, std = {self.std:.6f})")
-			filtered_weights = self.all_weights
+			filtered_weights = all_weights
 			histogram_range = (self.min_weight, self.max_weight)
 			
 			self.num_filtered_out = 0
+			self.filtered_count = len(all_weights)
 			self.filtered_min = self.min_weight
 			self.filtered_max = self.max_weight
 			
 		# Compute histogram on filtered data
 		if len(filtered_weights) > 0:
+			if self.filtered_count > 0:
+				self.bins = int(2 * (self.filtered_count ** (1/3))) # Rice's Rule with filtered count
+			else:
+				self.bins = 1
+	
+			self.histogram = np.zeros(self.bins, dtype=int)
+			self.bins_probabilities = np.zeros(self.bins, dtype=float)
+			
 			counts, _ = np.histogram(filtered_weights, bins=self.bins, range=histogram_range, density=False)
 			self.histogram = counts
 		else:
+			self.bins = 1
 			self.histogram = np.zeros(self.bins, dtype=int)
+			self.bins_probabilities = np.zeros(self.bins, dtype=float)
 
 	def plot_histogram(self):
 		if self.count == 0:
@@ -173,7 +189,7 @@ class ModelWeights:
   
 		title = f"Histogram of {self.param_type.title()} (Counts)"
 		xlabel = self.param_type.title()
-		range_ = (self.min_weight, self.max_weight)
+		range_ = (self.filtered_min, self.filtered_max)
 		bin_edges = np.linspace(range_[0], range_[1], self.bins + 1)
 		bin_width = bin_edges[1] - bin_edges[0]
 		bin_lefts = bin_edges[:-1]
@@ -219,8 +235,19 @@ def print_and_write(filename, text):
 
 	with open(filepath, "a") as f:
 		f.write(str(text) + "\n")
+
+def format_array_for_output(array, label):
+	if isinstance(array, np.ndarray):
+		with np.printoptions(threshold=np.inf, linewidth=np.inf):
+			array_str = np.array2string(array, separator=', ')
+		return f"{label}: {array_str}"
+	else:
+		return f"{label}: {array}"
   
 def main():
+	# Start timer
+	start_time = time.time()
+
 	# Load model
 	print("Loading model...")
 	model_name = "openai/gpt-oss-20b"
@@ -276,7 +303,9 @@ def main():
 	param_count_torch = sum(p.numel() for p in model.parameters())
 	print_and_write(model_name, f"Total parameter count (by Torch): {param_count_torch}")
 	print_and_write(model_name, f"Weight count (by NumPy): {modelWeights.count}")
+	print_and_write(model_name, f"Filtered weight count: {modelWeights.filtered_count}")
 	print_and_write(model_name, f"Bias count (by NumPy): {modelBiases.count}")
+	print_and_write(model_name, f"Filtered bias count: {modelBiases.filtered_count}")
  
 	# Print weights information
 	print_and_write(model_name, "\n=== WEIGHTS INFORMATION ===")
@@ -288,13 +317,13 @@ def main():
 	print_and_write(model_name, f"Filtered min weight: {modelWeights.filtered_min}")
 	print_and_write(model_name, f"Filtered max weight: {modelWeights.filtered_max}")
 	print_and_write(model_name, f"Number of weights filtered out: {modelWeights.num_filtered_out}")
-	if len(modelWeights.all_weights) > 0:
-		print_and_write(model_name, f"Percentage of weights filtered: {modelWeights.num_filtered_out/len(modelWeights.all_weights)*100:.2f}%")
-	print_and_write(model_name, f"Weights bins probabilities: {modelWeights.bins_probabilities}")
+	if modelWeights.count > 0:
+		print_and_write(model_name, f"Percentage of weights filtered: {modelWeights.num_filtered_out/modelWeights.count*100:.2f}%")
+	print_and_write(model_name, format_array_for_output(modelWeights.bins_probabilities, "Weights bins probabilities"))
 	print_and_write(model_name, f"Weights Shannon information: {modelWeights.shannon_information}")
 	print_and_write(model_name, f"Weights Desequilibrium: {modelWeights.desequilibrium}")
 	print_and_write(model_name, f"Weights LMC Complexity: {modelWeights.lmc_complexity}")
-	print_and_write(model_name, f"Weights histogram: {modelWeights.histogram}")
+	print_and_write(model_name, format_array_for_output(modelWeights.histogram, "Weights histogram"))
 	
 	# Print biases information
 	print_and_write(model_name, "\n=== BIASES INFORMATION ===")
@@ -306,73 +335,20 @@ def main():
 	print_and_write(model_name, f"Filtered min bias: {modelBiases.filtered_min}")
 	print_and_write(model_name, f"Filtered max bias: {modelBiases.filtered_max}")
 	print_and_write(model_name, f"Number of biases filtered out: {modelBiases.num_filtered_out}")
-	if len(modelBiases.all_weights) > 0:
-		print_and_write(model_name, f"Percentage of biases filtered: {modelBiases.num_filtered_out/len(modelBiases.all_weights)*100:.2f}%")
-	print_and_write(model_name, f"Biases bins probabilities: {modelBiases.bins_probabilities}")
+	if modelBiases.count > 0:
+		print_and_write(model_name, f"Percentage of biases filtered: {modelBiases.num_filtered_out/modelBiases.count*100:.2f}%")
+	print_and_write(model_name, format_array_for_output(modelBiases.bins_probabilities, "Biases bins probabilities"))
 	print_and_write(model_name, f"Biases Shannon information: {modelBiases.shannon_information}")
 	print_and_write(model_name, f"Biases Desequilibrium: {modelBiases.desequilibrium}")
 	print_and_write(model_name, f"Biases LMC Complexity: {modelBiases.lmc_complexity}")
-	print_and_write(model_name, f"Biases histogram: {modelBiases.histogram}")
- 
-def test():
-	model_name = "test"
-	modelWeights = ModelWeights(model_name, "weights")
-	modelBiases = ModelWeights(model_name, "bias")
+	print_and_write(model_name, format_array_for_output(modelBiases.histogram, "Biases histogram"))
 	
-	weights = torch.tensor([-1, 0, 1, 0, 0], dtype=torch.float32)
-	weights2 = torch.tensor([-2, 0, 2], dtype=torch.float32)
-	biases = torch.tensor([0.1, -0.1, 0.05], dtype=torch.float32)
- 
-	# Add weights and biases
-	modelWeights.add_weights(weights)
-	modelWeights.add_weights(weights2)
-	modelBiases.add_weights(biases)
-	
-	# Set bins
-	modelWeights.set_bins()
-	modelBiases.set_bins()
-	
-	# Build histograms from stored arrays
-	modelWeights.build_histogram_from_stored_arrays()
-	modelBiases.build_histogram_from_stored_arrays()
- 
-	modelWeights.plot_histogram()
-	modelBiases.plot_histogram()
- 
-	print_and_write(model_name, f"Weights histogram: {modelWeights.histogram}")
-	print_and_write(model_name, f"Mean weight: {modelWeights.mean}")
-	print_and_write(model_name, f"Std weight: {modelWeights.std}")
-	print_and_write(model_name, f"Biases histogram: {modelBiases.histogram}")
-	print_and_write(model_name, f"Mean bias: {modelBiases.mean}")
-	print_and_write(model_name, f"Std bias: {modelBiases.std}")
- 
-	modelWeights.calculate_bins_probabilities()
-	print_and_write(model_name, f"Weights bins probabilities: {modelWeights.bins_probabilities}")
- 
-	modelWeights.calculate_shannon_information()
-	print_and_write(model_name, f"Weights Shannon information: {modelWeights.shannon_information}")
- 
-	modelWeights.calculate_desequilibrium()
-	print_and_write(model_name, f"Weights desequilibrium: {modelWeights.desequilibrium}")
- 
-	modelWeights.calculate_lmc_complexity()
-	print_and_write(model_name, f"Weights LMC complexity: {modelWeights.lmc_complexity}")
-	
-	modelBiases.calculate_bins_probabilities()
-	print_and_write(model_name, f"Biases bins probabilities: {modelBiases.bins_probabilities}")
- 
-	modelBiases.calculate_shannon_information()
-	print_and_write(model_name, f"Biases Shannon information: {modelBiases.shannon_information}")
- 
-	modelBiases.calculate_desequilibrium()
-	print_and_write(model_name, f"Biases desequilibrium: {modelBiases.desequilibrium}")
- 
-	modelBiases.calculate_lmc_complexity()
-	print_and_write(model_name, f"Biases LMC complexity: {modelBiases.lmc_complexity}")
+	# total execution time
+	total_time = time.time() - start_time
+	print_and_write(model_name, f"Total execution time: {total_time:.2f} seconds")
 
 if __name__ == "__main__":
 	main()
-	#test()
 
 
 
