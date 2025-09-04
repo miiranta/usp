@@ -10,15 +10,15 @@ SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "atas")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences")
 
-SIGMA_THRESHOLD = 2
-SIGMA_OFFSET = 2
-
 if not os.path.exists(INPUT_FOLDER):
     print("Input folder does not exist.")
     exit(1)
 
 if not os.path.exists(OUTPUT_FOLDER):
     os.makedirs(OUTPUT_FOLDER)
+   
+SIGMA_THRESHOLD = 2
+SIGMA_OFFSET = 2
     
 BLACKLIST = [
     "javascript",
