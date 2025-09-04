@@ -10,11 +10,8 @@ SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "atas")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences")
 
-SENTENCES_WHITELIST = [ # Select sentences that contain these phrases
-]
-
-SENTENCES_BLACKLIST = [ # Select sentences that should not be included, overrides the whitelisted phrases
-]
+SIGMA_THRESHOLD = 2
+SIGMA_OFFSET = 2
 
 try:
     nlp = spacy.load("pt_core_news_lg")
@@ -30,6 +27,7 @@ def read_pdf_text(pdf_path):
         full_text = doc.text
         
         # SPECIFIC FILTERS FOR THE PDF FILES
+        # ---
         
         return full_text
         
@@ -62,6 +60,8 @@ def read_html_text(html_path):
             
             # Convert multiple dots to a single dot
             body_text = re.sub(r'\.{2,}', '.', body_text)
+            
+            # ---
             
             return body_text
 
@@ -107,8 +107,8 @@ def break_into_sentences(text):
     return cleaned_sentences
 
 def trim_phrases(phrases):
-    sigma_threshold = 2
-    sigma_offset = 2
+    sigma_threshold = SIGMA_THRESHOLD
+    sigma_offset = SIGMA_OFFSET
     cleaned_phrases = []
     
     # Remove phares that do not end in ., !, ?
@@ -132,30 +132,6 @@ def trim_phrases(phrases):
     
     return cleaned_phrases
 
-def select_sentences(sentences):
-    filtered_sentences = []
-    
-    if len(SENTENCES_WHITELIST) == 0:
-        filtered_sentences = sentences
-    else:
-        for sentence in sentences:
-            
-            # Check if the sentence contains any whitelisted phrases
-            if any(phrase.lower() in sentence.lower() for phrase in SENTENCES_WHITELIST):
-                filtered_sentences.append(sentence)
-            
-    if len(SENTENCES_BLACKLIST) != 0:
-        for sentence in filtered_sentences[:]:
-            
-            # Remove sentences that contain any blacklisted phrases
-            if any(phrase.lower() in sentence.lower() for phrase in SENTENCES_BLACKLIST):
-                filtered_sentences.remove(sentence)
-            
-    # Remove single words or single numbers 
-    filtered_sentences = [s for s in filtered_sentences if len(s.split()) > 1]
-        
-    return filtered_sentences
-        
 def main():
     folders = [f for f in os.listdir(INPUT_FOLDER) if os.path.isdir(os.path.join(INPUT_FOLDER, f))]
     
@@ -176,8 +152,7 @@ def main():
             html_extracted = read_html_text(os.path.join(INPUT_FOLDER, folder, html_files[0]))
             html_trimmed = trim(html_extracted)
             html_sentences = break_into_sentences(html_trimmed)
-            html_sentences_trimmed = trim_phrases(html_sentences)
-            html_sentences_final = select_sentences(html_sentences_trimmed)
+            html_sentences_final = trim_phrases(html_sentences)
             print(f" > Found {len(html_sentences_final)} sentences in HTML file.")
             
         pdf_files = [f for f in os.listdir(os.path.join(INPUT_FOLDER, folder)) if f.endswith('.pdf')]
@@ -185,8 +160,7 @@ def main():
             pdf_extracted = read_pdf_text(os.path.join(INPUT_FOLDER, folder, pdf_files[0]))
             pdf_trimmed = trim(pdf_extracted)
             pdf_sentences = break_into_sentences(pdf_trimmed)
-            pdf_sentences_trimmed = trim_phrases(pdf_sentences)
-            pdf_sentences_final = select_sentences(pdf_sentences_trimmed)
+            pdf_sentences_final = trim_phrases(pdf_sentences)
             print(f" > Found {len(pdf_sentences_final)} sentences in PDF file.")
         
         final_sentences = []
