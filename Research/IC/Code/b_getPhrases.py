@@ -16,9 +16,13 @@ if not os.path.exists(INPUT_FOLDER):
 
 if not os.path.exists(OUTPUT_FOLDER):
     os.makedirs(OUTPUT_FOLDER)
-
-SIGMA_THRESHOLD = 2
-SIGMA_OFFSET = 2
+    
+BLACKLIST = [
+    "javascript",
+    "cookies",
+    "expand_less",
+    "content_copy",
+]
 
 try:
     nlp = spacy.load("pt_core_news_lg")
@@ -32,7 +36,7 @@ def read_pdf_text(pdf_path):
     try:
         doc = layout(pdf_path)
         full_text = doc.text
-        
+         
         # SPECIFIC FILTERS FOR THE PDF FILES
         # ---
         
@@ -114,29 +118,20 @@ def break_into_sentences(text):
     return cleaned_sentences
 
 def trim_phrases(phrases):
-    sigma_threshold = SIGMA_THRESHOLD
-    sigma_offset = SIGMA_OFFSET
     cleaned_phrases = []
-    
+
     # Remove phares that do not end in ., !, ?
     for phrase in phrases:
         if re.search(r'[.!?]$', phrase):
             cleaned_phrases.append(phrase)
-            
-    # Remove phrases that are too short
-    if not cleaned_phrases:
-        return cleaned_phrases
     
-    lengths = [len(phrase) for phrase in cleaned_phrases]
-    mean = sum(lengths) / len(lengths)
-    variance = sum((l - mean) ** 2 for l in lengths) / len(lengths)
-    sd = math.sqrt(variance)
-    
-    mean_corrected = sum(lengths) / len(lengths) + sigma_offset * sd
-    lower_threshold = mean_corrected - sigma_threshold * sd
-    
-    cleaned_phrases = [phrase for phrase in cleaned_phrases if len(phrase) >= lower_threshold]
-    
+    # Remove one word phrases
+    cleaned_phrases = [phrase for phrase in cleaned_phrases if len(phrase.split()) > 1]
+
+    # Remove phrases in blacklist
+    for word in BLACKLIST:
+        cleaned_phrases = [phrase for phrase in cleaned_phrases if word.lower() not in phrase.lower()]
+
     return cleaned_phrases
 
 def main():
@@ -151,17 +146,7 @@ def main():
     for folder in folders:
         print(f"Processing folder: {folder}")
         
-        html_sentences = []
-        pdf_sentences = []
-        
-        html_files = [f for f in os.listdir(os.path.join(INPUT_FOLDER, folder)) if f.endswith('.html')]
-        if html_files:
-            html_extracted = read_html_text(os.path.join(INPUT_FOLDER, folder, html_files[0]))
-            html_trimmed = trim(html_extracted)
-            html_sentences = break_into_sentences(html_trimmed)
-            html_sentences_final = trim_phrases(html_sentences)
-            print(f" > Found {len(html_sentences_final)} sentences in HTML file.")
-            
+        pdf_sentences_final = []
         pdf_files = [f for f in os.listdir(os.path.join(INPUT_FOLDER, folder)) if f.endswith('.pdf')]
         if pdf_files:
             pdf_extracted = read_pdf_text(os.path.join(INPUT_FOLDER, folder, pdf_files[0]))
@@ -169,6 +154,16 @@ def main():
             pdf_sentences = break_into_sentences(pdf_trimmed)
             pdf_sentences_final = trim_phrases(pdf_sentences)
             print(f" > Found {len(pdf_sentences_final)} sentences in PDF file.")
+        
+        html_sentences_final = []
+        if len(pdf_sentences_final) == 0:
+            html_files = [f for f in os.listdir(os.path.join(INPUT_FOLDER, folder)) if f.endswith('.html')]
+            if html_files:
+                html_extracted = read_html_text(os.path.join(INPUT_FOLDER, folder, html_files[0]))
+                html_trimmed = trim(html_extracted)
+                html_sentences = break_into_sentences(html_trimmed)
+                html_sentences_final = trim_phrases(html_sentences)
+                print(f" > Found {len(html_sentences_final)} sentences in HTML file.")
         
         final_sentences = []
         if len(html_sentences_final) < len(pdf_sentences_final):

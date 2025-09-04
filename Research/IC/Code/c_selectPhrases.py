@@ -24,9 +24,6 @@ if not os.path.exists(OUTPUT_FOLDER):
     
 WORD_TO_SEARCH = "inflação"
 THRESHOLD_GLOBAL = 0.6 # %
-BLACKLIST = [
-    "javascript",
-]
 
 df = pd.DataFrame()
 filtered_df = pd.DataFrame()
@@ -81,10 +78,7 @@ def vetorize():
 def select():
     global filtered_df
     filtered_df = df[(df['inflation'] < THRESHOLD_GLOBAL)]
-    
-    for word in BLACKLIST:
-        filtered_df = filtered_df[~filtered_df['sentenca'].str.contains(word, case=False, na=False)]
-    
+      
     print('Quantidade final de sentenças:', len(filtered_df),'\n')
       
 def save():
