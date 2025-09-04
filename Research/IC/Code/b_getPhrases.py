@@ -10,6 +10,9 @@ SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "atas")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences")
 
+SIGMA_THRESHOLD = 2
+SIGMA_OFFSET = 2
+
 if not os.path.exists(INPUT_FOLDER):
     print("Input folder does not exist.")
     exit(1)
@@ -118,6 +121,9 @@ def break_into_sentences(text):
     return cleaned_sentences
 
 def trim_phrases(phrases):
+    sigma_threshold = SIGMA_THRESHOLD
+    sigma_offset = SIGMA_OFFSET
+    
     cleaned_phrases = []
 
     # Remove phares that do not end in ., !, ?
@@ -131,7 +137,16 @@ def trim_phrases(phrases):
     # Remove phrases in blacklist
     for word in BLACKLIST:
         cleaned_phrases = [phrase for phrase in cleaned_phrases if word.lower() not in phrase.lower()]
-
+        
+    # Remove phrases that are too short
+    lengths = [len(phrase) for phrase in cleaned_phrases]
+    mean = sum(lengths) / len(lengths)
+    variance = sum((l - mean) ** 2 for l in lengths) / len(lengths)
+    sd = math.sqrt(variance)
+    mean_corrected = sum(lengths) / len(lengths) + sigma_offset * sd
+    lower_threshold = mean_corrected - sigma_threshold * sd
+    cleaned_phrases = [phrase for phrase in cleaned_phrases if len(phrase) >= lower_threshold]
+    
     return cleaned_phrases
 
 def main():
