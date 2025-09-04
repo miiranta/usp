@@ -57,7 +57,7 @@ def vetorize():
     df = pd.DataFrame(dados)
     df["data"] = pd.to_datetime(df["data"], format="%d%m%Y", errors="coerce")
     
-    print('Quantidade inicial de sentenças:', len(df), '\n\n')
+    print('Quantidade inicial de sentenças:', len(df), '\n')
 
     # 
     embeddings = HuggingFaceEmbeddings(model_name="Qwen/Qwen3-Embedding-0.6B")
@@ -78,7 +78,7 @@ def select():
     for word in BLACKLIST:
         filtered_df = filtered_df[~filtered_df['sentenca'].str.contains(word, case=False, na=False)]
     
-    print('Quantidade final de sentenças:', len(filtered_df),'\n\n')
+    print('Quantidade final de sentenças:', len(filtered_df),'\n')
       
 def save():
     grouped_df = filtered_df.groupby(filtered_df['data'].dt.strftime('%d%m%Y'))
