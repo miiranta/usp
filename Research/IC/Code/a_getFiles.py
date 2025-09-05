@@ -83,8 +83,7 @@ def download_pdf(driver, date_folder, date):
 
         for i, url in enumerate(filtered, start=1):
             try:
-                parsed_url = urlparse(url)
-                filename = os.path.basename(parsed_url.path)
+                filename = f"{date}.pdf"
                 
                 filepath = os.path.join(date_folder, filename)
                 
