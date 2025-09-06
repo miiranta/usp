@@ -42,7 +42,7 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
     print(".....")
     sample_size = min(500000, n)
     print("......")
-    idx = np.random.choice(n, size=sample_size, replace=False)
+    idx = np.random.randint(0, n, size=sample_size, dtype=np.int64)
     print(".......")
     sample = data.DATA[idx]
     print("........")
@@ -213,6 +213,7 @@ FILTERS_TO_TEST = [0, 1, 2, 3, 4] # Number of standard deviations for outlier re
 def main():
     global MODEL_DATA_ARRAYS
     
+    # MODELS
     for model_name in MODELS_TO_TEST:
         start_timer = time.time()
 
@@ -255,11 +256,30 @@ def main():
         for t in TYPES_TO_TEST:
             print(f"-{t}: {len(MODEL_DATA_ARRAYS[t].DATA)}")
 
+        # TYPES
         for types in combinations(TYPES_TO_TEST):
             if len(types) == 0:
                 continue
-
+            
+            # Merge data
+            print(" > > Merging data...")
+            merged_data = Data()
+            total_length = sum(len(MODEL_DATA_ARRAYS[t].DATA) for t in types)
+            for t in types:
+                if len(MODEL_DATA_ARRAYS[t].DATA) == 0:
+                    continue
+                if merged_data.DATA is None:
+                    merged_data.DATA = np.empty(total_length, dtype=np.float32)
+                offset = merged_data.COUNT
+                ln = len(MODEL_DATA_ARRAYS[t].DATA)
+                merged_data.DATA[offset:offset+ln] = MODEL_DATA_ARRAYS[t].DATA
+                merged_data.COUNT += ln
+            calc_data_stats(merged_data)
+            print(f" > > > Merged data count: {merged_data.COUNT}")
+            
+            # FILTERS
             for filter in FILTERS_TO_TEST:
+                
                 testing_name = f"{model_name}_" + "-".join(types) + f"_filter{filter}"
                 set_model_name(model_name.replace('/', '_'), testing_name)
                 print(f" > Testing {testing_name}...")
@@ -270,29 +290,12 @@ def main():
                 if os.path.exists(path):
                     print(" > > Already done, skipping.")
                     continue
-                
-                # Merge data
-                print(" > > Merging data...")
-                merged_data = Data()
-                total_length = sum(len(MODEL_DATA_ARRAYS[t].DATA) for t in types)
-                for t in types:
-                    if len(MODEL_DATA_ARRAYS[t].DATA) == 0:
-                        continue
-                    if merged_data.DATA is None:
-                        merged_data.DATA = np.empty(total_length, dtype=np.float32)
-                    offset = merged_data.COUNT
-                    ln = len(MODEL_DATA_ARRAYS[t].DATA)
-                    merged_data.DATA[offset:offset+ln] = MODEL_DATA_ARRAYS[t].DATA
-                    merged_data.COUNT += ln
-                calc_data_stats(merged_data)
-                print(f" > > > Merged data count: {merged_data.COUNT}")
-                
+
                 # Filter outliers
                 if filter > 0:
                     print(" > > Filtering...")
                     filtered_data = remove_data_outliers(merged_data, sigma=filter)
                     calc_data_stats(filtered_data)
-                    del merged_data
                 else:
                     filtered_data = merged_data
                 
