@@ -131,14 +131,9 @@ def classify_param_name(name: str) -> str:
     # layernorm / norm
     if 'layernorm' in lname or 'ln' in lname or 'norm' in lname:
         return 'norm'
-    # typical head / output / classifier modules
-    if 'head' in lname or 'lm_head' in lname or 'classifier' in lname or 'pooler' in lname or 'out_proj' in lname:
-        return 'head'
     # suffix-based
     if 'bias' in lname:
         return 'bias'
-    if 'weight' in lname:
-        return 'weight'
     # fallback
     return 'other'
 
@@ -199,26 +194,25 @@ def write_down_all(data, histogram):
 MODELS_TO_TEST = [
     'openai/gpt-oss-20b',
 ]
-TYPES_TO_TEST = ['weight', 'bias', 'norm', 'embedding', 'head', 'other'] # Parameter types to analyze
+TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other'] # Parameter types to analyze
 FILTERS_TO_TEST = [0, 1, 2, 3, 4] # Number of standard deviations for outlier removal
 
 def main():
     global MODEL_DATA_ARRAYS
     
-    for model in MODELS_TO_TEST:
-        
+    for model_name in MODELS_TO_TEST:
         start_timer = time.time()
-        
-        print(f"Loading model {model}...")
-        model = AutoModel.from_pretrained(
-            model,
-            device_map = "cpu",
+
+        print(f"Loading model {model_name}...")
+        loaded_model = AutoModel.from_pretrained(
+            model=model_name,
+            device_map="cpu",
         )
         
         # Tally sizes per parameter type
         print("Step 1: Tallying parameter sizes per type...")
         sizes = {t: 0 for t in TYPES_TO_TEST}
-        for name, param in model.named_parameters():
+        for name, param in loaded_model.named_parameters():
             t = classify_param_name(name)
             sizes[t] += param.numel()
 
@@ -227,18 +221,22 @@ def main():
         MODEL_DATA_ARRAYS = {t: Data() for t in TYPES_TO_TEST}
         for t in TYPES_TO_TEST:
             MODEL_DATA_ARRAYS[t].DATA = np.empty(sizes[t], dtype=np.float32)
+            MODEL_DATA_ARRAYS[t].COUNT = 0
 
-        # Copy flattened params directly into preallocated buffers
+        # Step 3: copy params
         print("Step 3: Copying data into preallocated arrays...")
-        for name, param in model.named_parameters():
-            t = classify_param_name(name)
-            array = param_to_numpy(param)
-            offset = MODEL_DATA_ARRAYS[t].COUNT
-            length = len(array)
-            MODEL_DATA_ARRAYS[t].DATA[offset:offset+length] = array
-            MODEL_DATA_ARRAYS[t].COUNT += length
-        
-        # How many parameters in total? # Just a check
+        with torch.no_grad():
+            for name, param in loaded_model.named_parameters():
+                if param is None or param.numel() == 0:
+                    continue
+                t = classify_param_name(name)
+                arr = param_to_numpy(param)
+                offset = MODEL_DATA_ARRAYS[t].COUNT
+                ln = len(arr)
+                MODEL_DATA_ARRAYS[t].DATA[offset:offset+ln] = arr
+                MODEL_DATA_ARRAYS[t].COUNT += ln
+
+        # How many parameters in total?
         total_params = sum(len(MODEL_DATA_ARRAYS[t].DATA) for t in TYPES_TO_TEST)
         print(f"Total parameters: {total_params}")
         for t in TYPES_TO_TEST:
@@ -249,9 +247,8 @@ def main():
                 continue
 
             for filter in FILTERS_TO_TEST:
-                
-                testing_name = f"{model}_" + "-".join(types) + f"_filter{filter}"
-                set_model_name(model.replace('/', '_'), testing_name)
+                testing_name = f"{model_name}_" + "-".join(types) + f"_filter{filter}"
+                set_model_name(model_name.replace('/', '_'), testing_name)
                 print(f" > Testing {testing_name}...")
                 
                 # Already done?
@@ -280,8 +277,8 @@ def main():
                 write_down_all(filtered_data, histogram)
                 
                 print(" > > Done.")
-                
-        del model
+
+        del loaded_model
         del MODEL_DATA_ARRAYS
         MODEL_DATA_ARRAYS = dict()
         
