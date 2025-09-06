@@ -39,18 +39,12 @@ class Histogram:
 
 def calc_bin_amount(data): # Freedman-Diaconis rule
     n = data.COUNT
-    print(".....")
     sample_size = min(500000, n)
-    print("......")
     idx = np.random.randint(0, n, size=sample_size, dtype=np.int64)
-    print(".......")
     sample = data.DATA[idx]
-    print("........")
     
     q75, q25 = np.percentile(sample, [75 ,25])
     iqr = q75 - q25
-    
-    print(".........")
     
     bin_width = 2 * iqr * (n ** (-1/3))
     if bin_width == 0:
@@ -74,7 +68,9 @@ def calc_histogram(data, histogram):
     bin_amount = calc_bin_amount(data)
     print(f" > > > Bin amount: {bin_amount}")
     bins = np.linspace(data.MIN, data.MAX, bin_amount + 1)
+    print("a")
     counts, _ = np.histogram(data.DATA, bins=bins)
+    print("b")
     probs = counts / data.COUNT
     histogram.BINS = bins
     histogram.PROBS = probs
@@ -190,6 +186,7 @@ def write_down_histogram(histogram):
 
 def write_down_histogram_stats(histogram):
     write_down("Histogram Stats:")
+    write_down(f" > Bin Count: {len(histogram.BINS) - 1}")
     write_down(f" > Shannon Entropy: {histogram.SHANNON_ENTROPY}")
     write_down(f" > Desequilibrium: {histogram.DESEQUILIBRIUM}")
     write_down(f" > Complexity: {histogram.COMPLEXITY}")
