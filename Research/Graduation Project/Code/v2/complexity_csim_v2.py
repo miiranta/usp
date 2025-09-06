@@ -205,7 +205,7 @@ def main():
 
         print(f"Loading model {model_name}...")
         loaded_model = AutoModel.from_pretrained(
-            model=model_name,
+            model_name,
             device_map="cpu",
         )
         
