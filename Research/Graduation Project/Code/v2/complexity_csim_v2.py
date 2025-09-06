@@ -162,7 +162,7 @@ def combinations(types):
 
 def set_model_name(model_folder, model_name):
     global MODEL_NAME, OUTPUT_FOLDER, MODEL_FOLDER
-    MODEL_NAME = model_name
+    MODEL_NAME = model_name.replace('/', '_')
     MODEL_FOLDER = model_folder
     OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, 'results', MODEL_FOLDER, MODEL_NAME)
     if not os.path.exists(OUTPUT_FOLDER):
