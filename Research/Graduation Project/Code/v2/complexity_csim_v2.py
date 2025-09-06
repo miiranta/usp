@@ -261,16 +261,34 @@ def main():
                 # Merge data
                 print(" > > Merging data...")
                 merged_data = Data()
-                merged_data.DATA = np.concatenate([MODEL_DATA_ARRAYS[t].DATA for t in types], axis=0)
+                total_length = sum(len(MODEL_DATA_ARRAYS[t].DATA) for t in types)
+                for t in types:
+                    if len(MODEL_DATA_ARRAYS[t].DATA) == 0:
+                        continue
+                    if merged_data.DATA is None:
+                        merged_data.DATA = np.empty(total_length, dtype=np.float32)
+                    offset = merged_data.COUNT
+                    ln = len(MODEL_DATA_ARRAYS[t].DATA)
+                    merged_data.DATA[offset:offset+ln] = MODEL_DATA_ARRAYS[t].DATA
+                    merged_data.COUNT += ln
+                print(f" > > > Merged data count: {merged_data.COUNT}")
                 
-                print(" > > Filtering...")
-                calc_data_stats(merged_data)
-                filtered_data = remove_data_outliers(merged_data, sigma=filter)
+                # Filter outliers
+                if filter > 0:
+                    print(" > > Filtering...")
+                    calc_data_stats(merged_data)
+                    filtered_data = remove_data_outliers(merged_data, sigma=filter)
+                    del merged_data
+                else:
+                    filtered_data = merged_data
                 
                 print(" > > Calculating histogram...")
                 histogram = Histogram()
+                print(".")
                 calc_histogram(filtered_data, histogram)
+                print("..")
                 calc_histogram_stats(histogram)
+                print("...")
                 plot_histogram(histogram)
                 
                 print(" > > Writing down results...")
