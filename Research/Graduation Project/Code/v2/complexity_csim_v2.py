@@ -39,12 +39,18 @@ class Histogram:
 
 def calc_bin_amount(data): # Freedman-Diaconis rule
     n = data.COUNT
+    print(".....")
     sample_size = min(500000, n)
+    print("......")
     idx = np.random.choice(n, size=sample_size, replace=False)
+    print(".......")
     sample = data.DATA[idx]
+    print("........")
     
     q75, q25 = np.percentile(sample, [75 ,25])
     iqr = q75 - q25
+    
+    print(".........")
     
     bin_width = 2 * iqr * (n ** (-1/3))
     if bin_width == 0:
@@ -65,7 +71,6 @@ def calc_data_stats(data):
 # ==================================== HISTOGRAM
 
 def calc_histogram(data, histogram):
-    print("....")
     bin_amount = calc_bin_amount(data)
     print(f" > > > Bin amount: {bin_amount}")
     bins = np.linspace(data.MIN, data.MAX, bin_amount + 1)
@@ -279,8 +284,8 @@ def main():
                     ln = len(MODEL_DATA_ARRAYS[t].DATA)
                     merged_data.DATA[offset:offset+ln] = MODEL_DATA_ARRAYS[t].DATA
                     merged_data.COUNT += ln
-                print(f" > > > Merged data count: {merged_data.COUNT}")
                 calc_data_stats(merged_data)
+                print(f" > > > Merged data count: {merged_data.COUNT}")
                 
                 # Filter outliers
                 if filter > 0:
