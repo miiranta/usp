@@ -103,7 +103,6 @@ def remove_data_outliers(data, sigma=0):
         (data.DATA >= data.MEAN - sigma * data.STANDARD_DEVIATION) &
         (data.DATA <= data.MEAN + sigma * data.STANDARD_DEVIATION)
     ]
-    calc_data_stats(filtered_data)
     return filtered_data
 
 # ====================================
@@ -281,26 +280,27 @@ def main():
                     merged_data.DATA[offset:offset+ln] = MODEL_DATA_ARRAYS[t].DATA
                     merged_data.COUNT += ln
                 print(f" > > > Merged data count: {merged_data.COUNT}")
+                calc_data_stats(merged_data)
                 
                 # Filter outliers
                 if filter > 0:
                     print(" > > Filtering...")
-                    calc_data_stats(merged_data)
                     filtered_data = remove_data_outliers(merged_data, sigma=filter)
+                    calc_data_stats(filtered_data)
                     del merged_data
                 else:
                     filtered_data = merged_data
                 
                 print(" > > Calculating histogram...")
                 histogram = Histogram()
-                print(".")
                 calc_histogram(filtered_data, histogram)
-                print("..")
                 calc_histogram_stats(histogram)
-                print("...")
                 plot_histogram(histogram)
                 
                 print(" > > Writing down results...")
+                write_down(f"Model: {model_name}")
+                write_down(f"Types: {', '.join(types)}")
+                write_down(f"Filter: {filter} sigma")
                 write_down_all(filtered_data, histogram)
                 
                 print(" > > Done.")
