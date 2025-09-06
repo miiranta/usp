@@ -39,12 +39,16 @@ class Histogram:
 
 def calc_bin_amount(data): # Freedman-Diaconis rule
     q75, q25 = np.percentile(data.DATA, [75 ,25])
+    print(f" > > > Q25: {q25}, Q75: {q75}")
     iqr = q75 - q25
     bin_width = 2 * iqr * (len(data.DATA) ** (-1/3))
+    print(f" > > > IQR: {iqr}, Bin width: {bin_width}")
     if bin_width == 0:
         print("Error: bin_width is 0")
         exit(1)
+    print(f" > > > Data MIN: {data.MIN}, Data MAX: {data.MAX}")
     bin_amount = int(np.ceil((data.MAX - data.MIN) / bin_width))
+    print(f" > > > Calculated bin amount: {bin_amount}")
     return max(bin_amount, 1)
     
 def calc_data_stats(data):
@@ -58,7 +62,9 @@ def calc_data_stats(data):
 # ==================================== HISTOGRAM
 
 def calc_histogram(data, histogram):
+    print("....")
     bin_amount = calc_bin_amount(data)
+    print(f" > > > Bin amount: {bin_amount}")
     bins = np.linspace(data.MIN, data.MAX, bin_amount + 1)
     counts, _ = np.histogram(data.DATA, bins=bins)
     probs = counts / data.COUNT
