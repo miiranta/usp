@@ -18,7 +18,7 @@ if not os.path.exists(OUTPUT_FOLDER):
 MODEL_DATA_ARRAYS = dict() # param_type -> Data
 
 class Data:
-    DATA = []
+    DATA = None
     
     COUNT = 0
     MIN = None
@@ -215,28 +215,35 @@ def main():
             device_map = "cpu",
         )
         
-        for param_type in TYPES_TO_TEST:
-            MODEL_DATA_ARRAYS[param_type] = Data()
-        
-        # Collect all parameters
-        print("Collecting parameters...")
+        # Tally sizes per parameter type
+        print("Step 1: Tallying parameter sizes per type...")
+        sizes = {t: 0 for t in TYPES_TO_TEST}
         for name, param in model.named_parameters():
-            array_of_params = param_to_numpy(param)
-            param_type = classify_param_name(name)
-            MODEL_DATA_ARRAYS[param_type].DATA.append(array_of_params)
+            t = classify_param_name(name)
+            sizes[t] += param.numel()
+
+        # Allocate contiguous numpy arrays per type
+        print("Step 2: Allocating contiguous arrays...")
+        MODEL_DATA_ARRAYS = {t: Data() for t in TYPES_TO_TEST}
+        for t in TYPES_TO_TEST:
+            MODEL_DATA_ARRAYS[t].DATA = np.empty(sizes[t], dtype=np.float32)
+
+        # Copy flattened params directly into preallocated buffers
+        print("Step 3: Copying data into preallocated arrays...")
+        for name, param in model.named_parameters():
+            t = classify_param_name(name)
+            array = param_to_numpy(param)
+            offset = MODEL_DATA_ARRAYS[t].COUNT
+            length = len(array)
+            MODEL_DATA_ARRAYS[t].DATA[offset:offset+length] = array
+            MODEL_DATA_ARRAYS[t].COUNT += length
         
-        # Concatenate all collected parameters
-        print("Concatenating parameters...")
-        for param_type in TYPES_TO_TEST:
-            MODEL_DATA_ARRAYS[param_type].DATA = np.concatenate( MODEL_DATA_ARRAYS[param_type].DATA, axis=0)
-        
-        # How many parameters in total?
-        print("Counting parameters...")
+        # How many parameters in total? # Just a check
         total_params = sum(len(MODEL_DATA_ARRAYS[t].DATA) for t in TYPES_TO_TEST)
-        print(f"Total: {total_params}")
+        print(f"Total parameters: {total_params}")
         for t in TYPES_TO_TEST:
             print(f"-{t}: {len(MODEL_DATA_ARRAYS[t].DATA)}")
-        
+
         for types in combinations(TYPES_TO_TEST):
             if len(types) == 0:
                 continue
