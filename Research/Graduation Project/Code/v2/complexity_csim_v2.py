@@ -203,6 +203,8 @@ TYPES_TO_TEST = ['weight', 'bias', 'norm', 'embedding', 'head', 'other'] # Param
 FILTERS_TO_TEST = [0, 1, 2, 3, 4] # Number of standard deviations for outlier removal
 
 def main():
+    global MODEL_DATA_ARRAYS
+    
     for model in MODELS_TO_TEST:
         
         start_timer = time.time()
