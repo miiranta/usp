@@ -123,16 +123,17 @@ def calc_data_stats(data):
     
     total_sum = 0.0
     for arr_tensor in data.DATA:
-        data.COUNT += len(arr_tensor)
+        arr_gpu = arr_tensor.to(device)
+        data.COUNT += len(arr_gpu)
         
-        arr_min = torch.min(arr_tensor).item()
-        arr_max = torch.max(arr_tensor).item()
+        arr_min = torch.min(arr_gpu).item()
+        arr_max = torch.max(arr_gpu).item()
         if data.MIN is None or arr_min < data.MIN:
             data.MIN = arr_min
         if data.MAX is None or arr_max > data.MAX:
             data.MAX = arr_max
             
-        total_sum += torch.sum(arr_tensor).item()
+        total_sum += torch.sum(arr_gpu).item()
     
     if data.COUNT == 0:
         data.MEAN = 0.0
@@ -143,7 +144,8 @@ def calc_data_stats(data):
     
     total_sq_sum = 0.0
     for arr_tensor in data.DATA:
-        total_sq_sum += torch.sum((arr_tensor - data.MEAN) ** 2).item()
+        arr_gpu = arr_tensor.to(device)
+        total_sq_sum += torch.sum((arr_gpu - data.MEAN) ** 2).item()
     
     data.STANDARD_DEVIATION = (total_sq_sum / data.COUNT) ** 0.5
 
@@ -164,7 +166,8 @@ def calc_histogram(data, histogram):
     counts = torch.zeros(bin_amount, dtype=torch.long, device=device)
     
     for arr_tensor in data.DATA:
-        bin_indices = ((arr_tensor - data.MIN) / bin_width).long()
+        arr_gpu = arr_tensor.to(device)
+        bin_indices = ((arr_gpu - data.MIN) / bin_width).long()
         bin_indices = torch.clamp(bin_indices, 0, bin_amount - 1)
         counts += torch.bincount(bin_indices, minlength=bin_amount)
     
@@ -236,8 +239,9 @@ def remove_data_outliers(data, sigma=0):
     
     filtered_data = Data()
     for arr_tensor in data.DATA:
-        mask = (arr_tensor >= lower_bound) & (arr_tensor <= upper_bound)
-        filtered_tensor = arr_tensor[mask]
+        arr_gpu = arr_tensor.to(device)
+        mask = (arr_gpu >= lower_bound) & (arr_gpu <= upper_bound)
+        filtered_tensor = arr_gpu[mask].cpu()
         if len(filtered_tensor) > 0:
             filtered_data.DATA.append(filtered_tensor)
             
@@ -265,13 +269,13 @@ def calc_complexity(H, D): # C = H * D
 
 def param_to_torch(param):
 	if param is None:
-		return torch.tensor([], device=device)
+		return torch.tensor([])
 	t = param.detach()
 	if t.numel() == 0:
-		return torch.tensor([], device=device)
+		return torch.tensor([])
 	if t.dtype in (torch.bfloat16, torch.float16):
 		t = t.to(torch.float32)
-	return t.view(-1).to(device)
+	return t.view(-1)
 
 def classify_param_name(name: str) -> str:
     lname = name.lower()
