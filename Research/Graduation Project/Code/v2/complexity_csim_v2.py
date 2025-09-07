@@ -1,6 +1,8 @@
 import os
+import gc
 import time
 import torch
+import torch.cuda
 import numpy as np
 from transformers import AutoModel
 import matplotlib.pyplot as plt
@@ -21,19 +23,44 @@ MODEL_DATA_ARRAYS = dict() # param_type -> Data
 
 class Data:
     def __init__(self):
-        self.DATA = []
+        self._params = []  # raw parameter tensors
+
         self.COUNT = 0
         self.MIN = None
         self.MAX = None
         self.MEAN = 0.0
         self.STANDARD_DEVIATION = 0.0
+
+    @property
+    def DATA(self):
+        return self
+
+    def append(self, param_tensor: torch.Tensor):
+        self._params.append(param_tensor)
+
+    def __len__(self):
+        return len(self._params)
+
+    def __iter__(self):
+        for p in self._params:
+            yield self._param_to_tensor(p)
+
+    def __getitem__(self, idx):
+        return self._param_to_tensor(self._params[idx])
+
+    def _param_to_tensor(self, param):
+        if param is None:
+            return torch.tensor([])
+        t = param.detach()
+        if t.numel() == 0:
+            return torch.tensor([])
+        if t.dtype in (torch.bfloat16, torch.float16):
+            t = t.to(torch.float32)
+        return t.view(-1).cpu()
     
-class DataMerge:
-    def __init__(self, data_objects):
-        self.data_objects = data_objects
-        self.number_of_arrays = 0
-        for obj in data_objects:
-            self.number_of_arrays += len(obj.DATA)
+class MergedData:
+    def __init__(self):
+        self._data_objects = [] # List of Data objects to merge
         
         self.COUNT = 0
         self.MIN = None
@@ -44,10 +71,13 @@ class DataMerge:
     @property
     def DATA(self):
         return self
+    
+    def append(self, data_object: Data):
+        self._data_objects.append(data_object)
                 
     def __getitem__(self, index):
         current_index = 0
-        for obj in self.data_objects:
+        for obj in self._data_objects:
             for arr in obj.DATA:
                 if current_index == index:
                     return arr
@@ -55,12 +85,50 @@ class DataMerge:
         raise IndexError("Index out of range")
     
     def __iter__(self):
-        for obj in self.data_objects:
+        for obj in self._data_objects:
             for arr in obj.DATA:
                 yield arr
     
     def __len__(self):
-        return self.number_of_arrays
+        return sum(len(obj.DATA) for obj in self._data_objects)
+    
+class FilteredData:
+    def __init__(self, data_object, lower_bound, upper_bound):
+        self._data_object = data_object
+        self.lower = lower_bound
+        self.upper = upper_bound
+
+        self.COUNT = 0
+        self.MIN = None
+        self.MAX = None
+        self.MEAN = 0.0
+        self.STANDARD_DEVIATION = 0.0
+
+    @property
+    def DATA(self):
+        return self
+
+    def __len__(self):
+        return len(self._data_object.DATA)
+
+    def __iter__(self):
+        for arr in self._data_object.DATA:
+            if len(arr) == 0:
+                continue
+            filtered = self._filter_array(arr)
+            if len(filtered) > 0:
+                yield filtered
+
+    def __getitem__(self, idx):
+        arr = self._data_object.DATA[idx]
+        if len(arr) == 0:
+            return arr
+        return self._filter_array(arr)
+        
+    def _filter_array(self, arr):
+        arr_gpu = arr.to(device)
+        mask = (arr_gpu >= self.lower) & (arr_gpu <= self.upper)
+        return arr_gpu[mask].cpu()
     
 class Histogram:
     def __init__(self):
@@ -252,19 +320,9 @@ def plot_histogram(histogram):
 def remove_data_outliers(data, sigma=0):
     if sigma <= 0:
         return data
-  
     lower_bound = data.MEAN - sigma * data.STANDARD_DEVIATION
     upper_bound = data.MEAN + sigma * data.STANDARD_DEVIATION
-    
-    filtered_data = Data()
-    for arr_tensor in data.DATA:
-        arr_gpu = arr_tensor.to(device)
-        mask = (arr_gpu >= lower_bound) & (arr_gpu <= upper_bound)
-        filtered_tensor = arr_gpu[mask].cpu()
-        if len(filtered_tensor) > 0:
-            filtered_data.DATA.append(filtered_tensor)
-            
-    return filtered_data
+    return FilteredData(data, lower_bound, upper_bound)
 
 # ====================================
 
@@ -285,16 +343,6 @@ def calc_complexity(H, D): # C = H * D
     return H * D
 
 # ====================================
-
-def param_to_torch(param):
-	if param is None:
-		return torch.tensor([])
-	t = param.detach()
-	if t.numel() == 0:
-		return torch.tensor([])
-	if t.dtype in (torch.bfloat16, torch.float16):
-		t = t.to(torch.float32)
-	return t.view(-1)
 
 def classify_param_name(name: str) -> str:
     lname = name.lower()
@@ -371,7 +419,7 @@ def write_down_all(data, histogram):
 # ==================================== MAIN
 
 MODELS_TO_TEST = [
-    'openai/gpt-oss-120b',
+    #'openai/gpt-oss-120b',
     'openai/gpt-oss-20b',
 ]
 TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other'] # Parameter types to analyze
@@ -389,11 +437,9 @@ def main():
         # Load model
         print(f"Loading model {model_name}...")
         
-        import torch.cuda
         original_cuda_available = torch.cuda.is_available
         original_get_device_capability = torch.cuda.get_device_capability
         original_get_device_properties = torch.cuda.get_device_properties
-        
         torch.cuda.is_available = lambda: False
         torch.cuda.get_device_capability = lambda device=None: (0, 0)
         torch.cuda.get_device_properties = lambda device: None
@@ -427,15 +473,14 @@ def main():
             MODEL_DATA_ARRAYS[t] = Data()
         
         # Extract parameters
-        print("Extracting parameters...")
+        print("Storing references...")
         for name, param in loaded_model.named_parameters():
             ptype = classify_param_name(name)
             if ptype not in TYPES_TO_TEST:
                 continue
-            arr = param_to_torch(param)
-            if len(arr) == 0:
+            if param is None or param.numel() == 0:
                 continue
-            MODEL_DATA_ARRAYS[ptype].DATA.append(arr)
+            MODEL_DATA_ARRAYS[ptype].append(param)
             
         # Calculate data stats
         print("Calculating data stats...")
@@ -459,8 +504,10 @@ def main():
             
             # Merge data
             print(" > Merging data for types: " + ", ".join(types))
+            merged_data = MergedData()
             data_to_merge = [MODEL_DATA_ARRAYS[t] for t in types]
-            merged_data = DataMerge(data_to_merge)
+            for d in data_to_merge:
+                merged_data.append(d)
             
             # Calculate merged data stats
             print(" > Calculating merged data stats...")
@@ -506,13 +553,9 @@ def main():
                 print(" > > Done.")
 
         del loaded_model
-        for key in MODEL_DATA_ARRAYS:
-            MODEL_DATA_ARRAYS[key].DATA.clear()
-        MODEL_DATA_ARRAYS.clear()
         MODEL_DATA_ARRAYS = dict()
         
         # Force garbage collection and clear GPU cache
-        import gc
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
