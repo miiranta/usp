@@ -5,7 +5,12 @@ import numpy as np
 from transformers import AutoModel
 import matplotlib.pyplot as plt
 
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+if not torch.cuda.is_available():
+    print("CUDA is not available. Please ensure you have a compatible GPU and the necessary drivers installed.")
+    exit(1)
+device = torch.device("cuda")
 
 MODEL_NAME = 'default'
 MODEL_FOLDER = 'model'
@@ -103,22 +108,29 @@ def calc_data_stats(data):
     data.MEAN = 0.0
     data.STANDARD_DEVIATION = 0.0
     
+    total_sum = 0.0
     for arr in data.DATA:
-        data.COUNT += len(arr)
+        arr_tensor = torch.from_numpy(arr).float().to(device)
         
-        arr_min = np.min(arr)
-        arr_max = np.max(arr)
+        data.COUNT += len(arr_tensor)
+        
+        arr_min = torch.min(arr_tensor).item()
+        arr_max = torch.max(arr_tensor).item()
         if data.MIN is None or arr_min < data.MIN:
             data.MIN = arr_min
         if data.MAX is None or arr_max > data.MAX:
             data.MAX = arr_max
+            
+        total_sum += torch.sum(arr_tensor).item()
     
-        data.MEAN += np.sum(arr)
-    data.MEAN /= data.COUNT
+    data.MEAN = total_sum / data.COUNT
     
+    total_sq_sum = 0.0
     for arr in data.DATA:
-        data.STANDARD_DEVIATION += np.sum((arr - data.MEAN) ** 2)
-    data.STANDARD_DEVIATION = np.sqrt(data.STANDARD_DEVIATION / data.COUNT)
+        arr_tensor = torch.from_numpy(arr).float().to(device)
+        total_sq_sum += torch.sum((arr_tensor - data.MEAN) ** 2).item()
+    
+    data.STANDARD_DEVIATION = (total_sq_sum / data.COUNT) ** 0.5
 
 # ==================================== HISTOGRAM
 
@@ -131,22 +143,23 @@ def calc_histogram(data, histogram):
     print(f" > > > Bin amount: {bin_amount}")
     
     bin_width = (data.MAX - data.MIN) / bin_amount
-    counts = np.zeros(bin_amount, dtype=np.int64)
+    counts = torch.zeros(bin_amount, dtype=torch.long, device=device)
     
     print("a")
     
     for arr in data.DATA:
-        bin_indices = ((arr - data.MIN) / bin_width).astype(np.int64)
-        bin_indices = np.clip(bin_indices, 0, bin_amount - 1)
-        for idx in bin_indices:
-            counts[idx] += 1
+        arr_tensor = torch.from_numpy(arr).float().to(device)
+        bin_indices = ((arr_tensor - data.MIN) / bin_width).long()
+        bin_indices = torch.clamp(bin_indices, 0, bin_amount - 1)
+        counts += torch.bincount(bin_indices, minlength=bin_amount)
             
     print("b")
     
     # Convert counts to probabilities
-    total_count = np.sum(counts)
-    histogram.HIST = counts
-    histogram.PROBS = counts / total_count if total_count > 0 else counts
+    counts_np = counts.cpu().numpy()
+    total_count = np.sum(counts_np)
+    histogram.HIST = counts_np
+    histogram.PROBS = counts_np / total_count if total_count > 0 else counts_np
         
 def calc_histogram_stats(histogram):
     histogram.SHANNON_ENTROPY = calc_shannon_entropy(histogram.PROBS)
@@ -194,7 +207,9 @@ def remove_data_outliers(data, sigma=0):
     
     filtered_data = Data()
     for arr in data.DATA:
-        filtered_arr = arr[(arr >= lower_bound) & (arr <= upper_bound)]
+        arr_tensor = torch.from_numpy(arr).float().to(device)
+        mask = (arr_tensor >= lower_bound) & (arr_tensor <= upper_bound)
+        filtered_arr = arr_tensor[mask].cpu().numpy()
         if len(filtered_arr) > 0:
             filtered_data.DATA.append(filtered_arr)
             
