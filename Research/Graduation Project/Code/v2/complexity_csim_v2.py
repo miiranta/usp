@@ -395,9 +395,12 @@ def main():
         loaded_model = AutoModel.from_pretrained(
             model_name,
             device_map="cpu",
-            torch_dtype=torch.float32,
+            dtype=torch.float32,
             low_cpu_mem_usage=True,
             trust_remote_code=True,
+            quantization_config=None,
+            use_safetensors=True,
+            attn_implementation="eager",
         )
         
         if old_cuda_visible is not None:
