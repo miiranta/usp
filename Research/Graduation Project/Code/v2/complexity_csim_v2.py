@@ -323,17 +323,18 @@ def calc_histogram(data, histogram):
     
     bin_width = (data.MAX - data.MIN) / bin_amount
     histogram.BIN_WIDTH = bin_width
-    counts = torch.zeros(bin_amount, dtype=torch.long, device=device)
-    
+    counts = torch.zeros(bin_amount, dtype=torch.long, device='cpu')
+
     for arr_tensor in data.DATA:
-        arr_gpu = arr_tensor.to(device)
-        bin_indices = ((arr_gpu - data.MIN) / bin_width).long()
+        arr_cpu_t = arr_tensor.to('cpu')
+        bin_indices_f = (arr_cpu_t - data.MIN) / bin_width
+        bin_indices = torch.floor(bin_indices_f).to(torch.long)
         bin_indices = torch.clamp(bin_indices, 0, bin_amount - 1)
         counts += torch.bincount(bin_indices, minlength=bin_amount)
-        
+
     # Convert counts to probabilities
-    total_count = torch.sum(counts).item()
-    counts_np = counts.cpu().numpy()
+    total_count = int(counts.sum().item())
+    counts_np = counts.numpy()
     histogram.HIST = counts_np
     histogram.PROBS = counts_np / total_count if total_count > 0 else counts_np
     
