@@ -388,10 +388,22 @@ def main():
 
         # Load model
         print(f"Loading model {model_name}...")
+        
+        old_cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+        
         loaded_model = AutoModel.from_pretrained(
             model_name,
             device_map="cpu",
+            torch_dtype=torch.float32,
+            low_cpu_mem_usage=True,
+            trust_remote_code=True,
         )
+        
+        if old_cuda_visible is not None:
+            os.environ["CUDA_VISIBLE_DEVICES"] = old_cuda_visible
+        else:
+            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
         
         # Allocate data arrays
         print("Allocating data arrays...")
@@ -483,8 +495,15 @@ def main():
         MODEL_DATA_ARRAYS.clear()
         MODEL_DATA_ARRAYS = dict()
         
+        # Force garbage collection and clear GPU cache
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
         total_time = time.time() - start_timer
-        print(f"Total execution time: {total_time:.2f} seconds.")
+        print(f"Total execution time for {model_name}: {total_time:.2f} seconds.")
+        print("-" * 50)
         
 if __name__ == "__main__":
     main()
