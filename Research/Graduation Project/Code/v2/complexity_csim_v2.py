@@ -63,18 +63,29 @@ class Data:
         sizes = [p.numel() for p in self._params]
         cumsum = np.cumsum([0] + sizes)
         samples_values = []
-        for idx in indices:
+        
+        sorted_pairs = sorted(enumerate(indices), key=lambda x: x[1])
+        current_param_idx = -1
+        current_param_flat = None
+        
+        for orig_pos, idx in sorted_pairs:
             for i in range(len(cumsum)-1):
                 if cumsum[i] <= idx < cumsum[i+1]:
                     local_idx = idx - cumsum[i]
-                    param = self._params[i]
-                    if param is None:
-                        continue
-                    param_flat = param.detach().cpu().view(-1)
-                    value = param_flat[local_idx].item()
-                    samples_values.append(value)
+                    
+                    if i != current_param_idx:
+                        param = self._params[i]
+                        if param is None:
+                            continue
+                        current_param_flat = param.detach().cpu().view(-1)
+                        current_param_idx = i
+                    
+                    value = current_param_flat[local_idx].item()
+                    samples_values.append((orig_pos, value))
                     break
-        return np.array(samples_values)
+        
+        samples_values.sort()
+        return np.array([val for _, val in samples_values])
     
     def get_random_sample(self, sample_size):
         if self.COUNT == 0:
@@ -120,14 +131,30 @@ class MergedData:
         sizes = [obj.COUNT for obj in self._data_objects]
         cumsum = np.cumsum([0] + sizes)
         samples_values = []
-        for idx in indices:
+        
+        sorted_pairs = sorted(enumerate(indices), key=lambda x: x[1])
+        
+        obj_indices = {}
+        for orig_pos, idx in sorted_pairs:
             for i in range(len(cumsum)-1):
                 if cumsum[i] <= idx < cumsum[i+1]:
                     local_idx = idx - cumsum[i]
-                    sub_values = self._data_objects[i]._get_values_at_indices([local_idx])
-                    samples_values.append(sub_values[0])
+                    if i not in obj_indices:
+                        obj_indices[i] = []
+                    obj_indices[i].append((orig_pos, local_idx))
                     break
-        return np.array(samples_values)
+        
+        for obj_idx in sorted(obj_indices.keys()):
+            local_requests = obj_indices[obj_idx]
+            local_indices = [local_idx for _, local_idx in local_requests]
+            
+            sub_values = self._data_objects[obj_idx]._get_values_at_indices(local_indices)
+            
+            for (orig_pos, _), value in zip(local_requests, sub_values):
+                samples_values.append((orig_pos, value))
+    
+        samples_values.sort()
+        return np.array([val for _, val in samples_values])
     
     def get_random_sample(self, sample_size):
         if self.COUNT == 0:
@@ -200,7 +227,6 @@ class FilteredData:
                     samples_values.append((orig_pos, value))
                     break
         
-        # Restore original order
         samples_values.sort()
         return np.array([val for _, val in samples_values])
     
