@@ -398,7 +398,6 @@ def main():
             dtype=torch.float32,
             low_cpu_mem_usage=True,
             trust_remote_code=True,
-            quantization_config=None,
             use_safetensors=True,
             attn_implementation="eager",
         )
