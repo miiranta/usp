@@ -217,7 +217,12 @@ def calc_data_stats(data):
 # ==================================== HISTOGRAM
 
 def calc_histogram(data, histogram):
+    print("a")
+    
     bin_amount = calc_bin_amount(data)
+    
+    print("b")
+    
     if bin_amount <= 0:
         print("Error: bin_amount is 0")
         exit(1)
@@ -230,17 +235,23 @@ def calc_histogram(data, histogram):
     histogram.BIN_WIDTH = bin_width
     counts = torch.zeros(bin_amount, dtype=torch.long, device=device)
     
+    print("c")
+    
     for arr_tensor in data.DATA:
         arr_gpu = arr_tensor.to(device)
         bin_indices = ((arr_gpu - data.MIN) / bin_width).long()
         bin_indices = torch.clamp(bin_indices, 0, bin_amount - 1)
         counts += torch.bincount(bin_indices, minlength=bin_amount)
+        
+    print("d")
     
     # Convert counts to probabilities
     total_count = torch.sum(counts).item()
     counts_np = counts.cpu().numpy()
     histogram.HIST = counts_np
     histogram.PROBS = counts_np / total_count if total_count > 0 else counts_np
+    
+    print("e")
         
 def calc_histogram_stats(histogram):
     histogram.SHANNON_ENTROPY = calc_shannon_entropy(histogram.PROBS)
