@@ -206,7 +206,7 @@ def calc_data_stats(data):
     variance = (total_sq_sum / data.COUNT) - (data.MEAN ** 2)
     data.STANDARD_DEVIATION = variance ** 0.5
 
-@jit(parallel=True)
+@jit(nopython=True)
 def sample_values(data_arrays, sample_size):
     samples = np.empty(sample_size, dtype=np.float32)
     for i in prange(sample_size):
