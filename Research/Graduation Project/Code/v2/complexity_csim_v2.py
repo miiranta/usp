@@ -1,11 +1,13 @@
 import os
 import gc
 import time
+import random
 import torch
 import torch.cuda
 import numpy as np
 from transformers import AutoModel
 import matplotlib.pyplot as plt
+from numba import jit, prange
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -142,7 +144,7 @@ class Histogram:
         self.SHANNON_ENTROPY = 0.0
         self.DESEQUILIBRIUM = 0.0
         self.COMPLEXITY = 0.0
-        
+  
 # ==================================== DATA
 
 def calc_bin_amount(data): # Freedman-Diaconis rule
@@ -150,20 +152,13 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
     if n == 0:
         return 1
         
-    sample_size = min(500000, n)
+    sample_size = min(10000, n)
 
-    samples = []
-    
     print(".")
     
-    for _ in range(sample_size):
-        random_array_idx = torch.randint(0, len(data.DATA), (1,)).item()
-        random_array = data.DATA[random_array_idx]
-        if len(random_array) == 0:
-            continue
-        random_value_idx = torch.randint(0, len(random_array), (1,)).item()
-        random_value = random_array[random_value_idx].item()
-        samples.append(random_value)
+    data_arrays = [arr.numpy() for arr in data.DATA]
+    samples_np = sample_values(data_arrays, sample_size)
+    samples = samples_np[~np.isnan(samples_np)].tolist()
     
     print("..")
     
@@ -220,6 +215,19 @@ def calc_data_stats(data):
         total_sq_sum += torch.sum((arr_gpu - data.MEAN) ** 2).item()
     
     data.STANDARD_DEVIATION = (total_sq_sum / data.COUNT) ** 0.5
+
+@jit(parallel=True)
+def sample_values(data_arrays, sample_size):
+    samples = np.empty(sample_size, dtype=np.float32)
+    for i in prange(sample_size):
+        random_array_idx = random.randint(0, len(data_arrays))
+        random_array = data_arrays[random_array_idx]
+        if len(random_array) == 0:
+            samples[i] = 0
+        else:
+            random_value_idx = random.randint(0, len(random_array))
+            samples[i] = random_array[random_value_idx]
+    return samples
 
 # ==================================== HISTOGRAM
 
