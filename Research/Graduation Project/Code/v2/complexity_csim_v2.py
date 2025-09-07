@@ -271,7 +271,7 @@ def remove_data_outliers(data, sigma=0):
 def calc_shannon_entropy(probs): # H = -Σ p(x) log(p(x))
     probs_tensor = torch.from_numpy(probs).to(device)
     probs_tensor = probs_tensor[probs_tensor > 0]
-    return -torch.sum(probs_tensor * torch.log2(probs_tensor)).item()
+    return -torch.sum(probs_tensor * torch.log(probs_tensor)).item()
 
 def calc_desequilibrium(probs): # D = Σ (p(x) - 1/n)^2
     probs_tensor = torch.from_numpy(probs).to(device)
@@ -371,6 +371,7 @@ def write_down_all(data, histogram):
 # ==================================== MAIN
 
 MODELS_TO_TEST = [
+    'openai/gpt-oss-120b',
     'openai/gpt-oss-20b',
 ]
 TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other'] # Parameter types to analyze
