@@ -1,4 +1,7 @@
 import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 import gc
 import time
 import torch
@@ -7,8 +10,6 @@ import numpy as np
 from transformers import AutoModel
 import matplotlib.pyplot as plt
 from numba import jit, prange
-
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 if not torch.cuda.is_available():
     print("CUDA is not available. Please ensure you have a compatible GPU and the necessary drivers installed.")
@@ -472,6 +473,10 @@ def main():
             torch.cuda.is_available = original_cuda_available
             torch.cuda.get_device_capability = original_get_device_capability
             torch.cuda.get_device_properties = original_get_device_properties
+        
+            torch.cuda.empty_cache()
+            loaded_model.enable_attention_slicing()
+            loaded_model.enable_sequential_cpu_offload()
         
         # Allocate data arrays
         print("Allocating data arrays...")
