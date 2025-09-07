@@ -14,11 +14,8 @@ device = torch.device("cuda")
 
 MODEL_NAME = 'default'
 MODEL_FOLDER = 'model'
+OUTPUT_FOLDER = None
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, 'results', MODEL_FOLDER, MODEL_NAME)
-
-if not os.path.exists(OUTPUT_FOLDER):
-    os.makedirs(OUTPUT_FOLDER)
 
 MODEL_DATA_ARRAYS = dict() # param_type -> Data
 
@@ -223,9 +220,10 @@ def plot_histogram(histogram):
     plt.xlabel('Value Range')
     plt.ylabel('Frequency')
     
-    safe_model_name = MODEL_NAME.replace('/', '-')
-    path = os.path.join(OUTPUT_FOLDER, f'{safe_model_name}_histogram.png')
-    plt.savefig(path)
+    if OUTPUT_FOLDER is not None:
+        safe_model_name = MODEL_NAME.replace('/', '-')
+        path = os.path.join(OUTPUT_FOLDER, f'{safe_model_name}_histogram.png')
+        plt.savefig(path)
     plt.close()
 
 # ====================================
@@ -310,6 +308,9 @@ def set_model_name(model_folder, model_name):
         os.makedirs(OUTPUT_FOLDER)
 
 def write_down(text):
+    global OUTPUT_FOLDER
+    if OUTPUT_FOLDER is None:
+        return
     safe_model_name = MODEL_NAME.replace('/', '-')
     path = os.path.join(OUTPUT_FOLDER, f'{safe_model_name}.txt')
     with open(path, 'a') as f:
@@ -325,9 +326,11 @@ def write_down_data_stats(data):
 
 def write_down_histogram(histogram):
     write_down("Bins:")
-    write_down(np.array2string(histogram.HIST, separator=', ', threshold=np.inf))
+    hist_list = histogram.HIST.tolist()
+    write_down('[' + ', '.join(map(str, hist_list)) + ']')
     write_down("Probs:")
-    write_down(np.array2string(histogram.PROBS, separator=', ', threshold=np.inf))
+    probs_list = histogram.PROBS.tolist()
+    write_down('[' + ', '.join(map(str, probs_list)) + ']')
 
 def write_down_histogram_stats(histogram):
     write_down("Histogram Stats:")
