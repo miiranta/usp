@@ -153,13 +153,9 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
         
     sample_size = min(10000, n)
 
-    print(".")
-    
     data_arrays = [arr.numpy() for arr in data.DATA]
     samples_np = sample_values(data_arrays, sample_size)
     samples = samples_np[~np.isnan(samples_np)].tolist()
-    
-    print("..")
     
     if len(samples) == 0:
         return 1
@@ -174,8 +170,6 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
         print("Error: bin_width is 0")
         exit(1)
         
-    print("...")
-
     bin_amount = int(torch.ceil(torch.tensor((data.MAX - data.MIN) / bin_width)).item())
     return max(bin_amount, 1)
     
@@ -231,25 +225,18 @@ def sample_values(data_arrays, sample_size):
 # ==================================== HISTOGRAM
 
 def calc_histogram(data, histogram):
-    print("a")
-    
     bin_amount = calc_bin_amount(data)
-    
-    print("b")
-    
     if bin_amount <= 0:
         print("Error: bin_amount is 0")
         exit(1)
     histogram.BINS = bin_amount
     histogram.DATA_MIN = data.MIN
     histogram.DATA_MAX = data.MAX
-    print(f" > > > Bin amount: {bin_amount}")
+    print(f" > > > > Bin amount: {bin_amount}")
     
     bin_width = (data.MAX - data.MIN) / bin_amount
     histogram.BIN_WIDTH = bin_width
     counts = torch.zeros(bin_amount, dtype=torch.long, device=device)
-    
-    print("c")
     
     for arr_tensor in data.DATA:
         arr_gpu = arr_tensor.to(device)
@@ -257,19 +244,18 @@ def calc_histogram(data, histogram):
         bin_indices = torch.clamp(bin_indices, 0, bin_amount - 1)
         counts += torch.bincount(bin_indices, minlength=bin_amount)
         
-    print("d")
-    
     # Convert counts to probabilities
     total_count = torch.sum(counts).item()
     counts_np = counts.cpu().numpy()
     histogram.HIST = counts_np
     histogram.PROBS = counts_np / total_count if total_count > 0 else counts_np
     
-    print("e")
-        
 def calc_histogram_stats(histogram):
+    print("a")
     histogram.SHANNON_ENTROPY = calc_shannon_entropy(histogram.PROBS)
+    print("b")
     histogram.DESEQUILIBRIUM = calc_desequilibrium(histogram.PROBS)
+    print("c")
     histogram.COMPLEXITY = calc_complexity(histogram.SHANNON_ENTROPY, histogram.DESEQUILIBRIUM)
 
 def plot_histogram(histogram):
@@ -279,6 +265,8 @@ def plot_histogram(histogram):
     
     fig, ax = plt.subplots(figsize=(12, 6))
     fig.suptitle(f"Parameter Histogram for {MODEL_NAME}", fontsize=16)
+    
+    print("d")
     
     bin_edges = np.linspace(histogram.DATA_MIN, histogram.DATA_MAX, histogram.BINS + 1)
     bin_width = bin_edges[1] - bin_edges[0]
@@ -291,11 +279,15 @@ def plot_histogram(histogram):
         downsampled_hist = []
         downsampled_lefts = []
         
+        print("e")
+        
         for i in range(0, len(histogram.HIST), downsample_factor):
             end_idx = min(i + downsample_factor, len(histogram.HIST))
             bin_group = histogram.HIST[i:end_idx]
             downsampled_hist.append(np.sum(bin_group))
             downsampled_lefts.append(bin_lefts[i])
+        
+        print("f")
         
         downsampled_bin_width = bin_width * downsample_factor
         
