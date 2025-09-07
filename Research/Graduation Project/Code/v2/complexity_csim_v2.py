@@ -322,7 +322,7 @@ def calc_histogram(data, histogram):
     
     counts = torch.zeros(bin_amount, dtype=torch.long, device='cpu')
 
-    CHUNK_ELEMS = 5000000
+    CHUNK_ELEMS = 2000000000
     chunk_list = []
     chunk_count = 0
 
