@@ -474,8 +474,6 @@ def main():
             torch.cuda.get_device_properties = original_get_device_properties
         
             torch.cuda.empty_cache()
-            loaded_model.enable_attention_slicing()
-            loaded_model.enable_sequential_cpu_offload()
         
         # Allocate data arrays
         print("Allocating data arrays...")
