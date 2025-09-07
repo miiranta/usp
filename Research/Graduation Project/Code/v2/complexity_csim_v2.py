@@ -428,7 +428,7 @@ def write_down_all(data, histogram):
 # ==================================== MAIN
 
 MODELS_TO_TEST = [
-    #'openai/gpt-oss-120b',
+    'openai/gpt-oss-120b',
     'openai/gpt-oss-20b',
 ]
 TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other'] # Parameter types to analyze
