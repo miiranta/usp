@@ -180,50 +180,71 @@ def calc_histogram_stats(histogram):
     histogram.COMPLEXITY = calc_complexity(histogram.SHANNON_ENTROPY, histogram.DESEQUILIBRIUM)
 
 def plot_histogram(histogram):
-    max_plot_bins = 10000  # Maximum bins to plot for performance
-    
     if histogram.HIST is None or len(histogram.HIST) == 0:
         print("Warning: Empty histogram, skipping plot")
         return
     
-    plt.figure(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(12, 6))
+    fig.suptitle(f"Parameter Histogram for {MODEL_NAME}", fontsize=16)
     
+    bin_edges = np.linspace(histogram.DATA_MIN, histogram.DATA_MAX, histogram.BINS + 1)
+    bin_width = bin_edges[1] - bin_edges[0]
+    bin_lefts = bin_edges[:-1]
+    
+    max_plot_bins = 10000
     if len(histogram.HIST) > max_plot_bins:
         downsample_factor = len(histogram.HIST) // max_plot_bins + 1
         
-        plot_hist = []
-        plot_bin_centers = []
+        downsampled_hist = []
+        downsampled_lefts = []
+        
         for i in range(0, len(histogram.HIST), downsample_factor):
-            bin_group = histogram.HIST[i:i+downsample_factor]
-            plot_hist.append(torch.sum(torch.from_numpy(bin_group)).item())
-            
-            start_value = histogram.DATA_MIN + i * histogram.BIN_WIDTH
-            end_value = histogram.DATA_MIN + min(i + downsample_factor, len(histogram.HIST)) * histogram.BIN_WIDTH
-            bin_center = (start_value + end_value) / 2
-            plot_bin_centers.append(bin_center)
+            end_idx = min(i + downsample_factor, len(histogram.HIST))
+            bin_group = histogram.HIST[i:end_idx]
+            downsampled_hist.append(np.sum(bin_group))
+            downsampled_lefts.append(bin_lefts[i])
         
-        plot_hist = torch.tensor(plot_hist).cpu().numpy()
-        plot_bin_centers = torch.tensor(plot_bin_centers).cpu().numpy()
-        print(f" > > > Plotting histogram with {len(plot_hist)} bins (downsampled from {len(histogram.HIST)})")
+        downsampled_bin_width = bin_width * downsample_factor
         
-        plt.bar(plot_bin_centers, plot_hist, edgecolor='black')
-        plt.title(f'Histogram ({len(plot_hist):,} bins, downsampled from {len(histogram.HIST):,} bins)')
+        ax.bar(
+            downsampled_lefts,
+            downsampled_hist,
+            width=downsampled_bin_width,
+            align='edge',
+            color='blue',
+            alpha=0.7,
+            edgecolor='black',
+            linewidth=0.5,
+        )
+        
+        title = f"Histogram (Counts) - {len(downsampled_hist):,} bins (downsampled from {len(histogram.HIST):,})"
+        print(f" > > > Plotting histogram with {len(downsampled_hist)} bins (downsampled from {len(histogram.HIST)})")
     else:
-        bin_centers = torch.linspace(
-            histogram.DATA_MIN + histogram.BIN_WIDTH/2,
-            histogram.DATA_MAX - histogram.BIN_WIDTH/2,
-            len(histogram.HIST)
-        ).cpu().numpy()
-        plt.bar(bin_centers, histogram.HIST, edgecolor='black')
-        plt.title('Histogram')
+        ax.bar(
+            bin_lefts,
+            histogram.HIST,
+            width=bin_width,
+            align='edge',
+            color='blue',
+            alpha=0.7,
+            edgecolor='black',
+            linewidth=0.5,
+        )
+        
+        title = f"Histogram (Counts) - {len(histogram.HIST):,} bins"
     
-    plt.xlabel('Value Range')
-    plt.ylabel('Frequency')
+    ax.set_title(title)
+    ax.set_xlabel("Value Range")
+    ax.set_ylabel("Frequency")
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     
     if OUTPUT_FOLDER is not None:
         safe_model_name = MODEL_NAME.replace('/', '-')
         path = os.path.join(OUTPUT_FOLDER, f'{safe_model_name}_histogram.png')
-        plt.savefig(path)
+        plt.savefig(path, dpi=150, bbox_inches='tight')
+    
     plt.close()
 
 # ====================================
