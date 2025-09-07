@@ -243,7 +243,6 @@ class Histogram:
         self.PROBS = None
         self.DATA_MIN = None
         self.DATA_MAX = None
-        self.BIN_WIDTH = None
         
         self.SHANNON_ENTROPY = 0.0
         self.DESEQUILIBRIUM = 0.0
@@ -321,16 +320,41 @@ def calc_histogram(data, histogram):
     histogram.DATA_MAX = data.MAX
     print(f" > > > > Bin amount: {bin_amount}")
     
-    bin_width = (data.MAX - data.MIN) / bin_amount
-    histogram.BIN_WIDTH = bin_width
     counts = torch.zeros(bin_amount, dtype=torch.long, device='cpu')
 
+    CHUNK_ELEMS = 5000000
+    chunk_list = []
+    chunk_count = 0
+
+    def _process_and_accumulate(concat_tensor):
+        start = time.time()
+        concat_cuda = concat_tensor.to(device)
+        hist = torch.histc(concat_cuda, bins=bin_amount, min=data.MIN, max=data.MAX)
+        counts.add_(hist.to(torch.long).to('cpu'))
+        del hist
+        del concat_cuda
+        elapsed = time.time() - start
+        print(f" > > > chunk processed: elems={concat_tensor.numel():,}, time={elapsed:.3f}s")
+        return
+
     for arr_tensor in data.DATA:
-        arr_cpu_t = arr_tensor.to('cpu')
-        bin_indices_f = (arr_cpu_t - data.MIN) / bin_width
-        bin_indices = torch.floor(bin_indices_f).to(torch.long)
-        bin_indices = torch.clamp(bin_indices, 0, bin_amount - 1)
-        counts += torch.bincount(bin_indices, minlength=bin_amount)
+        if arr_tensor.numel() == 0:
+            continue
+        t = arr_tensor.to('cpu')
+        chunk_list.append(t)
+        chunk_count += t.numel()
+
+        if chunk_count >= CHUNK_ELEMS:
+            concat = torch.cat(chunk_list)
+            _process_and_accumulate(concat)
+            del concat
+            chunk_list = []
+            chunk_count = 0
+
+    if chunk_count > 0 and len(chunk_list) > 0:
+        concat = torch.cat(chunk_list)
+        _process_and_accumulate(concat)
+        del concat
 
     # Convert counts to probabilities
     total_count = int(counts.sum().item())
