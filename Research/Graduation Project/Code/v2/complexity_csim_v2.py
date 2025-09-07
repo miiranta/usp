@@ -43,7 +43,7 @@ class DataMerge:
         
     @property
     def DATA(self):
-        return self  # Return self to act like a list
+        return self
                 
     def __getitem__(self, index):
         current_index = 0
@@ -250,7 +250,7 @@ def remove_data_outliers(data, sigma=0):
 def calc_shannon_entropy(probs): # H = -Σ p(x) log(p(x))
     probs_tensor = torch.from_numpy(probs).to(device)
     probs_tensor = probs_tensor[probs_tensor > 0]
-    return -torch.sum(probs_tensor * torch.log(probs_tensor)).item()
+    return -torch.sum(probs_tensor * torch.log2(probs_tensor)).item()
 
 def calc_desequilibrium(probs): # D = Σ (p(x) - 1/n)^2
     probs_tensor = torch.from_numpy(probs).to(device)
@@ -344,8 +344,8 @@ def write_down_all(data, histogram):
     write_down_data_stats(data)
     write_down("\n=== HISTOGRAM STATS ===")
     write_down_histogram_stats(histogram)
-    write_down("\n=== HISTOGRAM ===")
-    write_down_histogram(histogram)
+    #write_down("\n=== HISTOGRAM ===")
+    #write_down_histogram(histogram)
 
 # ==================================== MAIN
 
