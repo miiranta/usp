@@ -153,6 +153,9 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
     sample_size = min(500000, n)
 
     samples = []
+    
+    print(".")
+    
     for _ in range(sample_size):
         random_array_idx = torch.randint(0, len(data.DATA), (1,)).item()
         random_array = data.DATA[random_array_idx]
@@ -161,6 +164,8 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
         random_value_idx = torch.randint(0, len(random_array), (1,)).item()
         random_value = random_array[random_value_idx].item()
         samples.append(random_value)
+    
+    print("..")
     
     if len(samples) == 0:
         return 1
@@ -174,6 +179,8 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
     if bin_width == 0:
         print("Error: bin_width is 0")
         exit(1)
+        
+    print("...")
 
     bin_amount = int(torch.ceil(torch.tensor((data.MAX - data.MIN) / bin_width)).item())
     return max(bin_amount, 1)
