@@ -1,13 +1,12 @@
 import os
 import gc
 import time
-import random
 import torch
 import torch.cuda
 import numpy as np
 from transformers import AutoModel
 import matplotlib.pyplot as plt
-from numba import jit, prange
+from numba import jit, prange, random
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
@@ -223,7 +222,7 @@ def sample_values(data_arrays, sample_size):
         random_array_idx = random.randint(0, len(data_arrays))
         random_array = data_arrays[random_array_idx]
         if len(random_array) == 0:
-            samples[i] = 0
+            samples[i] = np.nan
         else:
             random_value_idx = random.randint(0, len(random_array))
             samples[i] = random_array[random_value_idx]
