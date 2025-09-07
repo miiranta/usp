@@ -130,10 +130,14 @@ def calc_histogram(data, histogram):
     histogram.BINS = bin_amount
     print(f" > > > Bin amount: {bin_amount}")
     
-    counts = np.zeros(bin_amount)
+    bin_width = (data.MAX - data.MIN) / bin_amount
+    counts = np.zeros(bin_amount, dtype=np.int64)
+    
     for arr in data.DATA:
-        hist, _ = np.histogram(arr, bins=bin_amount, range=(data.MIN, data.MAX), density=False)
-        counts += hist
+        bin_indices = ((arr - data.MIN) / bin_width).astype(np.int64)
+        bin_indices = np.clip(bin_indices, 0, bin_amount - 1)
+        for idx in bin_indices:
+            counts[idx] += 1
     
     # Convert counts to probabilities
     total_count = np.sum(counts)
@@ -146,9 +150,27 @@ def calc_histogram_stats(histogram):
     histogram.COMPLEXITY = calc_complexity(histogram.SHANNON_ENTROPY, histogram.DESEQUILIBRIUM)
 
 def plot_histogram(histogram):
+    max_plot_bins = 10000  # Maximum bins to plot for performance
+    
     plt.figure(figsize=(10, 6))
-    plt.bar(range(len(histogram.HIST)), histogram.HIST, width=1.0, edgecolor='black')
-    plt.title('Histogram')
+    
+    if len(histogram.HIST) > max_plot_bins:
+        downsample_factor = len(histogram.HIST) // max_plot_bins + 1
+        
+        plot_hist = []
+        for i in range(0, len(histogram.HIST), downsample_factor):
+            bin_group = histogram.HIST[i:i+downsample_factor]
+            plot_hist.append(np.sum(bin_group))
+        
+        plot_hist = np.array(plot_hist)
+        print(f" > > > Plotting {len(plot_hist)} bins (downsampled from {len(histogram.HIST)})")
+        
+        plt.bar(range(len(plot_hist)), plot_hist, width=1.0, edgecolor='black')
+        plt.title(f'Histogram (downsampled from {len(histogram.HIST):,} bins)')
+    else:
+        plt.bar(range(len(histogram.HIST)), histogram.HIST, width=1.0, edgecolor='black')
+        plt.title('Histogram')
+    
     plt.xlabel('Bins')
     plt.ylabel('Frequency')
     
@@ -278,6 +300,8 @@ FILTERS_TO_TEST = [0, 1, 2, 3, 4] # Number of standard deviations for outlier re
 def main():
     global MODEL_DATA_ARRAYS
     
+    
+    
     # MODELS
     for model_name in MODELS_TO_TEST:
         start_timer = time.time()
@@ -308,6 +332,7 @@ def main():
         # Calculate data stats
         print("Calculating data stats...")
         for ptype in MODEL_DATA_ARRAYS:
+            print(f" -{ptype}...")
             calc_data_stats(MODEL_DATA_ARRAYS[ptype])
         
         print("Value counts:")
@@ -316,6 +341,7 @@ def main():
             total_count += MODEL_DATA_ARRAYS[ptype].COUNT
             print(f"-{ptype}: {MODEL_DATA_ARRAYS[ptype].COUNT}")
         print(f"--total: {total_count}")
+        
         
         
         # TYPES
