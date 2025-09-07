@@ -77,6 +77,8 @@ class Data:
         return np.array(samples_values)
     
     def get_random_sample(self, sample_size):
+        if self.COUNT == 0:
+            return np.array([])
         random_idxs = np.random.randint(0, self.COUNT, size=sample_size)
         return self._get_values_at_indices(random_idxs)
     
@@ -122,12 +124,14 @@ class MergedData:
             for i in range(len(cumsum)-1):
                 if cumsum[i] <= idx < cumsum[i+1]:
                     local_idx = idx - cumsum[i]
-                    sub_values = self._data_objects[i].get_values_at_indices([local_idx])
+                    sub_values = self._data_objects[i]._get_values_at_indices([local_idx])
                     samples_values.append(sub_values[0])
                     break
         return np.array(samples_values)
     
     def get_random_sample(self, sample_size):
+        if self.COUNT == 0:
+            return np.array([])
         random_idxs = np.random.randint(0, self.COUNT, size=sample_size)
         return self._get_values_at_indices(random_idxs)
     
@@ -175,20 +179,34 @@ class FilteredData:
             sizes.append(len(arr))
         cumsum = np.cumsum([0] + sizes)
         samples_values = []
-        for idx in indices:
+        
+        sorted_pairs = sorted(enumerate(indices), key=lambda x: x[1])
+        current_array_idx = -1
+        current_filtered = None
+        
+        for orig_pos, idx in sorted_pairs:
             for i in range(len(cumsum)-1):
                 if cumsum[i] <= idx < cumsum[i+1]:
                     local_idx = idx - cumsum[i]
-                    filtered_iter = iter(self.DATA)
-                    for _ in range(i):
-                        next(filtered_iter)
-                    the_filtered = next(filtered_iter)
-                    value = the_filtered[local_idx].item()
-                    samples_values.append(value)
+                    
+                    if i != current_array_idx:
+                        data_iter = iter(self.DATA)
+                        for _ in range(i):
+                            next(data_iter)
+                        current_filtered = next(data_iter)
+                        current_array_idx = i
+                    
+                    value = current_filtered[local_idx].item()
+                    samples_values.append((orig_pos, value))
                     break
-        return np.array(samples_values)
+        
+        # Restore original order
+        samples_values.sort()
+        return np.array([val for _, val in samples_values])
     
     def get_random_sample(self, sample_size):
+        if self.COUNT == 0:
+            return np.array([])
         random_idxs = np.random.randint(0, self.COUNT, size=sample_size)
         return self._get_values_at_indices(random_idxs)
     
