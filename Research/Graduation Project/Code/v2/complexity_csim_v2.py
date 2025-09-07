@@ -269,7 +269,7 @@ def plot_histogram(histogram):
     
     max_plot_bins = 10000
     if len(histogram.HIST) > max_plot_bins:
-        downsample_factor = len(histogram.HIST) // max_plot_bins + 1
+        downsample_factor = len(histogram.HIST) // max_plot_bins
         
         downsampled_hist = []
         downsampled_lefts = []
@@ -308,6 +308,7 @@ def plot_histogram(histogram):
         )
         
         title = f"Histogram (Counts) - {len(histogram.HIST):,} bins"
+        print(f" > > > Plotting histogram with {len(histogram.HIST)} bins")
     
     ax.set_title(title)
     ax.set_xlabel("Value Range")
