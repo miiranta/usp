@@ -151,7 +151,7 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
     if n == 0:
         return 1
         
-    sample_size = min(10000, n)
+    sample_size = min(100000, n)
 
     data_arrays = [arr.numpy() for arr in data.DATA]
     samples_np = sample_values(data_arrays, sample_size)
@@ -251,11 +251,8 @@ def calc_histogram(data, histogram):
     histogram.PROBS = counts_np / total_count if total_count > 0 else counts_np
     
 def calc_histogram_stats(histogram):
-    print("a")
     histogram.SHANNON_ENTROPY = calc_shannon_entropy(histogram.PROBS)
-    print("b")
     histogram.DESEQUILIBRIUM = calc_desequilibrium(histogram.PROBS)
-    print("c")
     histogram.COMPLEXITY = calc_complexity(histogram.SHANNON_ENTROPY, histogram.DESEQUILIBRIUM)
 
 def plot_histogram(histogram):
@@ -265,8 +262,6 @@ def plot_histogram(histogram):
     
     fig, ax = plt.subplots(figsize=(12, 6))
     fig.suptitle(f"Parameter Histogram for {MODEL_NAME}", fontsize=16)
-    
-    print("d")
     
     bin_edges = np.linspace(histogram.DATA_MIN, histogram.DATA_MAX, histogram.BINS + 1)
     bin_width = bin_edges[1] - bin_edges[0]
@@ -278,16 +273,12 @@ def plot_histogram(histogram):
         
         downsampled_hist = []
         downsampled_lefts = []
-        
-        print("e")
-        
+
         for i in range(0, len(histogram.HIST), downsample_factor):
             end_idx = min(i + downsample_factor, len(histogram.HIST))
             bin_group = histogram.HIST[i:end_idx]
             downsampled_hist.append(np.sum(bin_group))
             downsampled_lefts.append(bin_lefts[i])
-        
-        print("f")
         
         downsampled_bin_width = bin_width * downsample_factor
         
