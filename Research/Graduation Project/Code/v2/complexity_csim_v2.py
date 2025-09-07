@@ -70,26 +70,39 @@ class Histogram:
         self.BINS = 0
         self.HIST = None
         self.PROBS = None
+        self.DATA_MIN = None
+        self.DATA_MAX = None
+        self.BIN_WIDTH = None
+        
         self.SHANNON_ENTROPY = 0.0
         self.DESEQUILIBRIUM = 0.0
         self.COMPLEXITY = 0.0
-
+        
 # ==================================== DATA
 
 def calc_bin_amount(data): # Freedman-Diaconis rule
     n = data.COUNT
+    if n == 0:
+        return 1
+        
     sample_size = min(500000, n)
 
-    sample = []    
+    samples = []
     for _ in range(sample_size):
-        random_array_idx = np.random.randint(0, len(data.DATA))
+        random_array_idx = torch.randint(0, len(data.DATA), (1,)).item()
         random_array = data.DATA[random_array_idx]
-        random_value_idx = np.random.randint(0, len(random_array))
-        random_value = random_array[random_value_idx]
-        sample.append(random_value)
+        if len(random_array) == 0:
+            continue
+        random_value_idx = torch.randint(0, len(random_array), (1,)).item()
+        random_value = random_array[random_value_idx].item()
+        samples.append(random_value)
     
-    sample = np.array(sample)
-    q75, q25 = np.percentile(sample, [75 ,25])
+    if len(samples) == 0:
+        return 1
+        
+    sample_tensor = torch.tensor(samples, device=device)
+    q75 = torch.quantile(sample_tensor, 0.75).item()
+    q25 = torch.quantile(sample_tensor, 0.25).item()
     iqr = q75 - q25
     
     bin_width = 2 * iqr * (n ** (-1/3))
@@ -97,7 +110,7 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
         print("Error: bin_width is 0")
         exit(1)
 
-    bin_amount = int(np.ceil((data.MAX - data.MIN) / bin_width))
+    bin_amount = int(torch.ceil(torch.tensor((data.MAX - data.MIN) / bin_width)).item())
     return max(bin_amount, 1)
     
 def calc_data_stats(data):
@@ -109,9 +122,7 @@ def calc_data_stats(data):
     data.STANDARD_DEVIATION = 0.0
     
     total_sum = 0.0
-    for arr in data.DATA:
-        arr_tensor = torch.from_numpy(arr).float().to(device)
-        
+    for arr_tensor in data.DATA:
         data.COUNT += len(arr_tensor)
         
         arr_min = torch.min(arr_tensor).item()
@@ -123,11 +134,15 @@ def calc_data_stats(data):
             
         total_sum += torch.sum(arr_tensor).item()
     
+    if data.COUNT == 0:
+        data.MEAN = 0.0
+        data.STANDARD_DEVIATION = 0.0
+        return
+        
     data.MEAN = total_sum / data.COUNT
     
     total_sq_sum = 0.0
-    for arr in data.DATA:
-        arr_tensor = torch.from_numpy(arr).float().to(device)
+    for arr_tensor in data.DATA:
         total_sq_sum += torch.sum((arr_tensor - data.MEAN) ** 2).item()
     
     data.STANDARD_DEVIATION = (total_sq_sum / data.COUNT) ** 0.5
@@ -140,24 +155,22 @@ def calc_histogram(data, histogram):
         print("Error: bin_amount is 0")
         exit(1)
     histogram.BINS = bin_amount
+    histogram.DATA_MIN = data.MIN
+    histogram.DATA_MAX = data.MAX
     print(f" > > > Bin amount: {bin_amount}")
     
     bin_width = (data.MAX - data.MIN) / bin_amount
+    histogram.BIN_WIDTH = bin_width
     counts = torch.zeros(bin_amount, dtype=torch.long, device=device)
     
-    print("a")
-    
-    for arr in data.DATA:
-        arr_tensor = torch.from_numpy(arr).float().to(device)
+    for arr_tensor in data.DATA:
         bin_indices = ((arr_tensor - data.MIN) / bin_width).long()
         bin_indices = torch.clamp(bin_indices, 0, bin_amount - 1)
         counts += torch.bincount(bin_indices, minlength=bin_amount)
-            
-    print("b")
     
     # Convert counts to probabilities
+    total_count = torch.sum(counts).item()
     counts_np = counts.cpu().numpy()
-    total_count = np.sum(counts_np)
     histogram.HIST = counts_np
     histogram.PROBS = counts_np / total_count if total_count > 0 else counts_np
         
@@ -169,26 +182,42 @@ def calc_histogram_stats(histogram):
 def plot_histogram(histogram):
     max_plot_bins = 10000  # Maximum bins to plot for performance
     
+    if histogram.HIST is None or len(histogram.HIST) == 0:
+        print("Warning: Empty histogram, skipping plot")
+        return
+    
     plt.figure(figsize=(10, 6))
     
     if len(histogram.HIST) > max_plot_bins:
         downsample_factor = len(histogram.HIST) // max_plot_bins + 1
         
         plot_hist = []
+        plot_bin_centers = []
         for i in range(0, len(histogram.HIST), downsample_factor):
             bin_group = histogram.HIST[i:i+downsample_factor]
-            plot_hist.append(np.sum(bin_group))
+            plot_hist.append(torch.sum(torch.from_numpy(bin_group)).item())
+            
+            start_value = histogram.DATA_MIN + i * histogram.BIN_WIDTH
+            end_value = histogram.DATA_MIN + min(i + downsample_factor, len(histogram.HIST)) * histogram.BIN_WIDTH
+            bin_center = (start_value + end_value) / 2
+            plot_bin_centers.append(bin_center)
         
-        plot_hist = np.array(plot_hist)
-        print(f" > > > Plotting {len(plot_hist)} bins (downsampled from {len(histogram.HIST)})")
+        plot_hist = torch.tensor(plot_hist).cpu().numpy()
+        plot_bin_centers = torch.tensor(plot_bin_centers).cpu().numpy()
+        print(f" > > > Plotting histogram with {len(plot_hist)} bins (downsampled from {len(histogram.HIST)})")
         
-        plt.bar(range(len(plot_hist)), plot_hist, width=1.0, edgecolor='black')
-        plt.title(f'Histogram (downsampled from {len(histogram.HIST):,} bins)')
+        plt.bar(plot_bin_centers, plot_hist, edgecolor='black')
+        plt.title(f'Histogram ({len(plot_hist):,} bins, downsampled from {len(histogram.HIST):,} bins)')
     else:
-        plt.bar(range(len(histogram.HIST)), histogram.HIST, width=1.0, edgecolor='black')
+        bin_centers = torch.linspace(
+            histogram.DATA_MIN + histogram.BIN_WIDTH/2,
+            histogram.DATA_MAX - histogram.BIN_WIDTH/2,
+            len(histogram.HIST)
+        ).cpu().numpy()
+        plt.bar(bin_centers, histogram.HIST, edgecolor='black')
         plt.title('Histogram')
     
-    plt.xlabel('Bins')
+    plt.xlabel('Value Range')
     plt.ylabel('Frequency')
     
     safe_model_name = MODEL_NAME.replace('/', '-')
@@ -206,40 +235,43 @@ def remove_data_outliers(data, sigma=0):
     upper_bound = data.MEAN + sigma * data.STANDARD_DEVIATION
     
     filtered_data = Data()
-    for arr in data.DATA:
-        arr_tensor = torch.from_numpy(arr).float().to(device)
+    for arr_tensor in data.DATA:
         mask = (arr_tensor >= lower_bound) & (arr_tensor <= upper_bound)
-        filtered_arr = arr_tensor[mask].cpu().numpy()
-        if len(filtered_arr) > 0:
-            filtered_data.DATA.append(filtered_arr)
+        filtered_tensor = arr_tensor[mask]
+        if len(filtered_tensor) > 0:
+            filtered_data.DATA.append(filtered_tensor)
             
     return filtered_data
 
 # ====================================
 
 def calc_shannon_entropy(probs): # H = -Σ p(x) log(p(x))
-    probs = probs[probs > 0]
-    return -np.sum(probs * np.log(probs))
+    probs_tensor = torch.from_numpy(probs).to(device)
+    probs_tensor = probs_tensor[probs_tensor > 0]
+    return -torch.sum(probs_tensor * torch.log(probs_tensor)).item()
 
 def calc_desequilibrium(probs): # D = Σ (p(x) - 1/n)^2
-    n = len(probs)
+    probs_tensor = torch.from_numpy(probs).to(device)
+    n = len(probs_tensor)
+    if n == 0:
+        return 0.0
     uniform_prob = 1.0 / n
-    return np.sum((probs - uniform_prob) ** 2)
+    return torch.sum((probs_tensor - uniform_prob) ** 2).item()
 
 def calc_complexity(H, D): # C = H * D
     return H * D
 
 # ====================================
 
-def param_to_numpy(param):
+def param_to_torch(param):
 	if param is None:
-		return torch.tensor([])
+		return torch.tensor([], device=device)
 	t = param.detach()
 	if t.numel() == 0:
-		return torch.tensor([])
+		return torch.tensor([], device=device)
 	if t.dtype in (torch.bfloat16, torch.float16):
 		t = t.to(torch.float32)
-	return t.view(-1).numpy()
+	return t.view(-1).to(device)
 
 def classify_param_name(name: str) -> str:
     lname = name.lower()
@@ -289,9 +321,9 @@ def write_down_data_stats(data):
 
 def write_down_histogram(histogram):
     write_down("Bins:")
-    write_down(np.array2string(histogram.HIST, separator=', '))
+    write_down(np.array2string(histogram.HIST, separator=', ', threshold=np.inf))
     write_down("Probs:")
-    write_down(np.array2string(histogram.PROBS, separator=', '))
+    write_down(np.array2string(histogram.PROBS, separator=', ', threshold=np.inf))
 
 def write_down_histogram_stats(histogram):
     write_down("Histogram Stats:")
@@ -343,7 +375,7 @@ def main():
             ptype = classify_param_name(name)
             if ptype not in TYPES_TO_TEST:
                 continue
-            arr = param_to_numpy(param)
+            arr = param_to_torch(param)
             if len(arr) == 0:
                 continue
             MODEL_DATA_ARRAYS[ptype].DATA.append(arr)
