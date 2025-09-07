@@ -59,6 +59,27 @@ class Data:
             t = t.to(torch.float32)
         return t.view(-1).cpu()
     
+    def _get_values_at_indices(self, indices):
+        sizes = [p.numel() for p in self._params]
+        cumsum = np.cumsum([0] + sizes)
+        samples_values = []
+        for idx in indices:
+            for i in range(len(cumsum)-1):
+                if cumsum[i] <= idx < cumsum[i+1]:
+                    local_idx = idx - cumsum[i]
+                    param = self._params[i]
+                    if param is None:
+                        continue
+                    param_flat = param.detach().cpu().view(-1)
+                    value = param_flat[local_idx].item()
+                    samples_values.append(value)
+                    break
+        return np.array(samples_values)
+    
+    def get_random_sample(self, sample_size):
+        random_idxs = np.random.randint(0, self.COUNT, size=sample_size)
+        return self._get_values_at_indices(random_idxs)
+    
 class MergedData:
     def __init__(self):
         self._data_objects = [] # List of Data objects to merge
@@ -93,9 +114,26 @@ class MergedData:
     def __len__(self):
         return sum(len(obj.DATA) for obj in self._data_objects)
     
+    def _get_values_at_indices(self, indices):
+        sizes = [obj.COUNT for obj in self._data_objects]
+        cumsum = np.cumsum([0] + sizes)
+        samples_values = []
+        for idx in indices:
+            for i in range(len(cumsum)-1):
+                if cumsum[i] <= idx < cumsum[i+1]:
+                    local_idx = idx - cumsum[i]
+                    sub_values = self._data_objects[i].get_values_at_indices([local_idx])
+                    samples_values.append(sub_values[0])
+                    break
+        return np.array(samples_values)
+    
+    def get_random_sample(self, sample_size):
+        random_idxs = np.random.randint(0, self.COUNT, size=sample_size)
+        return self._get_values_at_indices(random_idxs)
+    
 class FilteredData:
     def __init__(self, data_object, lower_bound, upper_bound):
-        self._data_object = data_object
+        self._data_object = data_object # MergedData or Data
         self.lower = lower_bound
         self.upper = upper_bound
 
@@ -131,6 +169,29 @@ class FilteredData:
         mask = (arr_gpu >= self.lower) & (arr_gpu <= self.upper)
         return arr_gpu[mask].cpu()
     
+    def _get_values_at_indices(self, indices):
+        sizes = []
+        for arr in self.DATA:
+            sizes.append(len(arr))
+        cumsum = np.cumsum([0] + sizes)
+        samples_values = []
+        for idx in indices:
+            for i in range(len(cumsum)-1):
+                if cumsum[i] <= idx < cumsum[i+1]:
+                    local_idx = idx - cumsum[i]
+                    filtered_iter = iter(self.DATA)
+                    for _ in range(i):
+                        next(filtered_iter)
+                    the_filtered = next(filtered_iter)
+                    value = the_filtered[local_idx].item()
+                    samples_values.append(value)
+                    break
+        return np.array(samples_values)
+    
+    def get_random_sample(self, sample_size):
+        random_idxs = np.random.randint(0, self.COUNT, size=sample_size)
+        return self._get_values_at_indices(random_idxs)
+    
 class Histogram:
     def __init__(self):
         self.BINS = 0
@@ -153,7 +214,7 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
         
     sample_size = min(100000, n)
 
-    samples_np = sample_values(data, sample_size)
+    samples_np = data.get_random_sample(sample_size)
     samples = samples_np[~np.isnan(samples_np)].tolist()
     
     if len(samples) == 0:
@@ -203,18 +264,6 @@ def calc_data_stats(data):
     data.MEAN = total_sum / data.COUNT
     variance = (total_sq_sum / data.COUNT) - (data.MEAN ** 2)
     data.STANDARD_DEVIATION = variance ** 0.5
-
-def sample_values(data, sample_size):
-    samples = np.empty(sample_size, dtype=np.float32)
-    for i in range(sample_size):
-        random_array_idx = np.random.randint(0, len(data.DATA))
-        random_tensor = data.DATA[random_array_idx]
-        if len(random_tensor) == 0:
-            samples[i] = np.nan
-        else:
-            random_value_idx = np.random.randint(0, len(random_tensor))
-            samples[i] = random_tensor[random_value_idx].item()
-    return samples
 
 # ==================================== HISTOGRAM
 
