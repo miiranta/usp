@@ -133,11 +133,15 @@ def calc_histogram(data, histogram):
     bin_width = (data.MAX - data.MIN) / bin_amount
     counts = np.zeros(bin_amount, dtype=np.int64)
     
+    print("a")
+    
     for arr in data.DATA:
         bin_indices = ((arr - data.MIN) / bin_width).astype(np.int64)
         bin_indices = np.clip(bin_indices, 0, bin_amount - 1)
         for idx in bin_indices:
             counts[idx] += 1
+            
+    print("b")
     
     # Convert counts to probabilities
     total_count = np.sum(counts)
@@ -174,7 +178,7 @@ def plot_histogram(histogram):
     plt.xlabel('Bins')
     plt.ylabel('Frequency')
     
-    safe_model_name = MODEL_NAME.replace('/', '_')
+    safe_model_name = MODEL_NAME.replace('/', '-')
     path = os.path.join(OUTPUT_FOLDER, f'{safe_model_name}_histogram.png')
     plt.savefig(path)
     plt.close()
@@ -248,14 +252,14 @@ def combinations(types):
 
 def set_model_name(model_folder, model_name):
     global MODEL_NAME, OUTPUT_FOLDER, MODEL_FOLDER
-    MODEL_NAME = model_name.replace('/', '_')
+    MODEL_NAME = model_name.replace('/', '-')
     MODEL_FOLDER = model_folder
     OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, 'results', MODEL_FOLDER, MODEL_NAME)
     if not os.path.exists(OUTPUT_FOLDER):
         os.makedirs(OUTPUT_FOLDER)
 
 def write_down(text):
-    safe_model_name = MODEL_NAME.replace('/', '_')
+    safe_model_name = MODEL_NAME.replace('/', '-')
     path = os.path.join(OUTPUT_FOLDER, f'{safe_model_name}.txt')
     with open(path, 'a') as f:
         f.write(text + '\n')
@@ -350,46 +354,46 @@ def main():
                 continue
             
             # Merge data
-            print(" > > Merging data...")
+            print(" > Merging data for types: " + ", ".join(types))
             data_to_merge = [MODEL_DATA_ARRAYS[t] for t in types]
             merged_data = DataMerge(data_to_merge)
             
             # Calculate merged data stats
-            print(" > > Calculating merged data stats...")
+            print(" > Calculating merged data stats...")
             calc_data_stats(merged_data)
-            print(f" > > > Merged data count: {merged_data.COUNT}")
+            print(f" > Merged data count: {merged_data.COUNT}")
             
             
             
             # FILTERS
             for filter in FILTERS_TO_TEST:
                 
-                testing_name = f"{model_name}_" + "-".join(types) + f"_filter{filter}"
-                set_model_name(model_name.replace('/', '_'), testing_name)
-                print(f" > Testing {testing_name}...")
+                testing_name = f"{model_name}_" + "-".join(types) + f"_filter-{filter}"
+                set_model_name(model_name.replace('/', '-'), testing_name)
+                print(f" > > Testing {testing_name}...")
                 
                 # Already done?
-                safe_model_name = MODEL_NAME.replace('/', '_')
+                safe_model_name = MODEL_NAME.replace('/', '-')
                 path = os.path.join(OUTPUT_FOLDER, f'{safe_model_name}.txt')
                 if os.path.exists(path):
-                    print(" > > Already done, skipping.")
+                    print(" > > > Already done, skipping.")
                     continue
 
                 # Filter outliers
                 if filter > 0:
-                    print(" > > Filtering...")
+                    print(" > > > Filtering...")
                     filtered_data = remove_data_outliers(merged_data, sigma=filter)
                     calc_data_stats(filtered_data)
                 else:
                     filtered_data = merged_data
                 
-                print(" > > Calculating histogram...")
+                print(" > > > Calculating histogram...")
                 histogram = Histogram()
                 calc_histogram(filtered_data, histogram)
                 calc_histogram_stats(histogram)
                 plot_histogram(histogram)
                 
-                print(" > > Writing down results...")
+                print(" > > > Writing down results...")
                 write_down(f"Model: {model_name}")
                 write_down(f"Types: {', '.join(types)}")
                 write_down(f"Filter: {filter} sigma")
