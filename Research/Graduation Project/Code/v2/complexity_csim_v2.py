@@ -389,23 +389,37 @@ def main():
         # Load model
         print(f"Loading model {model_name}...")
         
-        old_cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
-        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+        import torch.cuda
+        original_cuda_available = torch.cuda.is_available
+        original_get_device_capability = torch.cuda.get_device_capability
+        original_get_device_properties = torch.cuda.get_device_properties
         
-        loaded_model = AutoModel.from_pretrained(
-            model_name,
-            device_map="cpu",
-            dtype=torch.float32,
-            low_cpu_mem_usage=True,
-            trust_remote_code=True,
-            use_safetensors=True,
-            attn_implementation="eager",
-        )
+        torch.cuda.is_available = lambda: False
+        torch.cuda.get_device_capability = lambda device=None: (0, 0)
+        torch.cuda.get_device_properties = lambda device: None
         
-        if old_cuda_visible is not None:
-            os.environ["CUDA_VISIBLE_DEVICES"] = old_cuda_visible
-        else:
-            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+        try:
+            loaded_model = AutoModel.from_pretrained(
+                model_name,
+                device_map="cpu",
+                dtype=torch.float32,
+                low_cpu_mem_usage=True,
+                trust_remote_code=True,
+                use_safetensors=True,
+                attn_implementation="eager",
+            )
+            
+            print(f"Successfully loaded {model_name}")
+            
+        except Exception as e:
+            print(f"Error loading model {model_name}: {e}")
+            print("Skipping this model...")
+            continue
+            
+        finally:
+            torch.cuda.is_available = original_cuda_available
+            torch.cuda.get_device_capability = original_get_device_capability
+            torch.cuda.get_device_properties = original_get_device_properties
         
         # Allocate data arrays
         print("Allocating data arrays...")
