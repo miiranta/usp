@@ -9,7 +9,6 @@ import torch.cuda
 import numpy as np
 from transformers import AutoModel
 import matplotlib.pyplot as plt
-from numba import jit, prange
 
 if not torch.cuda.is_available():
     print("CUDA is not available. Please ensure you have a compatible GPU and the necessary drivers installed.")
@@ -154,8 +153,7 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
         
     sample_size = min(100000, n)
 
-    data_arrays = [arr.numpy() for arr in data.DATA]
-    samples_np = sample_values(data_arrays, sample_size)
+    samples_np = sample_values(data, sample_size)
     samples = samples_np[~np.isnan(samples_np)].tolist()
     
     if len(samples) == 0:
@@ -206,17 +204,16 @@ def calc_data_stats(data):
     variance = (total_sq_sum / data.COUNT) - (data.MEAN ** 2)
     data.STANDARD_DEVIATION = variance ** 0.5
 
-@jit(nopython=True)
-def sample_values(data_arrays, sample_size):
+def sample_values(data, sample_size):
     samples = np.empty(sample_size, dtype=np.float32)
-    for i in prange(sample_size):
-        random_array_idx = np.random.randint(0, len(data_arrays))
-        random_array = data_arrays[random_array_idx]
-        if len(random_array) == 0:
+    for i in range(sample_size):
+        random_array_idx = np.random.randint(0, len(data.DATA))
+        random_tensor = data.DATA[random_array_idx]
+        if len(random_tensor) == 0:
             samples[i] = np.nan
         else:
-            random_value_idx = np.random.randint(0, len(random_array))
-            samples[i] = random_array[random_value_idx]
+            random_value_idx = np.random.randint(0, len(random_tensor))
+            samples[i] = random_tensor[random_value_idx].item()
     return samples
 
 # ==================================== HISTOGRAM
