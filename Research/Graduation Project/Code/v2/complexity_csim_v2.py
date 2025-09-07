@@ -185,18 +185,17 @@ def calc_data_stats(data):
     total_sum = 0.0
     total_sq_sum = 0.0
     for arr_tensor in data.DATA:
-        arr_gpu = arr_tensor.to(device)
-        data.COUNT += len(arr_gpu)
+        data.COUNT += len(arr_tensor)
         
-        arr_min = torch.min(arr_gpu).item()
-        arr_max = torch.max(arr_gpu).item()
+        arr_min = torch.min(arr_tensor).item()
+        arr_max = torch.max(arr_tensor).item()
         if data.MIN is None or arr_min < data.MIN:
             data.MIN = arr_min
         if data.MAX is None or arr_max > data.MAX:
             data.MAX = arr_max
             
-        total_sum += torch.sum(arr_gpu).item()
-        total_sq_sum += torch.sum(arr_gpu ** 2).item()
+        total_sum += torch.sum(arr_tensor).item()
+        total_sq_sum += torch.sum(arr_tensor ** 2).item()
     
     if data.COUNT == 0:
         data.MEAN = 0.0
