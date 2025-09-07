@@ -182,6 +182,7 @@ def calc_data_stats(data):
     data.STANDARD_DEVIATION = 0.0
     
     total_sum = 0.0
+    total_sq_sum = 0.0
     for arr_tensor in data.DATA:
         arr_gpu = arr_tensor.to(device)
         data.COUNT += len(arr_gpu)
@@ -194,6 +195,7 @@ def calc_data_stats(data):
             data.MAX = arr_max
             
         total_sum += torch.sum(arr_gpu).item()
+        total_sq_sum += torch.sum(arr_gpu ** 2).item()
     
     if data.COUNT == 0:
         data.MEAN = 0.0
@@ -201,13 +203,8 @@ def calc_data_stats(data):
         return
         
     data.MEAN = total_sum / data.COUNT
-    
-    total_sq_sum = 0.0
-    for arr_tensor in data.DATA:
-        arr_gpu = arr_tensor.to(device)
-        total_sq_sum += torch.sum((arr_gpu - data.MEAN) ** 2).item()
-    
-    data.STANDARD_DEVIATION = (total_sq_sum / data.COUNT) ** 0.5
+    variance = (total_sq_sum / data.COUNT) - (data.MEAN ** 2)
+    data.STANDARD_DEVIATION = variance ** 0.5
 
 @jit(parallel=True)
 def sample_values(data_arrays, sample_size):
