@@ -18,31 +18,72 @@ if not os.path.exists(OUTPUT_FOLDER):
 MODEL_DATA_ARRAYS = dict() # param_type -> Data
 
 class Data:
-    DATA = None
+    def __init__(self):
+        self.DATA = []
+        self.COUNT = 0
+        self.MIN = None
+        self.MAX = None
+        self.MEAN = 0.0
+        self.STANDARD_DEVIATION = 0.0
     
-    COUNT = 0
-    MIN = None
-    MAX = None
+class DataMerge:
+    def __init__(self, data_objects):
+        self.data_objects = data_objects
+        self.number_of_arrays = 0
+        for obj in data_objects:
+            self.number_of_arrays += len(obj.DATA)
+        
+        self.COUNT = 0
+        self.MIN = None
+        self.MAX = None
+        self.MEAN = 0.0
+        self.STANDARD_DEVIATION = 0.0
+        
+    @property
+    def DATA(self):
+        return self  # Return self to act like a list
+                
+    def __getitem__(self, index):
+        current_index = 0
+        for obj in self.data_objects:
+            for arr in obj.DATA:
+                if current_index == index:
+                    return arr
+                current_index += 1
+        raise IndexError("Index out of range")
     
-    MEAN = None
-    STANDARD_DEVIATION = None
+    def __iter__(self):
+        for obj in self.data_objects:
+            for arr in obj.DATA:
+                yield arr
+    
+    def __len__(self):
+        return self.number_of_arrays
     
 class Histogram:
-    BINS = np.array([])
-    PROBS = np.array([])
-    
-    SHANNON_ENTROPY = None
-    DESEQUILIBRIUM = None
-    COMPLEXITY = None
+    def __init__(self):
+        self.BINS = 0
+        self.HIST = None
+        self.PROBS = None
+        self.SHANNON_ENTROPY = 0.0
+        self.DESEQUILIBRIUM = 0.0
+        self.COMPLEXITY = 0.0
 
 # ==================================== DATA
 
 def calc_bin_amount(data): # Freedman-Diaconis rule
     n = data.COUNT
     sample_size = min(500000, n)
-    idx = np.random.randint(0, n, size=sample_size, dtype=np.int64)
-    sample = data.DATA[idx]
+
+    sample = []    
+    for _ in range(sample_size):
+        random_array_idx = np.random.randint(0, len(data.DATA))
+        random_array = data.DATA[random_array_idx]
+        random_value_idx = np.random.randint(0, len(random_array))
+        random_value = random_array[random_value_idx]
+        sample.append(random_value)
     
+    sample = np.array(sample)
     q75, q25 = np.percentile(sample, [75 ,25])
     iqr = q75 - q25
     
@@ -55,39 +96,62 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
     return max(bin_amount, 1)
     
 def calc_data_stats(data):
-    data.COUNT = len(data.DATA)
-    data.MIN = np.min(data.DATA)
-    data.MAX = np.max(data.DATA)
+    data.COUNT = 0
+    data.MIN = None
+    data.MAX = None
     
-    data.MEAN = np.mean(data.DATA)
-    data.STANDARD_DEVIATION = np.std(data.DATA)
+    data.MEAN = 0.0
+    data.STANDARD_DEVIATION = 0.0
+    
+    for arr in data.DATA:
+        data.COUNT += len(arr)
+        
+        arr_min = np.min(arr)
+        arr_max = np.max(arr)
+        if data.MIN is None or arr_min < data.MIN:
+            data.MIN = arr_min
+        if data.MAX is None or arr_max > data.MAX:
+            data.MAX = arr_max
+    
+        data.MEAN += np.sum(arr)
+    data.MEAN /= data.COUNT
+    
+    for arr in data.DATA:
+        data.STANDARD_DEVIATION += np.sum((arr - data.MEAN) ** 2)
+    data.STANDARD_DEVIATION = np.sqrt(data.STANDARD_DEVIATION / data.COUNT)
 
 # ==================================== HISTOGRAM
 
 def calc_histogram(data, histogram):
     bin_amount = calc_bin_amount(data)
+    if bin_amount <= 0:
+        print("Error: bin_amount is 0")
+        exit(1)
+    histogram.BINS = bin_amount
     print(f" > > > Bin amount: {bin_amount}")
-    bins = np.linspace(data.MIN, data.MAX, bin_amount + 1)
-    print("a")
-    counts, _ = np.histogram(data.DATA, bins=bins)
-    print("b")
-    probs = counts / data.COUNT
-    histogram.BINS = bins
-    histogram.PROBS = probs
     
+    counts = np.zeros(bin_amount)
+    for arr in data.DATA:
+        hist, _ = np.histogram(arr, bins=bin_amount, range=(data.MIN, data.MAX), density=False)
+        counts += hist
+    
+    # Convert counts to probabilities
+    total_count = np.sum(counts)
+    histogram.HIST = counts
+    histogram.PROBS = counts / total_count if total_count > 0 else counts
+        
 def calc_histogram_stats(histogram):
     histogram.SHANNON_ENTROPY = calc_shannon_entropy(histogram.PROBS)
     histogram.DESEQUILIBRIUM = calc_desequilibrium(histogram.PROBS)
     histogram.COMPLEXITY = calc_complexity(histogram.SHANNON_ENTROPY, histogram.DESEQUILIBRIUM)
 
 def plot_histogram(histogram):
-    plt.figure()
-    bin_centers = (histogram.BINS[:-1] + histogram.BINS[1:]) / 2
-    plt.bar(bin_centers, histogram.PROBS, width=np.diff(histogram.BINS), edgecolor='black', align='center')
-    plt.xlabel('Value')
-    plt.ylabel('Probability')
+    plt.figure(figsize=(10, 6))
+    plt.bar(range(len(histogram.HIST)), histogram.HIST, width=1.0, edgecolor='black')
     plt.title('Histogram')
-    plt.grid(True)
+    plt.xlabel('Bins')
+    plt.ylabel('Frequency')
+    
     safe_model_name = MODEL_NAME.replace('/', '_')
     path = os.path.join(OUTPUT_FOLDER, f'{safe_model_name}_histogram.png')
     plt.savefig(path)
@@ -98,12 +162,16 @@ def plot_histogram(histogram):
 def remove_data_outliers(data, sigma=0):
     if sigma <= 0:
         return data
+  
+    lower_bound = data.MEAN - sigma * data.STANDARD_DEVIATION
+    upper_bound = data.MEAN + sigma * data.STANDARD_DEVIATION
     
     filtered_data = Data()
-    filtered_data.DATA = data.DATA[
-        (data.DATA >= data.MEAN - sigma * data.STANDARD_DEVIATION) &
-        (data.DATA <= data.MEAN + sigma * data.STANDARD_DEVIATION)
-    ]
+    for arr in data.DATA:
+        filtered_arr = arr[(arr >= lower_bound) & (arr <= upper_bound)]
+        if len(filtered_arr) > 0:
+            filtered_data.DATA.append(filtered_arr)
+            
     return filtered_data
 
 # ====================================
@@ -180,13 +248,13 @@ def write_down_data_stats(data):
 
 def write_down_histogram(histogram):
     write_down("Bins:")
-    write_down(np.array2string(histogram.BINS, separator=', '))
+    write_down(np.array2string(histogram.HIST, separator=', '))
     write_down("Probs:")
     write_down(np.array2string(histogram.PROBS, separator=', '))
 
 def write_down_histogram_stats(histogram):
     write_down("Histogram Stats:")
-    write_down(f" > Bin Count: {len(histogram.BINS) - 1}")
+    write_down(f" > Bin Count: {histogram.BINS}")
     write_down(f" > Shannon Entropy: {histogram.SHANNON_ENTROPY}")
     write_down(f" > Desequilibrium: {histogram.DESEQUILIBRIUM}")
     write_down(f" > Complexity: {histogram.COMPLEXITY}")
@@ -214,45 +282,42 @@ def main():
     for model_name in MODELS_TO_TEST:
         start_timer = time.time()
 
+        # Load model
         print(f"Loading model {model_name}...")
         loaded_model = AutoModel.from_pretrained(
             model_name,
             device_map="cpu",
         )
         
-        # Tally sizes per parameter type
-        print("Step 1: Tallying parameter sizes per type...")
-        sizes = {t: 0 for t in TYPES_TO_TEST}
+        # Allocate data arrays
+        print("Allocating data arrays...")
+        for t in TYPES_TO_TEST:
+            MODEL_DATA_ARRAYS[t] = Data()
+        
+        # Extract parameters
+        print("Extracting parameters...")
         for name, param in loaded_model.named_parameters():
-            t = classify_param_name(name)
-            sizes[t] += param.numel()
-
-        # Allocate contiguous numpy arrays per type
-        print("Step 2: Allocating contiguous arrays...")
-        MODEL_DATA_ARRAYS = {t: Data() for t in TYPES_TO_TEST}
-        for t in TYPES_TO_TEST:
-            MODEL_DATA_ARRAYS[t].DATA = np.empty(sizes[t], dtype=np.float32)
-            MODEL_DATA_ARRAYS[t].COUNT = 0
-
-        # Step 3: copy params
-        print("Step 3: Copying data into preallocated arrays...")
-        with torch.no_grad():
-            for name, param in loaded_model.named_parameters():
-                if param is None or param.numel() == 0:
-                    continue
-                t = classify_param_name(name)
-                arr = param_to_numpy(param)
-                offset = MODEL_DATA_ARRAYS[t].COUNT
-                ln = len(arr)
-                MODEL_DATA_ARRAYS[t].DATA[offset:offset+ln] = arr
-                MODEL_DATA_ARRAYS[t].COUNT += ln
-
-        # How many parameters in total?
-        total_params = sum(len(MODEL_DATA_ARRAYS[t].DATA) for t in TYPES_TO_TEST)
-        print(f"Total parameters: {total_params}")
-        for t in TYPES_TO_TEST:
-            print(f"-{t}: {len(MODEL_DATA_ARRAYS[t].DATA)}")
-
+            ptype = classify_param_name(name)
+            if ptype not in TYPES_TO_TEST:
+                continue
+            arr = param_to_numpy(param)
+            if len(arr) == 0:
+                continue
+            MODEL_DATA_ARRAYS[ptype].DATA.append(arr)
+            
+        # Calculate data stats
+        print("Calculating data stats...")
+        for ptype in MODEL_DATA_ARRAYS:
+            calc_data_stats(MODEL_DATA_ARRAYS[ptype])
+        
+        print("Value counts:")
+        total_count = 0
+        for ptype in MODEL_DATA_ARRAYS:
+            total_count += MODEL_DATA_ARRAYS[ptype].COUNT
+            print(f"-{ptype}: {MODEL_DATA_ARRAYS[ptype].COUNT}")
+        print(f"--total: {total_count}")
+        
+        
         # TYPES
         for types in combinations(TYPES_TO_TEST):
             if len(types) == 0:
@@ -260,19 +325,15 @@ def main():
             
             # Merge data
             print(" > > Merging data...")
-            merged_data = Data()
-            total_length = sum(len(MODEL_DATA_ARRAYS[t].DATA) for t in types)
-            for t in types:
-                if len(MODEL_DATA_ARRAYS[t].DATA) == 0:
-                    continue
-                if merged_data.DATA is None:
-                    merged_data.DATA = np.empty(total_length, dtype=np.float32)
-                offset = merged_data.COUNT
-                ln = len(MODEL_DATA_ARRAYS[t].DATA)
-                merged_data.DATA[offset:offset+ln] = MODEL_DATA_ARRAYS[t].DATA
-                merged_data.COUNT += ln
+            data_to_merge = [MODEL_DATA_ARRAYS[t] for t in types]
+            merged_data = DataMerge(data_to_merge)
+            
+            # Calculate merged data stats
+            print(" > > Calculating merged data stats...")
             calc_data_stats(merged_data)
             print(f" > > > Merged data count: {merged_data.COUNT}")
+            
+            
             
             # FILTERS
             for filter in FILTERS_TO_TEST:
@@ -311,7 +372,9 @@ def main():
                 print(" > > Done.")
 
         del loaded_model
-        del MODEL_DATA_ARRAYS
+        for key in MODEL_DATA_ARRAYS:
+            MODEL_DATA_ARRAYS[key].DATA.clear()
+        MODEL_DATA_ARRAYS.clear()
         MODEL_DATA_ARRAYS = dict()
         
         total_time = time.time() - start_timer
