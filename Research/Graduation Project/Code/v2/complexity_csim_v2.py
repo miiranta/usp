@@ -196,10 +196,50 @@ class FilteredData:
         return self._filter_array(arr)
         
     def _filter_array(self, arr):
-        mask = (arr >= self.lower) & (arr <= self.upper)
-        if mask.numel() == 0:
+        if arr.numel() == 0:
             return torch.tensor([])
-        return arr[mask]
+
+        timer_start = time.time()
+
+        CPU_CHUNK_ELEMS = 5000000  # process this many elems per CPU chunk
+        GPU_CHUNK_ELEMS = 2000000  # move up to this many elems to GPU at once
+
+        n = arr.numel()
+        
+        # Small = CPU
+        if n <= CPU_CHUNK_ELEMS:
+            mask = (arr >= self.lower) & (arr <= self.upper)
+            if not mask.any().item():
+                elapsed = time.time() - timer_start
+                print(f" > > > filter processed (CPU): elems={n:,}, time={elapsed:.3f}s")
+                return torch.tensor([])
+            return arr[mask]
+
+        # Large = GPU + CPU chunks
+        parts = []
+        start = 0
+        while start < n:
+            end = min(start + CPU_CHUNK_ELEMS, n)
+            chunk = arr[start:end]
+            
+            if (end - start) <= GPU_CHUNK_ELEMS:
+                chunk_cuda = chunk.to(device)
+                mask = (chunk_cuda >= self.lower) & (chunk_cuda <= self.upper)
+                if mask.any().item():
+                    parts.append(chunk_cuda[mask].to('cpu'))
+                del chunk_cuda
+            else:
+                mask = (chunk >= self.lower) & (chunk <= self.upper)
+                if mask.any().item():
+                    parts.append(chunk[mask])
+            start = end
+
+        if len(parts) == 0:
+            elapsed = time.time() - timer_start
+            print(f" > > > filter processed (GPU): elems={n:,}, time={elapsed:.3f}s")
+            return torch.tensor([])
+
+        return torch.cat(parts)
     
     def _get_values_at_indices(self, indices):
         sizes = []
