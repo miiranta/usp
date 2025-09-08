@@ -380,7 +380,7 @@ def plot_histogram(histogram):
     hist_tensor = histogram.HIST
 
     if hist_tensor.numel() > max_plot_bins:
-        downsample_factor = hist_tensor.numel() // max_plot_bins
+        downsample_factor = hist_tensor.numel() // max_plot_bins + 1
 
         downsampled_hist = []
         downsampled_lefts = []
@@ -539,11 +539,11 @@ def write_down_all(data, histogram):
 # ==================================== MAIN
 
 MODELS_TO_TEST = [
-    'openai/gpt-oss-120b',
+    #'openai/gpt-oss-120b',
     'openai/gpt-oss-20b',
 ]
 TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other'] # Parameter types to analyze
-FILTERS_TO_TEST = [1, 2, 3, 4] # Number of standard deviations for outlier removal
+FILTERS_TO_TEST = [0, 1, 2, 3, 4] # Number of standard deviations for outlier removal
 
 def main():
     global MODEL_DATA_ARRAYS
