@@ -62,7 +62,9 @@ class Data:
     
     def _get_values_at_indices(self, indices):
         sizes = [p.numel() for p in self._params]
-        cumsum = np.cumsum([0] + sizes)
+        cumsum = [0]
+        for s in sizes:
+            cumsum.append(cumsum[-1] + s)
         samples_values = []
         
         sorted_pairs = sorted(enumerate(indices), key=lambda x: x[1])
@@ -86,12 +88,14 @@ class Data:
                     break
         
         samples_values.sort()
-        return np.array([val for _, val in samples_values])
+        if len(samples_values) == 0:
+            return torch.tensor([], dtype=torch.float32)
+        return torch.tensor([val for _, val in samples_values], dtype=torch.float32)
     
     def get_random_sample(self, sample_size):
         if self.COUNT == 0:
-            return np.array([])
-        random_idxs = np.random.randint(0, self.COUNT, size=sample_size)
+            return torch.tensor([], dtype=torch.float32)
+        random_idxs = torch.randint(0, max(1, self.COUNT), (sample_size,), dtype=torch.long)
         return self._get_values_at_indices(random_idxs)
     
 class MergedData:
@@ -130,7 +134,9 @@ class MergedData:
     
     def _get_values_at_indices(self, indices):
         sizes = [obj.COUNT for obj in self._data_objects]
-        cumsum = np.cumsum([0] + sizes)
+        cumsum = [0]
+        for s in sizes:
+            cumsum.append(cumsum[-1] + s)
         samples_values = []
         
         sorted_pairs = sorted(enumerate(indices), key=lambda x: x[1])
@@ -149,23 +155,28 @@ class MergedData:
             local_requests = obj_indices[obj_idx]
             local_indices = [local_idx for _, local_idx in local_requests]
             
-            sub_values = self._data_objects[obj_idx]._get_values_at_indices(local_indices)
+            sub_values = self._data_objects[obj_idx]._get_values_at_indices(torch.tensor(local_indices, dtype=torch.long))
             
-            for (orig_pos, _), value in zip(local_requests, sub_values):
-                samples_values.append((orig_pos, value))
+            for (orig_pos, _), value in zip(local_requests, sub_values.tolist()):
+                samples_values.append((orig_pos, float(value)))
     
         samples_values.sort()
-        return np.array([val for _, val in samples_values])
+        if len(samples_values) == 0:
+            return torch.tensor([], dtype=torch.float32)
+        return torch.tensor([val for _, val in samples_values], dtype=torch.float32)
     
     def get_random_sample(self, sample_size):
         if self.COUNT == 0:
-            return np.array([])
-        random_idxs = np.random.randint(0, self.COUNT, size=sample_size)
+            return torch.tensor([], dtype=torch.float32)
+        random_idxs = torch.randint(0, max(1, self.COUNT), (sample_size,), dtype=torch.long)
         return self._get_values_at_indices(random_idxs)
     
 class FilteredData:
     def __init__(self, data_object, lower_bound, upper_bound):
-        self._data_object = data_object # MergedData or Data
+        self._data_object = data_object # MergedData
+        if not isinstance(self._data_object, MergedData):
+            raise ValueError("FilteredData currently only supports wrapping MergedData objects")
+        
         self.lower = lower_bound
         self.upper = upper_bound
 
@@ -197,43 +208,27 @@ class FilteredData:
         return self._filter_array(arr)
         
     def _filter_array(self, arr):
-        mask = (arr >= self.lower) & (arr <= self.upper)
+        mask = (arr >= float(self.lower)) & (arr <= float(self.upper))
         return arr[mask]
     
-    def _get_values_at_indices(self, indices):
-        filtered_arrays = []
-        sizes = []
-        for arr in self.DATA:
-            l = len(arr)
-            if l == 0:
-                continue
-            filtered_arrays.append(arr)
-            sizes.append(l)
-
-        if len(sizes) == 0:
-            return np.array([])
-
-        cumsum = np.cumsum([0] + sizes)
-        samples_values = []
-        sorted_pairs = sorted(enumerate(indices), key=lambda x: x[1])
-        orig_positions = [p for p, _ in sorted_pairs]
-        sorted_idxs = np.array([idx for _, idx in sorted_pairs])
-
-        arr_indices = np.searchsorted(cumsum, sorted_idxs, side='right') - 1
-        local_indices = sorted_idxs - cumsum[arr_indices]
-
-        for orig_pos, arr_i, local_i in zip(orig_positions, arr_indices, local_indices):
-            value = filtered_arrays[arr_i][int(local_i)].item()
-            samples_values.append((orig_pos, value))
-
-        samples_values.sort()
-        return np.array([val for _, val in samples_values])
-    
     def get_random_sample(self, sample_size):
-        if self.COUNT == 0:
-            return np.array([])
-        random_idxs = np.random.randint(0, self.COUNT, size=sample_size)
-        return self._get_values_at_indices(random_idxs)
+        if self._data_object.COUNT == 0:
+            return torch.tensor([], dtype=torch.float32)
+        random_idxs = torch.randint(0, self._data_object.COUNT, (sample_size,), dtype=torch.long)
+        
+        complete = False
+        result_values = []
+        while not complete:
+            values = self._data_object._get_values_at_indices(random_idxs)
+            result_values.extend(self._filter_array(values).tolist())
+            
+            if len(result_values) >= sample_size:
+                complete = True
+            else:
+                needed = sample_size - len(result_values)
+                random_idxs = torch.randint(0, self._data_object.COUNT, (needed,), dtype=torch.long)
+    
+        return torch.tensor(result_values, dtype=torch.float32)
     
 class Histogram:
     def __init__(self):
@@ -256,8 +251,11 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
         
     sample_size = min(100000, n)
 
-    samples_np = data.get_random_sample(sample_size)
-    samples = samples_np[~np.isnan(samples_np)].tolist()
+    samples_tensor = data.get_random_sample(sample_size)
+    if samples_tensor.numel() == 0:
+        return 1
+        
+    samples = samples_tensor[~torch.isnan(samples_tensor)].tolist()
     
     if len(samples) == 0:
         return 1
