@@ -354,6 +354,7 @@ def calc_histogram(data, histogram):
         del concat
 
     # Convert counts to probabilities
+    print(" > > > > Converting counts to probabilities...")
     total_count = int(counts.sum().item())
     histogram.HIST = counts.clone()
     histogram.PROBS = counts.float() / total_count if total_count > 0 else counts.float()
