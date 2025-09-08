@@ -357,10 +357,10 @@ def calc_histogram(data, histogram):
         del concat
 
     # Convert counts to probabilities
+    print(" > > > Converting counts to probabilities...")
     total_count = int(counts.sum().item())
-    counts_np = counts.numpy()
-    histogram.HIST = counts_np
-    histogram.PROBS = counts_np / total_count if total_count > 0 else counts_np
+    histogram.HIST = counts.clone()
+    histogram.PROBS = counts.float() / total_count if total_count > 0 else counts.float()
     
 def calc_histogram_stats(histogram):
     histogram.SHANNON_ENTROPY = calc_shannon_entropy(histogram.PROBS)
@@ -380,20 +380,22 @@ def plot_histogram(histogram):
     bin_lefts = bin_edges[:-1]
     
     max_plot_bins = 10000
-    if len(histogram.HIST) > max_plot_bins:
-        downsample_factor = len(histogram.HIST) // max_plot_bins
-        
+    hist_tensor = histogram.HIST
+
+    if hist_tensor.numel() > max_plot_bins:
+        downsample_factor = hist_tensor.numel() // max_plot_bins
+
         downsampled_hist = []
         downsampled_lefts = []
 
-        for i in range(0, len(histogram.HIST), downsample_factor):
-            end_idx = min(i + downsample_factor, len(histogram.HIST))
-            bin_group = histogram.HIST[i:end_idx]
-            downsampled_hist.append(np.sum(bin_group))
-            downsampled_lefts.append(bin_lefts[i])
-        
+        for i in range(0, hist_tensor.numel(), downsample_factor):
+            end_idx = min(i + downsample_factor, hist_tensor.numel())
+            bin_group = hist_tensor[i:end_idx]
+            downsampled_hist.append(int(bin_group.sum().item()))
+            downsampled_lefts.append(float(bin_lefts[i]))
+
         downsampled_bin_width = bin_width * downsample_factor
-        
+
         ax.bar(
             downsampled_lefts,
             downsampled_hist,
@@ -404,13 +406,13 @@ def plot_histogram(histogram):
             edgecolor='black',
             linewidth=0.5,
         )
-        
-        title = f"Histogram (Counts) - {len(downsampled_hist):,} bins (downsampled from {len(histogram.HIST):,})"
-        print(f" > > > Plotting histogram with {len(downsampled_hist)} bins (downsampled from {len(histogram.HIST)})")
+
+        title = f"Histogram (Counts) - {len(downsampled_hist):,} bins (downsampled from {hist_tensor.numel():,})"
+        print(f" > > > Plotting histogram with {len(downsampled_hist)} bins (downsampled from {hist_tensor.numel()})")
     else:
         ax.bar(
             bin_lefts,
-            histogram.HIST,
+            hist_tensor.cpu().numpy(),
             width=bin_width,
             align='edge',
             color='blue',
@@ -418,9 +420,9 @@ def plot_histogram(histogram):
             edgecolor='black',
             linewidth=0.5,
         )
-        
-        title = f"Histogram (Counts) - {len(histogram.HIST):,} bins"
-        print(f" > > > Plotting histogram with {len(histogram.HIST)} bins")
+
+        title = f"Histogram (Counts) - {hist_tensor.numel():,} bins"
+        print(f" > > > Plotting histogram with {hist_tensor.numel()} bins")
     
     ax.set_title(title)
     ax.set_xlabel("Value Range")
@@ -448,13 +450,13 @@ def remove_data_outliers(data, sigma=0):
 # ====================================
 
 def calc_shannon_entropy(probs): # H = -Σ p(x) log(p(x))
-    probs_tensor = torch.from_numpy(probs).to(device)
+    probs_tensor = probs.to(device)
     probs_tensor = probs_tensor[probs_tensor > 0]
     return -torch.sum(probs_tensor * torch.log(probs_tensor)).item()
 
 def calc_desequilibrium(probs): # D = Σ (p(x) - 1/n)^2
-    probs_tensor = torch.from_numpy(probs).to(device)
-    n = len(probs_tensor)
+    probs_tensor = probs.to(device)
+    n = probs_tensor.numel()
     if n == 0:
         return 0.0
     uniform_prob = 1.0 / n
