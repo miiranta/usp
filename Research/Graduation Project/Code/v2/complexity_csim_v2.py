@@ -201,53 +201,33 @@ class FilteredData:
         return arr[mask]
     
     def _get_values_at_indices(self, indices):
-        if len(indices) == 0:
+        filtered_arrays = []
+        sizes = []
+        for arr in self.DATA:
+            l = len(arr)
+            if l == 0:
+                continue
+            filtered_arrays.append(arr)
+            sizes.append(l)
+
+        if len(sizes) == 0:
             return np.array([])
 
-        filtered_sources = []
-        sizes = []
-        for arr in self._data_object.DATA:
-            if arr.numel() == 0:
-                continue
-            
-            mask = (arr >= self.lower) & (arr <= self.upper)
-            cnt = int(mask.sum().item())
-            if cnt > 0:
-                filtered_sources.append(arr)
-                sizes.append(cnt)
+        cumsum = np.cumsum([0] + sizes)
+        samples_values = []
+        sorted_pairs = sorted(enumerate(indices), key=lambda x: x[1])
+        orig_positions = [p for p, _ in sorted_pairs]
+        sorted_idxs = np.array([idx for _, idx in sorted_pairs])
 
-        cumsum = torch.tensor([0] + sizes, dtype=torch.long)
-        idxs = torch.tensor(indices, dtype=torch.long)
-        bucket_ids = torch.searchsorted(cumsum[1:], idxs, right=True).tolist()
+        arr_indices = np.searchsorted(cumsum, sorted_idxs, side='right') - 1
+        local_indices = sorted_idxs - cumsum[arr_indices]
 
-        bucket_map = defaultdict(list)
-        for orig_pos, (bucket, global_idx) in enumerate(zip(bucket_ids, indices)):
-            bucket_start = int(cumsum[bucket].item())
-            local_idx = int(global_idx - bucket_start)
-            bucket_map[bucket].append((orig_pos, local_idx))
+        for orig_pos, arr_i, local_i in zip(orig_positions, arr_indices, local_indices):
+            value = filtered_arrays[arr_i][int(local_i)].item()
+            samples_values.append((orig_pos, value))
 
-        m = len(indices)
-        results = np.empty(m, dtype=float)
-        results.fill(np.nan)
-
-        for bucket in sorted(bucket_map.keys()):
-            reqs = bucket_map[bucket]
-            src_arr = filtered_sources[bucket]
-
-            mask = (src_arr >= self.lower) & (src_arr <= self.upper)
-            filtered = src_arr[mask]
-            if filtered.numel() == 0:
-                for orig_pos, _ in reqs:
-                    results[orig_pos] = np.nan
-                continue
-
-            local_idxs = torch.tensor([local for _, local in reqs], dtype=torch.long)
-            vals = filtered[local_idxs].cpu().numpy()
-
-            for (orig_pos, _), v in zip(reqs, vals):
-                results[orig_pos] = float(v)
-
-        return results
+        samples_values.sort()
+        return np.array([val for _, val in samples_values])
     
     def get_random_sample(self, sample_size):
         if self.COUNT == 0:
