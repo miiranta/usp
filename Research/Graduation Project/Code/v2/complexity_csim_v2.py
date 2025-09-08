@@ -9,6 +9,7 @@ import torch.cuda
 import numpy as np
 from transformers import AutoModel
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 if not torch.cuda.is_available():
     print("CUDA is not available. Please ensure you have a compatible GPU and the necessary drivers installed.")
@@ -196,80 +197,57 @@ class FilteredData:
         return self._filter_array(arr)
         
     def _filter_array(self, arr):
-        if arr.numel() == 0:
-            return torch.tensor([])
-
-        timer_start = time.time()
-
-        CPU_CHUNK_ELEMS = 5000000  # process this many elems per CPU chunk
-        GPU_CHUNK_ELEMS = 2000000  # move up to this many elems to GPU at once
-
-        n = arr.numel()
-        
-        # Small = CPU
-        if n <= CPU_CHUNK_ELEMS:
-            mask = (arr >= self.lower) & (arr <= self.upper)
-            if not mask.any().item():
-                elapsed = time.time() - timer_start
-                print(f" > > > filter processed (CPU): elems={n:,}, time={elapsed:.3f}s")
-                return torch.tensor([])
-            return arr[mask]
-
-        # Large = GPU + CPU chunks
-        parts = []
-        start = 0
-        while start < n:
-            end = min(start + CPU_CHUNK_ELEMS, n)
-            chunk = arr[start:end]
-            
-            if (end - start) <= GPU_CHUNK_ELEMS:
-                chunk_cuda = chunk.to(device)
-                mask = (chunk_cuda >= self.lower) & (chunk_cuda <= self.upper)
-                if mask.any().item():
-                    parts.append(chunk_cuda[mask].to('cpu'))
-                del chunk_cuda
-            else:
-                mask = (chunk >= self.lower) & (chunk <= self.upper)
-                if mask.any().item():
-                    parts.append(chunk[mask])
-            start = end
-
-        if len(parts) == 0:
-            elapsed = time.time() - timer_start
-            print(f" > > > filter processed (GPU): elems={n:,}, time={elapsed:.3f}s")
-            return torch.tensor([])
-
-        return torch.cat(parts)
+        mask = (arr >= self.lower) & (arr <= self.upper)
+        return arr[mask]
     
     def _get_values_at_indices(self, indices):
+        if len(indices) == 0:
+            return np.array([])
+
+        filtered_sources = []
         sizes = []
-        for arr in self.DATA:
-            sizes.append(len(arr))
-        cumsum = np.cumsum([0] + sizes)
-        samples_values = []
-        
-        sorted_pairs = sorted(enumerate(indices), key=lambda x: x[1])
-        current_array_idx = -1
-        current_filtered = None
-        
-        for orig_pos, idx in sorted_pairs:
-            for i in range(len(cumsum)-1):
-                if cumsum[i] <= idx < cumsum[i+1]:
-                    local_idx = idx - cumsum[i]
-                    
-                    if i != current_array_idx:
-                        data_iter = iter(self.DATA)
-                        for _ in range(i):
-                            next(data_iter)
-                        current_filtered = next(data_iter)
-                        current_array_idx = i
-                    
-                    value = current_filtered[local_idx].item()
-                    samples_values.append((orig_pos, value))
-                    break
-        
-        samples_values.sort()
-        return np.array([val for _, val in samples_values])
+        for arr in self._data_object.DATA:
+            if arr.numel() == 0:
+                continue
+            
+            mask = (arr >= self.lower) & (arr <= self.upper)
+            cnt = int(mask.sum().item())
+            if cnt > 0:
+                filtered_sources.append(arr)
+                sizes.append(cnt)
+
+        cumsum = torch.tensor([0] + sizes, dtype=torch.long)
+        idxs = torch.tensor(indices, dtype=torch.long)
+        bucket_ids = torch.searchsorted(cumsum[1:], idxs, right=True).tolist()
+
+        bucket_map = defaultdict(list)
+        for orig_pos, (bucket, global_idx) in enumerate(zip(bucket_ids, indices)):
+            bucket_start = int(cumsum[bucket].item())
+            local_idx = int(global_idx - bucket_start)
+            bucket_map[bucket].append((orig_pos, local_idx))
+
+        m = len(indices)
+        results = np.empty(m, dtype=float)
+        results.fill(np.nan)
+
+        for bucket in sorted(bucket_map.keys()):
+            reqs = bucket_map[bucket]
+            src_arr = filtered_sources[bucket]
+
+            mask = (src_arr >= self.lower) & (src_arr <= self.upper)
+            filtered = src_arr[mask]
+            if filtered.numel() == 0:
+                for orig_pos, _ in reqs:
+                    results[orig_pos] = np.nan
+                continue
+
+            local_idxs = torch.tensor([local for _, local in reqs], dtype=torch.long)
+            vals = filtered[local_idxs].cpu().numpy()
+
+            for (orig_pos, _), v in zip(reqs, vals):
+                results[orig_pos] = float(v)
+
+        return results
     
     def get_random_sample(self, sample_size):
         if self.COUNT == 0:
