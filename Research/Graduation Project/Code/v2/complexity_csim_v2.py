@@ -658,6 +658,7 @@ def main():
                     filtered_data = remove_data_outliers(merged_data, sigma=filter)
                     print(" > > > Calculating filtered data stats...")
                     calc_data_stats(filtered_data)
+                    print(f" > > > > Filtered data count: {filtered_data.COUNT} (removed {merged_data.COUNT - filtered_data.COUNT} | {(merged_data.COUNT - filtered_data.COUNT) / max(1, merged_data.COUNT) * 100:.2f}%)")
                 else:
                     filtered_data = merged_data
                 
