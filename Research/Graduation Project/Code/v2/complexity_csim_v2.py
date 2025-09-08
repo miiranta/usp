@@ -331,7 +331,7 @@ def calc_histogram(data, histogram):
         del hist
         del concat_cuda
         elapsed = time.time() - start
-        print(f" > > > chunk processed: elems={concat_tensor.numel():,}, time={elapsed:.3f}s")
+        print(f" > > > > chunk processed: elems={concat_tensor.numel():,}, time={elapsed:.3f}s")
         return
 
     for arr_tensor in data.DATA:
@@ -354,7 +354,6 @@ def calc_histogram(data, histogram):
         del concat
 
     # Convert counts to probabilities
-    print(" > > > Converting counts to probabilities...")
     total_count = int(counts.sum().item())
     histogram.HIST = counts.clone()
     histogram.PROBS = counts.float() / total_count if total_count > 0 else counts.float()
@@ -405,7 +404,7 @@ def plot_histogram(histogram):
         )
 
         title = f"Histogram (Counts) - {len(downsampled_hist):,} bins (downsampled from {hist_tensor.numel():,})"
-        print(f" > > > Plotting histogram with {len(downsampled_hist)} bins (downsampled from {hist_tensor.numel()})")
+        print(f" > > > > Plotting histogram with {len(downsampled_hist)} bins (downsampled from {hist_tensor.numel()})")
     else:
         ax.bar(
             bin_lefts,
@@ -419,7 +418,7 @@ def plot_histogram(histogram):
         )
 
         title = f"Histogram (Counts) - {hist_tensor.numel():,} bins"
-        print(f" > > > Plotting histogram with {hist_tensor.numel()} bins")
+        print(f" > > > > Plotting histogram with {hist_tensor.numel()} bins")
     
     ax.set_title(title)
     ax.set_xlabel("Value Range")
@@ -656,6 +655,7 @@ def main():
                 if filter > 0:
                     print(" > > > Filtering...")
                     filtered_data = remove_data_outliers(merged_data, sigma=filter)
+                    print(" > > > Calculating filtered data stats...")
                     calc_data_stats(filtered_data)
                 else:
                     filtered_data = merged_data
@@ -663,7 +663,9 @@ def main():
                 print(" > > > Calculating histogram...")
                 histogram = Histogram()
                 calc_histogram(filtered_data, histogram)
+                print(" > > > Calculating histogram stats...")
                 calc_histogram_stats(histogram)
+                print(" > > > Plotting histogram...")
                 plot_histogram(histogram)
                 
                 print(" > > > Writing down results...")
