@@ -196,9 +196,10 @@ class FilteredData:
         return self._filter_array(arr)
         
     def _filter_array(self, arr):
-        arr_gpu = arr.to(device)
-        mask = (arr_gpu >= self.lower) & (arr_gpu <= self.upper)
-        return arr_gpu[mask].cpu()
+        mask = (arr >= self.lower) & (arr <= self.upper)
+        if mask.numel() == 0:
+            return torch.tensor([])
+        return arr[mask]
     
     def _get_values_at_indices(self, indices):
         sizes = []
@@ -546,7 +547,7 @@ MODELS_TO_TEST = [
     'openai/gpt-oss-20b',
 ]
 TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other'] # Parameter types to analyze
-FILTERS_TO_TEST = [0, 1, 2, 3, 4] # Number of standard deviations for outlier removal
+FILTERS_TO_TEST = [1, 2, 3, 4] # Number of standard deviations for outlier removal
 
 def main():
     global MODEL_DATA_ARRAYS
