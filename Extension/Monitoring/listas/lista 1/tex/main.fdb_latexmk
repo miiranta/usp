@@ -1,9 +1,8 @@
 # Fdb version 4
-["pdflatex"] 1757885791.74981 "c:/Users/Lucas Miranda/Desktop/VSCode/Github/usp/Extension/Monitoring/exc/tex/main.tex" "main.pdf" "main" 1757885792.7471 0
+["pdflatex"] 1757886550.78141 "c:/Users/Lucas Miranda/Desktop/VSCode/Github/usp/Extension/Monitoring/listas/lista 1/tex/main.tex" "main.pdf" "main" 1757886551.71037 0
   "C:/Program Files/MiKTeX/fonts/enc/dvips/cm-super/cm-super-t1.enc" 1001775420 2971 def0b6c1f0b107b3b936def894055589 ""
   "C:/Program Files/MiKTeX/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1001775420 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "C:/Program Files/MiKTeX/fonts/type1/public/cm-super/sfbx1200.pfb" 1215618300 140176 d0f50dba675c56d445f84a32c1f93a79 ""
-  "C:/Program Files/MiKTeX/fonts/type1/public/cm-super/sfbx1728.pfb" 1215618300 139826 3796482349bae544f13f54da58f9706d ""
   "C:/Program Files/MiKTeX/fonts/type1/public/cm-super/sfrm1200.pfb" 1215618300 136101 b18d10b3436f8cb0cd04046deb340fe7 ""
   "C:/Program Files/MiKTeX/fonts/type1/public/cm-super/sfrm1440.pfb" 1215618300 131078 3adc08bf3d7686c3b3220602214807d7 ""
   "C:/Program Files/MiKTeX/fonts/type1/public/cm-super/sfrm2074.pfb" 1215618300 131290 aaf7998ff42b34dd604364315f71faa6 ""
@@ -15,10 +14,8 @@
   "C:/Users/Lucas Miranda/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1752359500 278194 14217b9c74496d1250e88da84646256e ""
   "C:/Users/Lucas Miranda/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1752359718 24229139 d77306866e929e90ec72c27154a133b1 ""
   "C:/Users/Lucas Miranda/AppData/Local/Programs/MiKTeX/fonts/tfm/jknappen/ec/ecbx1200.tfm" 993061958 3200 b8d69bc738e5ef3e08cefeef3109ff56 ""
-  "C:/Users/Lucas Miranda/AppData/Local/Programs/MiKTeX/fonts/tfm/jknappen/ec/ecbx1728.tfm" 993061962 3204 d35cb76836b6cb4ed404dd64a550530d ""
   "C:/Users/Lucas Miranda/AppData/Local/Programs/MiKTeX/fonts/tfm/jknappen/ec/ecrm1200.tfm" 993062126 3152 4850ff0163852b7fab34bd55e1197f28 ""
   "C:/Users/Lucas Miranda/AppData/Local/Programs/MiKTeX/fonts/tfm/jknappen/ec/ecrm1440.tfm" 993062128 3168 3bd7b08ba4330af81521911744311212 ""
-  "C:/Users/Lucas Miranda/AppData/Local/Programs/MiKTeX/fonts/tfm/jknappen/ec/ecrm1728.tfm" 993062128 3168 11457c8185ce67fb79662ba8b03d6db1 ""
   "C:/Users/Lucas Miranda/AppData/Local/Programs/MiKTeX/fonts/tfm/jknappen/ec/ecrm2074.tfm" 993062130 3184 b2541675eba9fa86d240ec0ecc913558 ""
   "C:/Users/Lucas Miranda/AppData/Local/Programs/MiKTeX/fonts/tfm/jknappen/ec/ectt1200.tfm" 993062344 1348 c48a0620e07683860afba1730adf9e53 ""
   "C:/Users/Lucas Miranda/AppData/Local/Programs/MiKTeX/fonts/tfm/jknappen/ec/tcrm1200.tfm" 993062508 1444 95ffe0f19b974d50849790c8225c7ef7 ""
@@ -83,10 +80,10 @@
   "C:/Users/Lucas Miranda/AppData/Roaming/MiKTeX/tex/latex/refcount/refcount.sty" 1576433952 9878 9e94e8fa600d95f9c7731bb21dfb67a4 ""
   "C:/Users/Lucas Miranda/AppData/Roaming/MiKTeX/tex/latex/rerunfilecheck/rerunfilecheck.sty" 1657800696 9714 ba3194bd52c8499b3f1e3eb91d409670 ""
   "c:/Users/Lucas" 1757011672 19052 240051b466429666a85c69428d9849f5 ""
-  "c:/Users/Lucas Miranda/Desktop/VSCode/Github/usp/Extension/Monitoring/exc/tex/main.tex" 1757885790 7089 678b7092c5b89f37246aaeec086afbb7 ""
-  "main.aux" 1757885792 261 11659514d8592db5b32becd0d63c2274 "pdflatex"
-  "main.out" 1757885792 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
-  "main.tex" 1757885790 7089 678b7092c5b89f37246aaeec086afbb7 ""
+  "c:/Users/Lucas Miranda/Desktop/VSCode/Github/usp/Extension/Monitoring/listas/lista 1/tex/main.tex" 1757886549 7324 aa73a3d36840d19da45bbad8093bfa8d ""
+  "main.aux" 1757886551 261 11659514d8592db5b32becd0d63c2274 "pdflatex"
+  "main.out" 1757886551 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
+  "main.tex" 1757886549 7324 aa73a3d36840d19da45bbad8093bfa8d ""
   (generated)
   "main.aux"
   "main.log"
