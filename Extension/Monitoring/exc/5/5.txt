@@ -1,5 +1,13 @@
-Implemente um programa que use endereçamento indireto para copiar um valor.
-O endereço de origem está na variável PONTEIRO.
-Copie o valor apontado para a variável DESTINO.
+Implemente um programa que utilize endereçamento indireto para copiar um valor de memória.
+A variável PONTEIRO contém o endereço de memória onde está o valor de origem.
+Use o modo de endereçamento indireto para carregar o valor apontado por PONTEIRO e copie-o para a variável DESTINO.
+
+Requisitos mínimos:
+- definir um valor origem em memória;
+- definir PONTEIRO apontando para esse endereço;
+- usar instrução com endereçamento indireto para ler o valor e em seguida armazená-lo em DESTINO.
+
+Saída esperada: após execução, a variável DESTINO deve conter a cópia do valor de origem.
+
 
 Este exercício ensina: endereçamento indireto (@).

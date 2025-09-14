@@ -1,5 +1,12 @@
-Implemente um programa que use deslocamento de bits para multiplicar por 2.
-Use a instrução SHL para deslocar o valor à esquerda.
-O número está em NUMERO e o resultado deve ir para RESULTADO.
+Implemente um programa que utilize deslocamento lógico à esquerda para multiplicar um valor por 2.
+O valor de entrada está na variável NUMERO. Aplique a instrução SHL e armazene o resultado em RESULTADO.
 
-Este exercício ensina: operações de deslocamento (SHL).
+Requisitos mínimos:
+- ler NUMERO do espaço de dados;
+- aplicar instrução de deslocamento lógico à esquerda (SHL) para multiplicar por 2;
+- armazenar o resultado em RESULTADO;
+
+Saída esperada: após execução, RESULTADO conterá NUMERO multiplicado por 2. Desconsidere overflow.
+
+
+Este exercício ensina: operações de deslocamento de bits (SHL).

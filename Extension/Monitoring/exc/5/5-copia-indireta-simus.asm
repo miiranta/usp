@@ -1,13 +1,17 @@
 ORG 0
 INICIO:
-    ; Este exemplo demonstra: LDA (modo indireto), STA (modo direto)
-    LDA @PONTEIRO   ; Carrega valor apontado por PONTEIRO (modo indireto)
-    STA DESTINO     ; Armazena no destino (modo direto)
-    HLT             ; Para o programa
+    LDA #123                    ; carga imediata do valor a ser copiado
+    STA VALOR_ORIGEM            ; armazena em VALOR_ORIGEM
+    LDA #VALOR_ORIGEM           ; carrega o endereço de VALOR_ORIGEM
+    STA PONTEIRO                ; armazena o ponteiro
+    LDA @PONTEIRO               ; carrega indiretamente o valor apontado
+    STA DESTINO                 ; armazena no destino (modo direto)
+    HLT                         ; Para o programa
 
 ; Dados
-VALOR_ORIGEM: 123   ; Valor a ser copiado
-PONTEIRO:  VALOR_ORIGEM  ; Ponteiro para o valor origem
-DESTINO:   DS 1     ; Destino da cópia
+VALOR_ORIGEM: DS 1
+PONTEIRO:     DS 1
+DESTINO:      DS 1          ; Destino da cópia
 
 END 0
+                             

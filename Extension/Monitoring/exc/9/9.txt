@@ -1,5 +1,12 @@
-Implemente um programa que use XOR para alternar bits.
-Aplique XOR entre NUMERO e MASCARA_XOR.
-O resultado deve ser armazenado em RESULTADO.
+Implemente um programa que utilize a operação lógica XOR para alternar bits de um valor.
+O operando está na variável NUMERO e a máscara está em MASCARA_XOR. Aplique NUMERO XOR MASCARA_XOR e armazene o resultado em RESULTADO.
+
+Requisitos mínimos:
+- ler NUMERO;
+- aplicar a operação XOR entre NUMERO e MASCARA_XOR;
+- armazenar o resultado em RESULTADO.
+
+Saída esperada: após execução, RESULTADO conterá NUMERO XOR MASCARA_XOR.
+
 
 Este exercício ensina: operação XOR para manipulação de bits.

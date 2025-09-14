@@ -1,5 +1,13 @@
-Implemente um programa que use subtração com carry (SBC).
-Subtraia NUM2 de NUM1 considerando um "empréstimo" inicial.
-Primeiro, defina o carry, depois use SBC.
+Implemente um programa que realize subtração com borrow utilizando a instrução SBC.
+Calcule NUM1 - NUM2 considerando o estado inicial do carry/borrow conforme a arquitetura; defina o carry/borrow inicial antes de executar SBC.
 
-Este exercício ensina: operações com carry (SBC) e manipulação de flags.
+Requisitos mínimos:
+- carregar NUM1 e NUM2;
+- definir o carry/borrow inicial conforme necessário;
+- executar a instrução SBC para efetuar a subtração com borrow;
+- armazenar o resultado em RESULTADO.
+
+Saída esperada: após execução, RESULTADO conterá NUM1 - NUM2 (com borrow aplicado).
+
+
+Este exercício ensina: operações com borrow/carry (SBC) e manipulação de flags.

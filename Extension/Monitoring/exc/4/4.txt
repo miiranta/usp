@@ -1,4 +1,11 @@
-Implemente um programa que conte de 1 até 5 usando um loop.
-A cada iteração, armazene o valor atual na variável CONTADOR.
+Implemente um programa que conte de 1 até 5 utilizando um loop e armazene o valor atual em memória.
 
-Este exercício ensina: loops básicos, comparações e desvios condicionais (JN).
+Requisitos mínimos:
+- inicializar a variável CONTADOR com 1;
+- incrementar CONTADOR a cada iteração utilizando instruções aritméticas;
+- empregar comparações e desvios condicionais (por exemplo JN/JZ) para controlar o término do loop.
+
+Saída esperada: ao final da execução, a variável CONTADOR deve conter o valor 5.
+
+
+Este exercício ensina: loops básicos, comparações e desvios condicionais (JN, JZ).

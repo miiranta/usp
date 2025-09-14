@@ -1,14 +1,17 @@
 ORG 0
 INICIO:
-    ; Este exemplo demonstra: LDA (modo direto), AND (modo direto), STA
+    LDA #170        ; carga imediata do número original (10101010b)
+    STA NUMERO
+    LDA #15         ; carga imediata da máscara (00001111b)
+    STA MASCARA
     LDA NUMERO      ; Carrega o número (modo direto)
     AND MASCARA     ; Aplica máscara bit a bit (modo direto)
     STA RESULTADO   ; Armazena resultado (modo direto)
     HLT             ; Para o programa
 
 ; Dados
-NUMERO:    170      ; Número original (10101010 em binário)
-MASCARA:   15       ; Máscara (00001111 em binário)
-RESULTADO: DS 1     ; Resultado da operação AND
+NUMERO:    DS 1     
+MASCARA:   DS 1     
+RESULTADO: DS 1     ; Resultado da operação AND (10101010 AND 00001111 = 00001010 ou 10 em decimal)
 
 END 0

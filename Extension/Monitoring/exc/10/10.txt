@@ -1,5 +1,12 @@
-Implemente um programa que use a pilha (PUSH e POP).
-Empilhe o valor de VALOR_A, depois carregue VALOR_B no acumulador.
-Em seguida, desempilhe VALOR_A e some com VALOR_B.
+Implemente um programa que demonstre o uso da pilha por meio das instruções PUSH e POP.
+Empilhe o valor armazenado em VALOR_A, carregue VALOR_B no acumulador, em seguida desempilhe o valor de VALOR_A e some-o ao acumulador.
+
+Requisitos mínimos:
+- utilizar instruções PUSH e POP para preservar e restaurar valores na pilha;
+- carregar VALOR_B no acumulador antes de desempilhar VALOR_A;
+- efetuar a soma e armazenar o resultado em RESULTADO.
+
+Saída esperada: após execução, RESULTADO conterá VALOR_A + VALOR_B.
+
 
 Este exercício ensina: uso da pilha com PUSH e POP.

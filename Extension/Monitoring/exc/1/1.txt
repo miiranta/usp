@@ -1,2 +1,8 @@
-Implemente um contador para a sequência de Fibonacci sem utilizar a pilha, ou seja, não utilize as instruções POP e PUSH. 
-Não é necessário implementar um limite para a contagem.
+Implemente um gerador da sequência de Fibonacci sem utilizar instruções de pilha (POP/ PUSH).
+
+Requisitos mínimos:
+- inicializar os dois primeiros termos da sequência (F(0) e F(1));
+- calcular termos subsequentes iterativamente sem usar POP/ PUSH;
+- armazenar o termo atual em uma variável acessível em memória.
+
+Saída esperada: o programa deve produzir os termos da sequência de Fibonacci em ordem crescente na memória, um termo por iteração; não é necessário implementar limite superior; o programa deve progredir iterativamente.

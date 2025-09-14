@@ -1,0 +1,153 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{parskip}
+
+\geometry{top=25mm,left=25mm,right=25mm,bottom=25mm}
+
+\title{Lista de Exercícios I - Monitoria}
+\author{Arquitetura de Computadores}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Exercícios}
+\begin{enumerate}[left=0pt,label=\textbf{Exercício \arabic*:},itemsep=8pt]
+
+\item Implemente um gerador da sequência de Fibonacci sem utilizar instruções de pilha (POP/ PUSH).
+
+Requisitos mínimos:
+\begin{itemize}
+	\item inicializar os dois primeiros termos da sequência (F(0) e F(1));
+	\item calcular termos subsequentes iterativamente sem usar POP/ PUSH;
+	\item armazenar o termo atual em uma variável acessível em memória.
+\end{itemize}
+
+Saída esperada: o programa deve produzir os termos da sequência de Fibonacci em ordem crescente na memória, um termo por iteração; não é necessário implementar limite superior; o programa deve progredir iterativamente.
+
+\item Implemente um programa que some dois valores inteiros armazenados em memória.
+
+A variável \texttt{NUM1} contém o primeiro operando e \texttt{NUM2} contém o segundo operando. Some os dois valores e armazene o resultado em \texttt{RESULTADO}.
+
+Requisitos mínimos:
+\begin{itemize}
+	\item ler \texttt{NUM1} e \texttt{NUM2};
+	\item executar a operação de soma;
+	\item armazenar o resultado em \texttt{RESULTADO};
+\end{itemize}
+
+Saída esperada: após execução, a variável \texttt{RESULTADO} conterá a soma de \texttt{NUM1} e \texttt{NUM2}.
+
+\item Implemente um programa que verifique se um valor inteiro armazenado em memória é par ou ímpar.
+
+O número de entrada está na variável \texttt{NUMERO}. Se \texttt{NUMERO} for par, armazene 1 em \texttt{RESULTADO}; caso contrário, armazene 0.
+
+Requisitos mínimos:
+\begin{itemize}
+	\item ler um número;
+	\item utilizar operações lógicas (por exemplo \texttt{AND} com 1) ou aritméticas para determinar paridade;
+	\item usar desvios condicionais (\texttt{JZ}/\texttt{JN}) para controlar o fluxo;
+	\item escrever o resultado em \texttt{RESULTADO} (1 = par, 0 = ímpar).
+\end{itemize}
+
+Saída esperada: após execução, \texttt{RESULTADO} conterá 1 se \texttt{NUMERO} for par ou 0 se for ímpar.
+
+\item Implemente um programa que conte de 1 até 5 utilizando um loop e armazene o valor atual em memória.
+
+Requisitos mínimos:
+\begin{itemize}
+	\item inicializar a variável \texttt{CONTADOR} com 1;
+	\item incrementar \texttt{CONTADOR} a cada iteração utilizando instruções aritméticas;
+	\item empregar comparações e desvios condicionais (por exemplo \texttt{JN}/\texttt{JZ}) para controlar o término do loop.
+\end{itemize}
+
+Saída esperada: ao final da execução, a variável \texttt{CONTADOR} deve conter o valor 5.
+
+\item Implemente um programa que utilize endereçamento indireto para copiar um valor de memória.
+
+A variável \texttt{PONTEIRO} contém o endereço de memória onde está o valor de origem. Use o modo de endereçamento indireto para carregar o valor apontado por \texttt{PONTEIRO} e copie-o para a variável \texttt{DESTINO}.
+
+Requisitos mínimos:
+\begin{itemize}
+	\item definir um valor origem em memória;
+	\item definir \texttt{PONTEIRO} apontando para esse endereço;
+	\item usar instrução com endereçamento indireto para ler o valor e em seguida armazená-lo em \texttt{DESTINO}.
+\end{itemize}
+
+Saída esperada: após execução, a variável \texttt{DESTINO} deve conter a cópia do valor de origem.
+
+\item Implemente um programa que aplique uma máscara de bits por meio de operação lógica \texttt{AND}.
+
+O operando está na variável \texttt{NUMERO} e a máscara está em \texttt{MASCARA}. Armazene o resultado da operação em \texttt{RESULTADO}.
+
+Requisitos mínimos:
+\begin{itemize}
+	\item ler \texttt{NUMERO} e \texttt{MASCARA} do espaço de dados;
+	\item aplicar a operação lógica bit a bit \texttt{AND} entre \texttt{NUMERO} e \texttt{MASCARA};
+	\item armazenar o resultado em \texttt{RESULTADO}.
+\end{itemize}
+
+Saída esperada: após execução, \texttt{RESULTADO} conterá o valor de \texttt{NUMERO} \texttt{AND} \texttt{MASCARA}.
+
+\item Implemente um programa que utilize deslocamento lógico à esquerda para multiplicar um valor por 2.
+
+O valor de entrada está na variável \texttt{NUMERO}. Aplique a instrução \texttt{SHL} e armazene o resultado em \texttt{RESULTADO}.
+
+Requisitos mínimos:
+\begin{itemize}
+	\item ler \texttt{NUMERO} do espaço de dados;
+	\item aplicar instrução de deslocamento lógico à esquerda (\texttt{SHL}) para multiplicar por 2;
+	\item armazenar o resultado em \texttt{RESULTADO};
+\end{itemize}
+
+Saída esperada: após execução, \texttt{RESULTADO} conterá \texttt{NUMERO} multiplicado por 2. Desconsidere overflow.
+
+\item Implemente um programa que realize subtração com borrow utilizando a instrução \texttt{SBC}.
+
+Calcule \texttt{NUM1} - \texttt{NUM2} considerando o estado inicial do carry/borrow conforme a arquitetura; defina o carry/borrow inicial antes de executar \texttt{SBC}.
+
+Requisitos mínimos:
+\begin{itemize}
+	\item carregar \texttt{NUM1} e \texttt{NUM2};
+	\item definir o carry/borrow inicial conforme necessário;
+	\item executar a instrução \texttt{SBC} para efetuar a subtração com borrow;
+	\item armazenar o resultado em \texttt{RESULTADO}.
+\end{itemize}
+
+Saída esperada: após execução, \texttt{RESULTADO} conterá \texttt{NUM1} - \texttt{NUM2} (com borrow aplicado).
+
+\item Implemente um programa que utilize a operação lógica \texttt{XOR} para alternar bits de um valor.
+
+O operando está na variável \texttt{NUMERO} e a máscara está em \texttt{MASCARA\_XOR}. Aplique \texttt{NUMERO} \texttt{XOR} \texttt{MASCARA\_XOR} e armazene o resultado em \texttt{RESULTADO}.
+
+Requisitos mínimos:
+\begin{itemize}
+	\item ler \texttt{NUMERO};
+	\item aplicar a operação \texttt{XOR} entre \texttt{NUMERO} e \texttt{MASCARA\_XOR};
+	\item armazenar o resultado em \texttt{RESULTADO}.
+\end{itemize}
+
+Saída esperada: após execução, \texttt{RESULTADO} conterá \texttt{NUMERO} \texttt{XOR} \texttt{MASCARA\_XOR}.
+
+\item Implemente um programa que demonstre o uso da pilha por meio das instruções \texttt{PUSH} e \texttt{POP}.
+
+Empilhe o valor armazenado em \texttt{VALOR\_A}, carregue \texttt{VALOR\_B} no acumulador, em seguida desempilhe o valor de \texttt{VALOR\_A} e some-o ao acumulador.
+
+Requisitos mínimos:
+\begin{itemize}
+	\item utilizar instruções \texttt{PUSH} e \texttt{POP} para preservar e restaurar valores na pilha;
+	\item carregar \texttt{VALOR\_B} no acumulador antes de desempilhar \texttt{VALOR\_A};
+	\item efetuar a soma e armazenar o resultado em \texttt{RESULTADO}.
+\end{itemize}
+
+Saída esperada: após execução, \texttt{RESULTADO} conterá \texttt{VALOR\_A} + \texttt{VALOR\_B}.
+\end{enumerate}
+
+\end{document}
+

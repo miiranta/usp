@@ -1,5 +1,13 @@
-Implemente um programa que some dois números armazenados na memória.
-Os números estão nas variáveis NUM1 e NUM2.
-O resultado deve ser armazenado na variável RESULTADO.
+Implemente um programa que some dois valores inteiros armazenados em memória.
+A variável NUM1 contém o primeiro operando e NUM2 contém o segundo operando.
+Some os dois valores e armazene o resultado em RESULTADO.
+
+Requisitos mínimos:
+- ler NUM1 e NUM2;
+- executar a operação de soma;
+- armazenar o resultado em RESULTADO;
+
+Saída esperada: após execução, a variável RESULTADO conterá a soma de NUM1 e NUM2.
+
 
 Este exercício ensina: operações aritméticas básicas e uso do modo direto.
