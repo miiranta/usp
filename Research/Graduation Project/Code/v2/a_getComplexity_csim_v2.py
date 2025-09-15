@@ -539,6 +539,8 @@ def write_down_all(data, histogram):
 # ==================================== MAIN
 
 MODELS_TO_TEST = [
+    'deepseek-ai/DeepSeek-R1',
+    
     'openai/gpt-oss-120b',
     'openai/gpt-oss-20b',
 ]
