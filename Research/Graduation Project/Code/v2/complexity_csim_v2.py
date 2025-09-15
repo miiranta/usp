@@ -674,6 +674,7 @@ def main():
                 write_down(f"Model: {model_name}")
                 write_down(f"Types: {', '.join(types)}")
                 write_down(f"Filter: {filter} sigma")
+                write_down("")
                 write_down_all(filtered_data, histogram)
                 
                 print(" > > Done.")
