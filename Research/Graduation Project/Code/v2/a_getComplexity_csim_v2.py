@@ -542,23 +542,111 @@ def write_down_all(data, histogram):
 
 # ==================================== MAIN
 
+# MODELS:
+
+# 1. Selection of the biggest companies by marketcap that post open models for text generation on HuggingFace
+# - OpenAI, Google, Meta, Microsoft
+
+# 2. For each company, select every model that:
+# - Is a transformer-based language model
+# - Is open weights (gated or not)
+# - Is text only
+# - Is the original model (not a fine-tuned version for sppecific tasks)
+# - Have less then 150B parameters (due to hardware limitations)
+
 MODELS_TO_TEST = [
+    # META
     'meta-llama/Llama-4-Scout-17B-16E',
     
-    'meta-llama/Llama-3.2-1B',
     'meta-llama/Llama-3.2-3B',
+    'meta-llama/Llama-3.2-1B',
     
-    'meta-llama/Llama-3.1-8B',
     'meta-llama/Llama-3.1-70B',
+    'meta-llama/Llama-3.1-8B',
     
-    'meta-llama/Meta-Llama-3-8B',
     'meta-llama/Meta-Llama-3-70B',
+    'meta-llama/Meta-Llama-3-8B',
     
-    'openai/gpt-oss-20b',
+    'meta-llama/Llama-2-70b',
+    'meta-llama/Llama-2-13b',
+    'meta-llama/Llama-2-7b',
+    
+    # GOOGLE
+    'google/gemma-3n-E4B',
+    'google/gemma-3n-E2B',
+    
+    'google/gemma-3-27b-pt',
+    'google/gemma-3-12b-pt',
+    'google/gemma-3-4b-pt',
+    'google/gemma-3-1b-pt',
+    'google/gemma-3-270m',
+    
+    'google/gemma-2-27b',
+    'google/gemma-2-9b',
+    'google/gemma-2-2b',
+    'google/gemma-2-2b-GGUF',
+    
+    'google/gemma-7b',
+    'google/gemma-7b-GGUF',
+    'google/gemma-2b',
+    'google/gemma-2b-GGUF',
+    
+    'google/recurrentgemma-9b',
+    'google/recurrentgemma-2b',
+    
+    # MICROSOFT
+    'microsoft/Phi-4-mini-flash-reasoning',
+    'microsoft/Phi-4-mini-reasoning',
+    'microsoft/Phi-4-mini-reasoning-onnx',
+    'microsoft/Phi-4-reasoning',
+    'microsoft/Phi-4-reasoning-onnx',
+    'microsoft/Phi-4-reasoning-plus',
+    'microsoft/Phi-4-reasoning-plus-onnx',
+    'microsoft/phi-4',
+    'microsoft/phi-4-onnx',
+    'microsoft/phi-4-gguf',
+    
+    'microsoft/phi-2',
+    
+    'microsoft/phi-1',
+    'microsoft/phi-1_5',
+    
+    'microsoft/bitnet-b1.58-2B-4T',
+    'microsoft/bitnet-b1.58-2B-4T-bf16',
+    'microsoft/bitnet-b1.58-2B-4T-gguf',
+    
+    # OPENAI
     'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    
+    'openai-community/gpt2-xl',
+    'openai-community/gpt2-large',
+    'openai-community/gpt2-medium',
+    'openai-community/gpt2',
+    
+    'openai-community/openai-gpt',
 ]
-TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other'] # Parameter types to analyze
-FILTERS_TO_TEST = [0, 1, 2, 3, 4] # Number of standard deviations for outlier removal
+
+# TYPES:
+
+# The types of parameters most commonly found in transformer-based language models
+# - Biases
+# - Normalization parameters (LayerNorm, BatchNorm, etc)
+# - Embedding parameters (token embeddings, positional embeddings, etc)
+# - Other parameters (weights of linear layers, attention layers, etc)
+
+TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other']
+
+# FILTERS:
+
+# Different levels of outlier removal to test
+# - 0: No filtering (infinite sigma)
+# - 1: removes weights that differ more than 1 standard deviation from the mean
+# - 2: '' 2 standard deviations
+# - 3: '' 3 standard deviations
+# - 4: '' 4 standard deviations
+
+FILTERS_TO_TEST = [0, 1, 2, 3, 4]
 
 def main():
     global MODEL_DATA_ARRAYS
