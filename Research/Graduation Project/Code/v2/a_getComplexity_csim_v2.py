@@ -9,7 +9,8 @@ import torch.cuda
 import numpy as np
 from transformers import AutoModel
 import matplotlib.pyplot as plt
-from collections import defaultdict
+from huggingface_hub import login
+from dotenv import load_dotenv
 
 if not torch.cuda.is_available():
     print("CUDA is not available. Please ensure you have a compatible GPU and the necessary drivers installed.")
@@ -22,6 +23,9 @@ OUTPUT_FOLDER = None
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 MODEL_DATA_ARRAYS = dict() # param_type -> Data
+
+load_dotenv(os.path.join(SCRIPT_FOLDER, '.env'))
+login(token=os.getenv('hugging_face_token'))
 
 class Data:
     def __init__(self):
