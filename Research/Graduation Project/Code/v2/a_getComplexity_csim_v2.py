@@ -539,10 +539,19 @@ def write_down_all(data, histogram):
 # ==================================== MAIN
 
 MODELS_TO_TEST = [
-    'deepseek-ai/DeepSeek-R1',
+    'meta-llama/Llama-4-Scout-17B-16E',
     
-    'openai/gpt-oss-120b',
+    'meta-llama/Llama-3.2-1B',
+    'meta-llama/Llama-3.2-3B',
+    
+    'meta-llama/Llama-3.1-8B',
+    'meta-llama/Llama-3.1-70B',
+    
+    'meta-llama/Meta-Llama-3-8B',
+    'meta-llama/Meta-Llama-3-70B',
+    
     'openai/gpt-oss-20b',
+    'openai/gpt-oss-120b',
 ]
 TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other'] # Parameter types to analyze
 FILTERS_TO_TEST = [0, 1, 2, 3, 4] # Number of standard deviations for outlier removal
