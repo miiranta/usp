@@ -608,8 +608,9 @@ MODELS_TO_TEST = [
     
     'microsoft/phi-2',
     
-    'microsoft/phi-1',
     'microsoft/phi-1_5',
+    
+    'microsoft/phi-1',
     
     'microsoft/bitnet-b1.58-2B-4T',
     'microsoft/bitnet-b1.58-2B-4T-bf16',
