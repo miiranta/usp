@@ -372,6 +372,12 @@ def plot_histogram(histogram):
     if histogram.HIST is None or len(histogram.HIST) == 0:
         print("Warning: Empty histogram, skipping plot")
         return
+    if histogram.DATA_MIN is None or histogram.DATA_MAX is None:
+        print("Warning: Histogram has no data range (DATA_MIN/DATA_MAX None), skipping plot")
+        return
+    if not isinstance(histogram.BINS, int) or histogram.BINS <= 0:
+        print("Warning: Histogram has invalid BINS value, skipping plot")
+        return
     
     fig, ax = plt.subplots(figsize=(12, 6))
     fig.suptitle(f"Parameter Histogram for {MODEL_NAME}", fontsize=16)
@@ -511,11 +517,17 @@ def write_down(text):
 
 def write_down_data_stats(data):
     write_down("Data Stats:")
-    write_down(f" > Count: {data.COUNT}")
-    write_down(f" > Min: {data.MIN}")
-    write_down(f" > Max: {data.MAX}")
-    write_down(f" > Mean: {data.MEAN}")
-    write_down(f" > Standard Deviation: {data.STANDARD_DEVIATION}")
+    count = data.COUNT if getattr(data, 'COUNT', None) is not None else 0
+    data_min = data.MIN if getattr(data, 'MIN', None) is not None else 0.0
+    data_max = data.MAX if getattr(data, 'MAX', None) is not None else 0.0
+    mean = data.MEAN if getattr(data, 'MEAN', None) is not None else 0.0
+    std = data.STANDARD_DEVIATION if getattr(data, 'STANDARD_DEVIATION', None) is not None else 0.0
+
+    write_down(f" > Count: {count}")
+    write_down(f" > Min: {data_min}")
+    write_down(f" > Max: {data_max}")
+    write_down(f" > Mean: {mean}")
+    write_down(f" > Standard Deviation: {std}")
 
 def write_down_histogram(histogram):
     write_down("Bins:")
@@ -527,10 +539,15 @@ def write_down_histogram(histogram):
 
 def write_down_histogram_stats(histogram):
     write_down("Histogram Stats:")
-    write_down(f" > Bin Count: {histogram.BINS}")
-    write_down(f" > Shannon Entropy: {histogram.SHANNON_ENTROPY}")
-    write_down(f" > Desequilibrium: {histogram.DESEQUILIBRIUM}")
-    write_down(f" > Complexity: {histogram.COMPLEXITY}")
+    bins = histogram.BINS if getattr(histogram, 'BINS', None) is not None else 0
+    H = histogram.SHANNON_ENTROPY if getattr(histogram, 'SHANNON_ENTROPY', None) is not None else 0.0
+    D = histogram.DESEQUILIBRIUM if getattr(histogram, 'DESEQUILIBRIUM', None) is not None else 0.0
+    C = histogram.COMPLEXITY if getattr(histogram, 'COMPLEXITY', None) is not None else 0.0
+
+    write_down(f" > Bin Count: {bins}")
+    write_down(f" > Shannon Entropy: {H}")
+    write_down(f" > Desequilibrium: {D}")
+    write_down(f" > Complexity: {C}")
 
 def write_down_all(data, histogram):
     write_down("=== DATA STATS ===")
