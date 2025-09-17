@@ -37,6 +37,6 @@ def write_phrases_to_file(phrases: list, out_path: str) -> None:
 
 if __name__ == "__main__":
     phrases = read_phrases_from_folder(INPUT_FOLDER)
-    selected = sample_phrases(phrases, 200)
+    selected = sample_phrases(phrases, 500)
     write_phrases_to_file(selected, OUTPUT_FILE)
     print(f"Wrote {len(selected)} phrases to: {OUTPUT_FILE}")
