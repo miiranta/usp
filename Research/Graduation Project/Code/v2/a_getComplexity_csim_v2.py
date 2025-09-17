@@ -575,14 +575,14 @@ MODELS_TO_TEST = [
     # META
     #'meta-llama/Llama-4-Scout-17B-16E',
     
-    'meta-llama/Llama-3.2-3B',
-    'meta-llama/Llama-3.2-1B',
+    #'meta-llama/Llama-3.2-3B',
+    #'meta-llama/Llama-3.2-1B',
     
-    'meta-llama/Llama-3.1-70B',
-    'meta-llama/Llama-3.1-8B',
+    #'meta-llama/Llama-3.1-70B',
+    #'meta-llama/Llama-3.1-8B',
     
-    'meta-llama/Meta-Llama-3-70B',
-    'meta-llama/Meta-Llama-3-8B',
+    #'meta-llama/Meta-Llama-3-70B',
+    #'meta-llama/Meta-Llama-3-8B',
     
     'meta-llama/Llama-2-70b',
     'meta-llama/Llama-2-13b',
@@ -634,8 +634,8 @@ MODELS_TO_TEST = [
     'microsoft/bitnet-b1.58-2B-4T-gguf',
     
     # OPENAI
-    'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
+    #'openai/gpt-oss-120b',
+    #'openai/gpt-oss-20b',
     
     'openai-community/gpt2-xl',
     'openai-community/gpt2-large',
