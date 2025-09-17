@@ -1,13 +1,12 @@
-Implemente um programa que realize subtração com borrow utilizando a instrução SBC.
-Calcule NUM1 - NUM2 considerando o estado inicial do carry/borrow conforme a arquitetura; defina o carry/borrow inicial antes de executar SBC.
+Implemente um programa que utilize a operação lógica XOR para alternar bits de um valor.
+O operando está na variável NUMERO e a máscara está em MASCARA_XOR. Aplique NUMERO XOR MASCARA_XOR e armazene o resultado em RESULTADO.
 
 Requisitos mínimos:
-- carregar NUM1 e NUM2;
-- definir o carry/borrow inicial conforme necessário;
-- executar a instrução SBC para efetuar a subtração com borrow;
+- ler NUMERO;
+- aplicar a operação XOR entre NUMERO e MASCARA_XOR;
 - armazenar o resultado em RESULTADO.
 
-Saída esperada: após execução, RESULTADO conterá NUM1 - NUM2 (com borrow aplicado).
+Saída esperada: após execução, RESULTADO conterá NUMERO XOR MASCARA_XOR.
 
 
-Este exercício ensina: operações com borrow/carry (SBC) e manipulação de flags.
+Este exercício ensina: operação XOR para manipulação de bits.

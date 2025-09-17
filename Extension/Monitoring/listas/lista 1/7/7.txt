@@ -1,12 +1,12 @@
-Implemente um programa que utilize deslocamento lógico à esquerda para multiplicar um valor por 2.
-O valor de entrada está na variável NUMERO. Aplique a instrução SHL e armazene o resultado em RESULTADO.
+Implemente um programa que aplique uma máscara de bits por meio de operação lógica AND.
+O operando está na variável NUMERO e a máscara está em MASCARA. Armazene o resultado da operação em RESULTADO.
 
 Requisitos mínimos:
-- ler NUMERO do espaço de dados;
-- aplicar instrução de deslocamento lógico à esquerda (SHL) para multiplicar por 2;
-- armazenar o resultado em RESULTADO;
+- ler NUMERO e MASCARA do espaço de dados;
+- aplicar a operação lógica bit a bit AND entre NUMERO e MASCARA;
+- armazenar o resultado em RESULTADO.
 
-Saída esperada: após execução, RESULTADO conterá NUMERO multiplicado por 2. Desconsidere overflow.
+Saída esperada: após execução, RESULTADO conterá o valor de NUMERO AND MASCARA.
 
 
-Este exercício ensina: operações de deslocamento de bits (SHL).
+Este exercício ensina: operações lógicas bit a bit (AND).

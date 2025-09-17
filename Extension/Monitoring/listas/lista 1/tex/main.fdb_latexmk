@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1757886550.78141 "c:/Users/Lucas Miranda/Desktop/VSCode/Github/usp/Extension/Monitoring/listas/lista 1/tex/main.tex" "main.pdf" "main" 1757886551.71037 0
+["pdflatex"] 1758069224.51173 "c:/Users/Lucas Miranda/Desktop/VSCode/Github/usp/Extension/Monitoring/listas/lista 1/tex/main.tex" "main.pdf" "main" 1758069225.84077 0
   "C:/Program Files/MiKTeX/fonts/enc/dvips/cm-super/cm-super-t1.enc" 1001775420 2971 def0b6c1f0b107b3b936def894055589 ""
   "C:/Program Files/MiKTeX/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1001775420 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "C:/Program Files/MiKTeX/fonts/type1/public/cm-super/sfbx1200.pfb" 1215618300 140176 d0f50dba675c56d445f84a32c1f93a79 ""
@@ -80,10 +80,10 @@
   "C:/Users/Lucas Miranda/AppData/Roaming/MiKTeX/tex/latex/refcount/refcount.sty" 1576433952 9878 9e94e8fa600d95f9c7731bb21dfb67a4 ""
   "C:/Users/Lucas Miranda/AppData/Roaming/MiKTeX/tex/latex/rerunfilecheck/rerunfilecheck.sty" 1657800696 9714 ba3194bd52c8499b3f1e3eb91d409670 ""
   "c:/Users/Lucas" 1757011672 19052 240051b466429666a85c69428d9849f5 ""
-  "c:/Users/Lucas Miranda/Desktop/VSCode/Github/usp/Extension/Monitoring/listas/lista 1/tex/main.tex" 1757886549 7324 aa73a3d36840d19da45bbad8093bfa8d ""
-  "main.aux" 1757886551 261 11659514d8592db5b32becd0d63c2274 "pdflatex"
-  "main.out" 1757886551 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
-  "main.tex" 1757886549 7324 aa73a3d36840d19da45bbad8093bfa8d ""
+  "c:/Users/Lucas Miranda/Desktop/VSCode/Github/usp/Extension/Monitoring/listas/lista 1/tex/main.tex" 1758069223 7277 2534c671531c614034ae478202e0f86e ""
+  "main.aux" 1758069225 261 e798df0c5857ec457d640e124d2a619a "pdflatex"
+  "main.out" 1758069225 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
+  "main.tex" 1758069223 7277 2534c671531c614034ae478202e0f86e ""
   (generated)
   "main.aux"
   "main.log"
