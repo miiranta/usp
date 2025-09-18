@@ -1,0 +1,18 @@
+Model: meta-llama/Llama-4-Scout-17B-16E
+Types: bias, embedding, other
+Filter: 0 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 108641099776
+ > Min: -6.6875
+ > Max: 7.3125
+ > Mean: 6.754331540399365e-07
+ > Standard Deviation: 0.014293362885732179
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 2011935
+ > Shannon Entropy: 7.224187850952148
+ > Desequilibrium: 0.0008741284254938364
+ > Complexity: 0.006314867951624503

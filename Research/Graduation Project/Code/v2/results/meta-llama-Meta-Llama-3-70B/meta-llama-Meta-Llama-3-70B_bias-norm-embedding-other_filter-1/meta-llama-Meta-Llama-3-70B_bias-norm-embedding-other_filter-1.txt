@@ -1,0 +1,18 @@
+Model: meta-llama/Meta-Llama-3-70B
+Types: bias, norm, embedding, other
+Filter: 1 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 54652875169
+ > Min: -0.01531982421875
+ > Max: 0.0152587890625
+ > Mean: -2.5373539493352592e-05
+ > Standard Deviation: 0.007894408719798863
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 4638
+ > Shannon Entropy: 6.963134765625
+ > Desequilibrium: 0.0008889359887689352
+ > Complexity: 0.006189781087812207
