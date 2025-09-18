@@ -319,7 +319,7 @@ def calc_histogram(data, histogram):
 
     if data.COUNT > 0 and bin_amount > data.COUNT:
         print(f" > > > > Capping bin amount {bin_amount} to total data count {data.COUNT}")
-        bin_amount = total_count
+        bin_amount = data.COUNT
 
     histogram.BINS = bin_amount
     histogram.DATA_MIN = data.MIN
