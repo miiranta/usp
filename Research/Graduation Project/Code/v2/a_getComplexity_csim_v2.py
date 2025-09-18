@@ -320,6 +320,7 @@ def calc_histogram(data, histogram):
     histogram.DATA_MIN = data.MIN
     histogram.DATA_MAX = data.MAX
     print(f" > > > > Bin amount: {bin_amount}")
+    print(f" > > > > Data range: [{data.MIN}, {data.MAX}]")
     
     counts = torch.zeros(bin_amount, dtype=torch.long, device='cpu')
 
