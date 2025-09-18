@@ -335,13 +335,23 @@ def calc_histogram(data, histogram):
 
     def _process_and_accumulate(concat_tensor):
         start = time.time()
-        concat_cuda = concat_tensor.to(device)
-        hist = torch.histc(concat_cuda, bins=bin_amount, min=data.MIN, max=data.MAX)
-        counts.add_(hist.to(torch.long).to('cpu'))
-        del hist
-        del concat_cuda
+
+        GPU_BATCH_ELEMS = 2200000000
+        processed_elems = 0
+        total_elems = concat_tensor.numel()
+        t_cpu = concat_tensor.view(-1)
+
+        for i in range(0, total_elems, GPU_BATCH_ELEMS):
+            sub = t_cpu[i:i+GPU_BATCH_ELEMS]
+            sub_cuda = sub.to(device)
+            hist = torch.histc(sub_cuda, bins=bin_amount, min=data.MIN, max=data.MAX)
+            counts.add_(hist.to(torch.long).to('cpu'))
+            del hist
+            del sub_cuda
+            processed_elems += sub.numel()
+
         elapsed = time.time() - start
-        print(f" > > > > chunk processed: elems={concat_tensor.numel():,}, time={elapsed:.3f}s")
+        print(f" > > > > chunk processed: elems={processed_elems:,}, time={elapsed:.3f}s")
         return
 
     for arr_tensor in data.DATA:
@@ -578,6 +588,17 @@ def write_down_all(data, histogram):
 # - Have less then 150B parameters (due to hardware limitations)
 
 MODELS_TO_TEST = [
+    # OPENAI
+    #'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    
+    'openai-community/gpt2-xl',
+    'openai-community/gpt2-large',
+    'openai-community/gpt2-medium',
+    'openai-community/gpt2',
+    
+    'openai-community/openai-gpt',
+    
     # META
     #'meta-llama/Llama-4-Scout-17B-16E',
     
@@ -638,17 +659,6 @@ MODELS_TO_TEST = [
     'microsoft/bitnet-b1.58-2B-4T',
     'microsoft/bitnet-b1.58-2B-4T-bf16',
     'microsoft/bitnet-b1.58-2B-4T-gguf',
-    
-    # OPENAI
-    #'openai/gpt-oss-120b',
-    #'openai/gpt-oss-20b',
-    
-    'openai-community/gpt2-xl',
-    'openai-community/gpt2-large',
-    'openai-community/gpt2-medium',
-    'openai-community/gpt2',
-    
-    'openai-community/openai-gpt',
 ]
 
 # TYPES:
