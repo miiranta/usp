@@ -588,17 +588,6 @@ def write_down_all(data, histogram):
 # - Have less then 150B parameters (due to hardware limitations)
 
 MODELS_TO_TEST = [
-    # OPENAI
-    #'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
-    
-    'openai-community/gpt2-xl',
-    'openai-community/gpt2-large',
-    'openai-community/gpt2-medium',
-    'openai-community/gpt2',
-    
-    'openai-community/openai-gpt',
-    
     # META
     #'meta-llama/Llama-4-Scout-17B-16E',
     
@@ -659,6 +648,17 @@ MODELS_TO_TEST = [
     'microsoft/bitnet-b1.58-2B-4T',
     'microsoft/bitnet-b1.58-2B-4T-bf16',
     'microsoft/bitnet-b1.58-2B-4T-gguf',
+    
+    # OPENAI
+    #'openai/gpt-oss-120b',
+    #'openai/gpt-oss-20b',
+    
+    'openai-community/gpt2-xl',
+    'openai-community/gpt2-large',
+    'openai-community/gpt2-medium',
+    'openai-community/gpt2',
+    
+    'openai-community/openai-gpt',
 ]
 
 # TYPES:
