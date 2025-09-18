@@ -274,7 +274,12 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
         print("Error: bin_width is 0")
         exit(1)
         
-    bin_amount = int(torch.ceil(torch.tensor((data.MAX - data.MIN) / bin_width)).item())
+    try:    
+        torch_bin_amount = torch.ceil(torch.tensor((data.MAX - data.MIN) / bin_width)).item()
+        bin_amount = int(torch_bin_amount)
+    except:
+        bin_amount = data.COUNT
+        
     return max(bin_amount, 1)
     
 def calc_data_stats(data):
