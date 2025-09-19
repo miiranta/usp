@@ -55,6 +55,9 @@ class Data:
         return self._param_to_tensor(self._params[idx])
 
     def _param_to_tensor(self, param):
+        RESONABLE_MIN = -1e30
+        RESONABLE_MAX = 1e30
+        
         if param is None:
             return torch.tensor([])
         t = param.detach()
@@ -62,6 +65,7 @@ class Data:
             return torch.tensor([])
         if t.dtype in (torch.bfloat16, torch.float16):
             t = t.to(torch.float32)
+        t = torch.clamp(t, RESONABLE_MIN, RESONABLE_MAX)
         return t.view(-1).cpu()
     
     def _get_values_at_indices(self, indices):
