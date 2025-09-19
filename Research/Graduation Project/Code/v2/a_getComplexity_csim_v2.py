@@ -731,7 +731,7 @@ def main():
                 os.environ["HF_DATASETS_OFFLINE"] = "0"
                 
             loaded_model = AutoModel.from_pretrained(
-                model_name=model_path,
+                pretrained_model_name_or_path=model_path,
                 device_map="cpu",
                 dtype=torch.float32,
                 low_cpu_mem_usage=True,
