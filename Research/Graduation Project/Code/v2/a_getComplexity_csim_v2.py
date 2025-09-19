@@ -323,7 +323,7 @@ def calc_histogram(data, histogram):
         print("Error: bin_amount is 0")
         exit(1)
 
-    BIN_CAP = 2000000000 # 2 billion ~8GB for float32
+    BIN_CAP = 1000000000 # 1 billion ~4GB for float32
     if bin_amount > BIN_CAP:
         print(f" > > > > Capping bin amount {bin_amount} to total data count {BIN_CAP}")
         bin_amount = BIN_CAP
