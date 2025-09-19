@@ -55,8 +55,8 @@ class Data:
         return self._param_to_tensor(self._params[idx])
 
     def _param_to_tensor(self, param):
-        RESONABLE_MIN = -1e30
-        RESONABLE_MAX = 1e30
+        RESONABLE_MIN = -1e15
+        RESONABLE_MAX = 1e15
         
         if param is None:
             return torch.tensor([])
@@ -607,9 +607,9 @@ MODELS_TO_TEST = [
     #'meta-llama/Meta-Llama-3-70B',
     #'meta-llama/Meta-Llama-3-8B',
     
-    'meta-llama/Llama-2-70b-hf',
-    'meta-llama/Llama-2-13b-hf',
-    'meta-llama/Llama-2-7b-hf',
+    #'meta-llama/Llama-2-70b-hf',
+    #'meta-llama/Llama-2-13b-hf',
+    #'meta-llama/Llama-2-7b-hf',
     
     # GOOGLE
     'google/gemma-3n-E4B',
