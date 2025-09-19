@@ -13,4 +13,5 @@ examples
 model_weights
 
 venv
+models
 .env
