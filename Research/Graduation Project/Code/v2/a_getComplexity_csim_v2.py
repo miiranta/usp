@@ -607,9 +607,9 @@ MODELS_TO_TEST = [
     #'meta-llama/Meta-Llama-3-70B',
     #'meta-llama/Meta-Llama-3-8B',
     
-    'meta-llama/Llama-2-70b',
-    'meta-llama/Llama-2-13b',
-    'meta-llama/Llama-2-7b',
+    'meta-llama/Llama-2-70b-hf',
+    'meta-llama/Llama-2-13b-hf',
+    'meta-llama/Llama-2-7b-hf',
     
     # GOOGLE
     'google/gemma-3n-E4B',
@@ -671,19 +671,7 @@ MODELS_TO_TEST = [
 # Models that cant be downloaded in online mode
 
 OFFLINE_MODELS = [
-    # META
-    'meta-llama/Llama-2-70b',
-    'meta-llama/Llama-2-13b',
-    'meta-llama/Llama-2-7b',
-]
-
-# Models that cant be loaded with safetensors
-
-NO_SAFETENSORS_MODELS = [
-    # META
-    'meta-llama/Llama-2-70b',
-    'meta-llama/Llama-2-13b',
-    'meta-llama/Llama-2-7b',
+    
 ]
 
 # TYPES:
@@ -730,7 +718,7 @@ def main():
             
             if model_name in OFFLINE_MODELS:
                 local_files_only = True
-                model_path = os.path.join(os.path.expanduser('~/.cache/huggingface/hub'), 'models--' + model_name.replace('/', '--'))
+                model_path = os.path.join(SCRIPT_FOLDER, '..', 'models', model_name.replace('/', '_'))
                 os.environ["TRANSFORMERS_OFFLINE"] = "1"
                 os.environ["HF_DATASETS_OFFLINE"] = "1"
             else:
@@ -739,18 +727,13 @@ def main():
                 os.environ["TRANSFORMERS_OFFLINE"] = "0"
                 os.environ["HF_DATASETS_OFFLINE"] = "0"
                 
-            if model_name in NO_SAFETENSORS_MODELS:
-                use_safetensors = False
-            else:
-                use_safetensors = True
-                
             loaded_model = AutoModel.from_pretrained(
                 pretrained_model_name_or_path=model_path,
                 device_map="cpu",
                 dtype=torch.float32,
                 low_cpu_mem_usage=True,
                 trust_remote_code=True,
-                use_safetensors=use_safetensors,
+                use_safetensors=True,
                 attn_implementation="eager",
                 local_files_only=local_files_only,
             )
