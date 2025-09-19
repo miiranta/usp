@@ -677,6 +677,15 @@ OFFLINE_MODELS = [
     'meta-llama/Llama-2-7b',
 ]
 
+# Models that cant be loaded with safetensors
+
+NO_SAFETENSORS_MODELS = [
+    # META
+    'meta-llama/Llama-2-70b',
+    'meta-llama/Llama-2-13b',
+    'meta-llama/Llama-2-7b',
+]
+
 # TYPES:
 
 # The types of parameters most commonly found in transformer-based language models
@@ -730,13 +739,18 @@ def main():
                 os.environ["TRANSFORMERS_OFFLINE"] = "0"
                 os.environ["HF_DATASETS_OFFLINE"] = "0"
                 
+            if model_name in NO_SAFETENSORS_MODELS:
+                use_safetensors = False
+            else:
+                use_safetensors = True
+                
             loaded_model = AutoModel.from_pretrained(
                 pretrained_model_name_or_path=model_path,
                 device_map="cpu",
                 dtype=torch.float32,
                 low_cpu_mem_usage=True,
                 trust_remote_code=True,
-                use_safetensors=True,
+                use_safetensors=use_safetensors,
                 attn_implementation="eager",
                 local_files_only=local_files_only,
             )
