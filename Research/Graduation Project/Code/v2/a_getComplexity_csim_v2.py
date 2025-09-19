@@ -668,6 +668,15 @@ MODELS_TO_TEST = [
     'openai-community/openai-gpt',
 ]
 
+# Models that cant be downloaded in online mode
+
+OFFLINE_MODELS = [
+    # META
+    'meta-llama/Llama-2-70b',
+    'meta-llama/Llama-2-13b',
+    'meta-llama/Llama-2-7b',
+]
+
 # TYPES:
 
 # The types of parameters most commonly found in transformer-based language models
@@ -709,6 +718,12 @@ def main():
         torch.cuda.get_device_properties = lambda device: None
         
         try:
+            
+            if model_name in OFFLINE_MODELS:
+                local_files_only = True
+            else:
+                local_files_only = False
+           
             loaded_model = AutoModel.from_pretrained(
                 model_name,
                 device_map="cpu",
@@ -717,6 +732,7 @@ def main():
                 trust_remote_code=True,
                 use_safetensors=True,
                 attn_implementation="eager",
+                local_files_only=local_files_only,
             )
             
             print(f"Successfully loaded {model_name}")
