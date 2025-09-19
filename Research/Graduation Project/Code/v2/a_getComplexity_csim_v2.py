@@ -55,9 +55,6 @@ class Data:
         return self._param_to_tensor(self._params[idx])
 
     def _param_to_tensor(self, param):
-        RESONABLE_MIN = -1e15
-        RESONABLE_MAX = 1e15
-        
         if param is None:
             return torch.tensor([])
         t = param.detach()
@@ -65,7 +62,14 @@ class Data:
             return torch.tensor([])
         if t.dtype in (torch.bfloat16, torch.float16):
             t = t.to(torch.float32)
+            
+        finite_mask = torch.isfinite(t)
+        t = t[finite_mask]
+            
+        RESONABLE_MIN = -1e15
+        RESONABLE_MAX = 1e15
         t = torch.clamp(t, RESONABLE_MIN, RESONABLE_MAX)
+        
         return t.view(-1).cpu()
     
     def _get_values_at_indices(self, indices):
@@ -293,6 +297,7 @@ def calc_data_stats(data):
     
     total_sum = 0.0
     total_sq_sum = 0.0
+    
     for arr_tensor in data.DATA:
         data.COUNT += len(arr_tensor)
         
