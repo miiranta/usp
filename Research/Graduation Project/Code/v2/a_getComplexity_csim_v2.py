@@ -341,7 +341,7 @@ def calc_histogram(data, histogram):
     def _process_and_accumulate(concat_tensor):
         start = time.time()
 
-        GPU_BATCH_ELEMS = 2200000000
+        GPU_BATCH_ELEMS = 50000000
         processed_elems = 0
         total_elems = concat_tensor.numel()
         t_cpu = concat_tensor.view(-1)
