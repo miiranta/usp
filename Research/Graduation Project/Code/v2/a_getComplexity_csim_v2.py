@@ -617,7 +617,7 @@ MODELS_TO_TEST = [
     #'meta-llama/Llama-2-7b-hf',
     
     # GOOGLE
-    'google/gemma-3n-E4B',
+    #'google/gemma-3n-E4B',
     'google/gemma-3n-E2B',
     
     'google/gemma-3-27b-pt',
