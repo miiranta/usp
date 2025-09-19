@@ -270,10 +270,7 @@ def calc_bin_amount(data): # Freedman-Diaconis rule
     iqr = q75 - q25
     
     bin_width = 2 * iqr * (n ** (-1/3))
-    if bin_width == 0:
-        print("Error: bin_width is 0")
-        exit(1)
-        
+
     try:    
         torch_bin_amount = torch.ceil(torch.tensor((data.MAX - data.MIN) / bin_width)).item()
         bin_amount = int(torch_bin_amount)
