@@ -721,11 +721,17 @@ def main():
             
             if model_name in OFFLINE_MODELS:
                 local_files_only = True
+                model_path = os.path.join(os.path.expanduser('~/.cache/huggingface/hub'), 'models--' + model_name.replace('/', '--'))
+                os.environ["TRANSFORMERS_OFFLINE"] = "1"
+                os.environ["HF_DATASETS_OFFLINE"] = "1"
             else:
                 local_files_only = False
-           
+                model_path = model_name
+                os.environ["TRANSFORMERS_OFFLINE"] = "0"
+                os.environ["HF_DATASETS_OFFLINE"] = "0"
+                
             loaded_model = AutoModel.from_pretrained(
-                model_name,
+                model_name=model_path,
                 device_map="cpu",
                 dtype=torch.float32,
                 low_cpu_mem_usage=True,
