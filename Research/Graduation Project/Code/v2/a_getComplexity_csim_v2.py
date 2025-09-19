@@ -322,9 +322,10 @@ def calc_histogram(data, histogram):
         print("Error: bin_amount is 0")
         exit(1)
 
-    if data.COUNT > 0 and bin_amount > data.COUNT:
-        print(f" > > > > Capping bin amount {bin_amount} to total data count {data.COUNT}")
-        bin_amount = data.COUNT
+    BIN_CAP = 2000000000 # 2 billion ~8GB for float32
+    if bin_amount > BIN_CAP:
+        print(f" > > > > Capping bin amount {bin_amount} to total data count {BIN_CAP}")
+        bin_amount = BIN_CAP
 
     histogram.BINS = bin_amount
     histogram.DATA_MIN = data.MIN
@@ -334,14 +335,14 @@ def calc_histogram(data, histogram):
     
     counts = torch.zeros(bin_amount, dtype=torch.long, device='cpu')
 
-    CHUNK_ELEMS = 50000000
+    CHUNK_ELEMS = 500000000 # 500 million ~2GB for float32
     chunk_list = []
     chunk_count = 0
 
     def _process_and_accumulate(concat_tensor):
         start = time.time()
 
-        GPU_BATCH_ELEMS = 50000000
+        GPU_BATCH_ELEMS = 1000000000 # 1 billion ~4GB for float32
         processed_elems = 0
         total_elems = concat_tensor.numel()
         t_cpu = concat_tensor.view(-1)
