@@ -158,7 +158,7 @@ class Evaluation:
             response_part = sanitized[resposta_index + len("RESPOSTA:"):].strip()
             print(f' --> {response_part}')
             
-            for ch in reversed(response_part):
+            for ch in response_part:
                 if ch in ("O", "N", "P"):
                     self.grade = ch
                     return
