@@ -1,6 +1,7 @@
 import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
+import re
 import csv
 import time
 import openai
@@ -142,8 +143,9 @@ class Evaluation:
             self.grade = -2
             return
         try:
-            norm = unicodedata.normalize('NFKC', self.sentence)
-            prompt_with_input = PROMPT + norm + "\nRESPOSTA:"
+            prompt_with_input = PROMPT + self.sentence + "\nRESPOSTA:"
+            prompt_with_input = sanitize_text(prompt_with_input)
+            
             inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
             with torch.no_grad():
                 generated = loaded_model.generate(
@@ -193,6 +195,18 @@ class Evaluation:
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
             return
+
+def sanitize_text(s: str) -> str:
+    s = unicodedata.normalize('NFKC', s)
+
+    s = s.replace('\u201c', '"').replace('\u201d', '"')
+    s = s.replace('\u2018', "'").replace('\u2019', "'")
+    s = s.replace('\u00A0', ' ')
+
+    s = ''.join(ch for ch in s if unicodedata.category(ch)[0] not in ('C',))
+
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
 
 def _date_key(d):
     day, month, year = map(int, d.split('/'))
