@@ -153,9 +153,7 @@ class Evaluation:
 
             decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()    
             
-            prompt_upper = (PROMPT + self.sentence + "\nRESPOSTA:").upper()
-            if decoded.startswith(prompt_upper):
-                decoded = decoded[len(prompt_upper):].strip()
+            print(f"Raw output: '{decoded[-1]}'")
 
             return decoded[-1]
         except Exception as e:
