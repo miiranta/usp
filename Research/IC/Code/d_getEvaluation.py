@@ -88,7 +88,7 @@ OPEN_MODELS = [
     'openai-community/openai-gpt',
 ]
 
-RETRIES = 3
+RETRIES = 5
 
 class File:
     def __init__(self, file, date):
@@ -158,11 +158,7 @@ class Evaluation:
             response_part = sanitized[resposta_index + len("RESPOSTA:"):].strip()
             print(f' --> {response_part}')
             
-            for ch in response_part:
-                if ch in ("O", "N", "P"):
-                    self.grade = ch
-                    return
-
+            self.grade = response_part[0]
             return
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
