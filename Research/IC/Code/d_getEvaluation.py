@@ -156,7 +156,7 @@ class Evaluation:
             
             resposta_index = sanitized.find("RESPOSTA:")
             response_part = sanitized[resposta_index + len("RESPOSTA:"):].strip()
-            print(f' --> {decoded}')
+            print(f' --> {response_part}')
             
             for ch in reversed(response_part):
                 if ch in ("O", "N", "P"):
