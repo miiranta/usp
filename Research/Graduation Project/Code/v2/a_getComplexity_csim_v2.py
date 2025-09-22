@@ -598,6 +598,7 @@ def write_down_all(data, histogram):
 # - Is text only
 # - Is the original model (not a fine-tuned version for sppecific tasks)
 # - Have less then 150B parameters (due to hardware limitations)
+# - Has to be recognized by HuggingFace Transformers library (AutoModel)
 
 MODELS_TO_TEST = [
     # META
@@ -637,7 +638,6 @@ MODELS_TO_TEST = [
     #'google/recurrentgemma-2b',
     
     # MICROSOFT
-    'microsoft/Phi-4-mini-flash-reasoning',
     #'microsoft/Phi-4-mini-reasoning',
     #'microsoft/Phi-4-reasoning',
     #'microsoft/Phi-4-reasoning-plus',
@@ -648,9 +648,6 @@ MODELS_TO_TEST = [
     #'microsoft/phi-1_5',
     
     #'microsoft/phi-1',
-    
-    'microsoft/bitnet-b1.58-2B-4T',
-    'microsoft/bitnet-b1.58-2B-4T-bf16',
     
     # OPENAI
     #'openai/gpt-oss-120b',
