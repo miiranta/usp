@@ -144,14 +144,12 @@ class Evaluation:
             return
         try:
             prompt_with_input = PROMPT + self.sentence + "\nRESPOSTA:"
-            prompt_with_input = sanitize_text(prompt_with_input)
-            
             inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
             with torch.no_grad():
                 generated = loaded_model.generate(
                     **inputs,
                     do_sample=False,
-                    max_new_tokens=5000,
+                    max_new_tokens=64,
                     pad_token_id=loaded_tokenizer.eos_token_id,
                 )
 
@@ -195,13 +193,6 @@ class Evaluation:
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
             return
-
-def sanitize_text(s: str) -> str:
-    s = s.replace('"', '')
-    s = s.replace("“", '').replace("”", '')
-    s = s.replace("'", '')
-    s = s.replace("’", '')
-    return s
 
 def _date_key(d):
     day, month, year = map(int, d.split('/'))
