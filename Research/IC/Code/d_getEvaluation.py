@@ -141,12 +141,29 @@ class Evaluation:
             self.grade = -2
             return
         try:
-            inputs = PROMPT + self.sentence + "\nRESPOSTA:"
-            inputs = loaded_tokenizer(inputs, return_tensors="pt")
+            prompt_with_input = PROMPT + self.sentence + "\nRESPOSTA:"
+            inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
             with torch.no_grad():
-                generated = loaded_model.generate(**inputs, max_new_tokens=20000, do_sample=False, pad_token_id=loaded_tokenizer.eos_token_id)
-            predicted_token = loaded_tokenizer.decode(generated[0][-1]).strip().upper()
-            self.grade = predicted_token
+                generated = loaded_model.generate(
+                    **inputs,
+                    max_new_tokens=16,
+                    do_sample=False,
+                    pad_token_id=loaded_tokenizer.eos_token_id,
+                )
+
+            decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
+
+            prompt_upper = (PROMPT + self.sentence + "\nRESPOSTA:").upper()
+            if decoded.startswith(prompt_upper):
+                decoded = decoded[len(prompt_upper):].strip()
+
+            for ch in decoded:
+                if ch in ("O", "N", "P"):
+                    self.grade = ch
+                    return
+
+            print(f"Unexpected model output when evaluating with {model}: '{decoded}'. Setting to -2.")
+            self.grade = -2
             return
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
