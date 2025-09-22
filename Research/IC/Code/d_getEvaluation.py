@@ -152,13 +152,7 @@ class Evaluation:
                 )
 
             decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
-
-            prompt_upper = (PROMPT + self.sentence + "\nRESPOSTA:").upper()
-            if decoded.startswith(prompt_upper):
-                decoded = decoded[len(prompt_upper):].strip()
-
-            print(f" --> {decoded[-1]}")
-            return decoded
+            return decoded[-1]
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
             self.grade = -2
