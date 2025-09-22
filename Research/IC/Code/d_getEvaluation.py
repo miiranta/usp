@@ -151,7 +151,12 @@ class Evaluation:
                     pad_token_id=loaded_tokenizer.eos_token_id,
                 )
 
-            decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
+            decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()    
+            
+            prompt_upper = (PROMPT + self.sentence + "\nRESPOSTA:").upper()
+            if decoded.startswith(prompt_upper):
+                decoded = decoded[len(prompt_upper):].strip()
+
             return decoded[-1]
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
