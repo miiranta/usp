@@ -153,9 +153,8 @@ class Evaluation:
 
             decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()    
             
-            print(f"Raw output: '{decoded[-1]}'")
-
-            return decoded[-1]
+            self.grade = decoded[-1]
+            return
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
             self.grade = -2
