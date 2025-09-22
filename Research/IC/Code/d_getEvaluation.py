@@ -147,6 +147,7 @@ class Evaluation:
                 generated = loaded_model.generate(
                     **inputs,
                     do_sample=False,
+                    max_new_tokens=5000,
                     pad_token_id=loaded_tokenizer.eos_token_id,
                 )
 
@@ -154,7 +155,7 @@ class Evaluation:
             print(f"-->: '{decoded[-15:].replace("\n", " ")}'")
             
             for ch in reversed(decoded):
-                if ch in ("O", "N", "P"):
+                if ch in ("O", "N", "P"):    
                     self.grade = ch
                     return
 
