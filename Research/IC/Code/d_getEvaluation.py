@@ -272,7 +272,8 @@ def main():
                             return
                                 
                     # Sleep to avoid rate limits
-                    time.sleep(0.15)
+                    if model not in OPEN_MODELS:
+                        time.sleep(0.15)
                         
             with open(output_file_path, 'w', encoding='utf-8-sig', newline='') as f:
                 writer = csv.writer(f, delimiter="|")
