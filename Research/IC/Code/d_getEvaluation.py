@@ -5,7 +5,7 @@ import csv
 import time
 import openai
 import torch
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from dotenv import load_dotenv
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
@@ -215,7 +215,7 @@ def main():
             torch.cuda.get_device_properties = lambda device: None
             
             try:
-                loaded_model = AutoModel.from_pretrained(
+                loaded_model = AutoModelForCausalLM.from_pretrained(
                     pretrained_model_name_or_path=model,
                     device_map="cpu",
                     dtype=torch.float32,
