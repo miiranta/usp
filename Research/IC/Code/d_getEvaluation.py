@@ -157,6 +157,7 @@ class Evaluation:
             if decoded.startswith(prompt_upper):
                 decoded = decoded[len(prompt_upper):].strip()
 
+            print(f" --> {decoded}")
             return decoded
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
