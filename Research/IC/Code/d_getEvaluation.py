@@ -148,8 +148,6 @@ class Evaluation:
             with torch.no_grad():
                 generated = loaded_model.generate(
                     **inputs,
-                    do_sample=False,
-                    max_new_tokens=64,
                     pad_token_id=loaded_tokenizer.eos_token_id,
                 )
 
