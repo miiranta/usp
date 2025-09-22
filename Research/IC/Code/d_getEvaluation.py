@@ -146,14 +146,18 @@ class Evaluation:
             with torch.no_grad():
                 generated = loaded_model.generate(
                     **inputs,
-                    max_new_tokens=1,
                     do_sample=False,
                     pad_token_id=loaded_tokenizer.eos_token_id,
                 )
 
             decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()    
+            print(f"-->: '{decoded}'")
             
-            self.grade = decoded[-1]
+            for ch in reversed(decoded):
+                if ch in ("O", "N", "P"):
+                    self.grade = ch
+                    return
+
             return
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
