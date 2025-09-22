@@ -40,9 +40,41 @@ A FRASE É:
 """
 
 MODELS = [
+    # CLOSED -----------
+    
+    # OPENAI
     "gpt-3.5-turbo",
     "gpt-4o",
-    "gpt-5"
+    "gpt-5",
+    
+    # OPEN -------------
+    
+    # META
+    'meta-llama/Llama-4-Scout-17B-16E',
+    'meta-llama/Llama-3.2-3B',
+    'meta-llama/Llama-3.1-70B',
+    'meta-llama/Meta-Llama-3-70B',
+    'meta-llama/Llama-2-70b-hf',
+    
+    # GOOGLE
+    'google/gemma-3n-E4B',
+    'google/gemma-3-27b-pt',
+    'google/gemma-2-27b',
+    'google/gemma-7b',
+    'google/recurrentgemma-9b',
+
+    # MICROSOFT
+    'microsoft/Phi-4-reasoning-plus',
+    'microsoft/phi-4',
+    'microsoft/phi-2',
+    'microsoft/phi-1_5',
+    'microsoft/phi-1',
+    
+    # OPENAI
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'openai-community/gpt2-xl',
+    'openai-community/openai-gpt',
 ]
 
 RETRIES = 3
