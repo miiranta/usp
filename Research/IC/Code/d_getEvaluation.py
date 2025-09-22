@@ -144,10 +144,8 @@ class Evaluation:
             inputs = PROMPT + self.sentence
             inputs = loaded_tokenizer(inputs, return_tensors="pt")
             with torch.no_grad():
-                outputs = loaded_model(**inputs)
-            logits = outputs.logits
-            predicted_token_id = logits.argmax(dim=-1)[0, -1].item()
-            predicted_token = loaded_tokenizer.decode([predicted_token_id]).strip().upper()
+                generated = loaded_model.generate(**inputs, max_new_tokens=1, do_sample=False, pad_token_id=loaded_tokenizer.eos_token_id)
+            predicted_token = loaded_tokenizer.decode(generated[0][-1]).strip().upper()
             self.grade = predicted_token
             return
         except Exception as e:
