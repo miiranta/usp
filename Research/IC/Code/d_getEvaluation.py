@@ -151,7 +151,7 @@ class Evaluation:
                 )
 
             decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()    
-            print(f"-->: '{decoded}'")
+            print(f"-->: '{decoded[-15:]}'")
             
             for ch in reversed(decoded):
                 if ch in ("O", "N", "P"):
