@@ -1,7 +1,11 @@
 import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import csv
 import time
 import openai
+import torch
+from transformers import AutoModel
 from dotenv import load_dotenv
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
@@ -20,6 +24,8 @@ load_dotenv(os.path.join(SCRIPT_FOLDER, '.env'))
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+loaded_model = None
 
 PROMPT = """
 DEFINIÇÃO DE OTIMISMO:
@@ -43,10 +49,12 @@ MODELS = [
     # CLOSED -----------
     
     # OPENAI
-    "gpt-3.5-turbo",
-    "gpt-4o",
-    "gpt-5",
-    
+    #"gpt-3.5-turbo",
+    #"gpt-4o",
+    #"gpt-5",
+]
+
+OPEN_MODELS = [
     # OPEN -------------
     
     # META
@@ -121,8 +129,31 @@ class Evaluation:
             print(f" -> {self.grade}")
             
         else:
-            print("Model not recognized.")
-            
+            self.evaluate_open_model(model)
+            self.string_grade_to_int()
+            print(f" -> {self.grade}")
+           
+    def evaluate_open_model(self, model):
+        global loaded_model
+        if loaded_model is None:
+            print("No model loaded.")
+            self.grade = -2
+            return
+        try:
+            inputs = PROMPT + self.sentence
+            inputs = loaded_model.tokenizer(inputs, return_tensors="pt")
+            with torch.no_grad():
+                outputs = loaded_model(**inputs)
+            logits = outputs.logits
+            predicted_token_id = logits.argmax(dim=-1)[0, -1].item()
+            predicted_token = loaded_model.tokenizer.decode([predicted_token_id]).strip().upper()
+            self.grade = predicted_token
+            return
+        except Exception as e:
+            print(f"Error evaluating with {model}: {e}")
+            self.grade = -2
+            return
+     
     def evaluate_openai(self, model):
         try:
             response = openai_client.chat.completions.create(
@@ -154,6 +185,8 @@ def _date_key(d):
     return (year, month, day)
 
 def main():
+    global loaded_model
+    
     raw_text_files = [f for f in os.listdir(INPUT_FOLDER) if f.endswith('.txt')]
     if not raw_text_files:
         print("No text files found in the input directory.")
@@ -167,7 +200,43 @@ def main():
         
     text_files.sort(key=lambda f: _date_key(f.date))
 
-    for model in MODELS:
+    for model in MODELS + OPEN_MODELS:
+        
+        # Open model? Load it
+        if model in OPEN_MODELS:
+            print(f"Loading model {model}...")
+
+            original_cuda_available = torch.cuda.is_available
+            original_get_device_capability = torch.cuda.get_device_capability
+            original_get_device_properties = torch.cuda.get_device_properties
+            torch.cuda.is_available = lambda: False
+            torch.cuda.get_device_capability = lambda device=None: (0, 0)
+            torch.cuda.get_device_properties = lambda device: None
+            
+            try:
+                loaded_model = AutoModel.from_pretrained(
+                    pretrained_model_name_or_path=model,
+                    device_map="cpu",
+                    dtype=torch.float32,
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True,
+                    use_safetensors=True,
+                    attn_implementation="eager",
+                )
+                
+                print(f"Successfully loaded {model}")
+                
+            except Exception as e:
+                print(f"Error loading model {model}: {e}")
+                print("Skipping this model...")
+                continue
+                
+            finally:
+                torch.cuda.is_available = original_cuda_available
+                torch.cuda.get_device_capability = original_get_device_capability
+                torch.cuda.get_device_properties = original_get_device_properties
+                torch.cuda.empty_cache()
+                
         for text_file in text_files:
             
             output_file_path = os.path.join(OUTPUT_FOLDER, f"{model}_{text_file.date.replace('/', '')}.csv")
@@ -215,6 +284,12 @@ def main():
                         evaluation.grade,
                         evaluation.sentence
                     ])
+                    
+        # Unload model
+        if model in OPEN_MODELS:
+            del loaded_model
+            torch.cuda.empty_cache()
+            print(f"Unloaded model {model}.")
 
 if __name__ == "__main__":
     main()
