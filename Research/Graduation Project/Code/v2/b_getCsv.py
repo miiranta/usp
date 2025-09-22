@@ -88,6 +88,16 @@ def filter_rows(infos):
             print(f"[{info.model} | {info.types} | {info.filter}] Removing (count = 0)")
             infos.remove(info)
     
+    # Remove any nan or inf values, print model name when removing
+    for info in infos[:]:
+        numeric_fields = [
+            info.count, info.min, info.max, info.mean, info.std,
+            info.bin_count, info.shannon_entropy, info.desequilibrium, info.complexity
+        ]
+        if any(isinstance(field, str) and (field.lower() == 'nan' or field.lower() == 'inf') for field in numeric_fields):
+            print(f"[{info.model} | {info.types} | {info.filter}] Removing (nan or inf values)")
+            infos.remove(info)
+    
 # ====================================
 
 def parse_lines(info):
