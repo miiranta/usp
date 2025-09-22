@@ -151,11 +151,12 @@ class Evaluation:
                     pad_token_id=loaded_tokenizer.eos_token_id,
                 )
 
-            decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()    
-            print(f"-->: '{decoded[-15:].replace("\n", " ")}'")
-            
-            for ch in reversed(decoded):
-                if ch in ("O", "N", "P"):    
+            decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
+            sanitized = decoded.replace('\r', ' ').replace('\n', ' ').strip()
+            print(f'-->: "{sanitized[-15:]}"')
+
+            for ch in reversed(sanitized):
+                if ch in ("O", "N", "P"):
                     self.grade = ch
                     return
 
