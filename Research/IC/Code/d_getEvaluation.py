@@ -197,15 +197,10 @@ class Evaluation:
             return
 
 def sanitize_text(s: str) -> str:
-    s = unicodedata.normalize('NFKC', s)
-
-    s = s.replace('\u201c', '"').replace('\u201d', '"')
-    s = s.replace('\u2018', "'").replace('\u2019', "'")
-    s = s.replace('\u00A0', ' ')
-
-    s = ''.join(ch for ch in s if unicodedata.category(ch)[0] not in ('C',))
-
-    s = re.sub(r'\s+', ' ', s).strip()
+    s = s.replace('"', '')
+    s = s.replace("“", '').replace("”", '')
+    s = s.replace("'", '')
+    s = s.replace("’", '')
     return s
 
 def _date_key(d):
