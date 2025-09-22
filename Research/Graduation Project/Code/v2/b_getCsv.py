@@ -81,6 +81,15 @@ def write_csv(infos):
 
 # ====================================
 
+def filter_rows(infos):
+    # Remove entries with count = 0, print model name when removing
+    for info in infos[:]:
+        if info.count == 0 or info.count == '0':
+            print(f"[{info.model} | {info.types} | {info.filter}] Removing (count = 0)")
+            infos.remove(info)
+    
+# ====================================
+
 def parse_lines(info):
     lines = info.unparsed_lines
 
@@ -141,12 +150,13 @@ def parse_lines(info):
 # ====================================
 
 def main():
-    dirs = get_subdirs()
+    infos = get_subdirs()
     
-    for info in dirs:
+    for info in infos:
         get_info_from_txt(info)
         
-    write_csv(dirs)
+    filter_rows(infos)
+    write_csv(infos)
     
 if __name__ == "__main__":
     main()
