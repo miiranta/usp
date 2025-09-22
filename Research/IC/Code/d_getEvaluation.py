@@ -250,7 +250,8 @@ def main():
                 
         for text_file in text_files:
             
-            output_file_path = os.path.join(OUTPUT_FOLDER, f"{model}_{text_file.date.replace('/', '')}.csv")
+            safe_model = model.replace('/', '_')
+            output_file_path = os.path.join(OUTPUT_FOLDER, f"{safe_model}_{text_file.date.replace('/', '')}.csv")
             if os.path.exists(output_file_path):
                 print(f"Output file for {model} on {text_file.date} already exists. Skipping...")
                 continue
