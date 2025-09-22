@@ -153,9 +153,12 @@ class Evaluation:
 
             decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
             sanitized = decoded.replace('\r', ' ').replace('\n', ' ').strip()
-            print(f' -->: {sanitized[-15:]}')
-
-            for ch in reversed(sanitized):
+            
+            resposta_index = sanitized.find("RESPOSTA:")
+            response_part = sanitized[resposta_index + len("RESPOSTA:"):].strip()
+            print(f' -->: {response_part}')
+            
+            for ch in reversed(response_part):
                 if ch in ("O", "N", "P"):
                     self.grade = ch
                     return
