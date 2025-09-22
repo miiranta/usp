@@ -5,7 +5,7 @@ import csv
 import time
 import openai
 import torch
-from transformers import AutoModel
+from transformers import AutoModel, AutoTokenizer
 from dotenv import load_dotenv
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +26,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 loaded_model = None
+loaded_tokenizer = None
 
 PROMPT = """
 DEFINIÇÃO DE OTIMISMO:
@@ -58,8 +59,8 @@ OPEN_MODELS = [
     # OPEN -------------
     
     # META
-    'meta-llama/Llama-4-Scout-17B-16E',
     'meta-llama/Llama-3.2-3B',
+    'meta-llama/Llama-4-Scout-17B-16E',
     'meta-llama/Llama-3.1-70B',
     'meta-llama/Meta-Llama-3-70B',
     'meta-llama/Llama-2-70b-hf',
@@ -134,19 +135,19 @@ class Evaluation:
             print(f" -> {self.grade}")
            
     def evaluate_open_model(self, model):
-        global loaded_model
-        if loaded_model is None:
-            print("No model loaded.")
+        global loaded_model, loaded_tokenizer
+        if loaded_model is None or loaded_tokenizer is None:
+            print("No model or tokenizer loaded.")
             self.grade = -2
             return
         try:
             inputs = PROMPT + self.sentence
-            inputs = loaded_model.tokenizer(inputs, return_tensors="pt")
+            inputs = loaded_tokenizer(inputs, return_tensors="pt")
             with torch.no_grad():
                 outputs = loaded_model(**inputs)
             logits = outputs.logits
             predicted_token_id = logits.argmax(dim=-1)[0, -1].item()
-            predicted_token = loaded_model.tokenizer.decode([predicted_token_id]).strip().upper()
+            predicted_token = loaded_tokenizer.decode([predicted_token_id]).strip().upper()
             self.grade = predicted_token
             return
         except Exception as e:
@@ -185,7 +186,7 @@ def _date_key(d):
     return (year, month, day)
 
 def main():
-    global loaded_model
+    global loaded_model, loaded_tokenizer
     
     raw_text_files = [f for f in os.listdir(INPUT_FOLDER) if f.endswith('.txt')]
     if not raw_text_files:
@@ -222,6 +223,11 @@ def main():
                     trust_remote_code=True,
                     use_safetensors=True,
                     attn_implementation="eager",
+                )
+                
+                loaded_tokenizer = AutoTokenizer.from_pretrained(
+                    pretrained_model_name_or_path=model,
+                    trust_remote_code=True,
                 )
                 
                 print(f"Successfully loaded {model}")
@@ -289,6 +295,7 @@ def main():
         # Unload model
         if model in OPEN_MODELS:
             del loaded_model
+            del loaded_tokenizer
             torch.cuda.empty_cache()
             print(f"Unloaded model {model}.")
 
