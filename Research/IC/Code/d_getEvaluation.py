@@ -144,7 +144,7 @@ class Evaluation:
             inputs = PROMPT + self.sentence + "\nRESPOSTA:"
             inputs = loaded_tokenizer(inputs, return_tensors="pt")
             with torch.no_grad():
-                generated = loaded_model.generate(**inputs, max_new_tokens=2, do_sample=False, pad_token_id=loaded_tokenizer.eos_token_id)
+                generated = loaded_model.generate(**inputs, max_new_tokens=10, do_sample=False, pad_token_id=loaded_tokenizer.eos_token_id)
             predicted_token = loaded_tokenizer.decode(generated[0][-1]).strip().upper()
             self.grade = predicted_token
             return
