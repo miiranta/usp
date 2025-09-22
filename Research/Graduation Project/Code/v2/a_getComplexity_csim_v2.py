@@ -618,59 +618,50 @@ MODELS_TO_TEST = [
     
     # GOOGLE
     #'google/gemma-3n-E4B',
-    'google/gemma-3n-E2B',
+    #'google/gemma-3n-E2B',
     
-    'google/gemma-3-27b-pt',
-    'google/gemma-3-12b-pt',
-    'google/gemma-3-4b-pt',
-    'google/gemma-3-1b-pt',
-    'google/gemma-3-270m',
+    #'google/gemma-3-27b-pt',
+    #'google/gemma-3-12b-pt',
+    #'google/gemma-3-4b-pt',
+    #'google/gemma-3-1b-pt',
+    #'google/gemma-3-270m',
     
-    'google/gemma-2-27b',
-    'google/gemma-2-9b',
-    'google/gemma-2-2b',
-    'google/gemma-2-2b-GGUF',
+    #'google/gemma-2-27b',
+    #'google/gemma-2-9b',
+    #'google/gemma-2-2b',
     
-    'google/gemma-7b',
-    'google/gemma-7b-GGUF',
-    'google/gemma-2b',
-    'google/gemma-2b-GGUF',
+    #'google/gemma-7b',
+    #'google/gemma-2b',
     
-    'google/recurrentgemma-9b',
-    'google/recurrentgemma-2b',
+    #'google/recurrentgemma-9b',
+    #'google/recurrentgemma-2b',
     
     # MICROSOFT
     'microsoft/Phi-4-mini-flash-reasoning',
-    'microsoft/Phi-4-mini-reasoning',
-    'microsoft/Phi-4-mini-reasoning-onnx',
-    'microsoft/Phi-4-reasoning',
-    'microsoft/Phi-4-reasoning-onnx',
-    'microsoft/Phi-4-reasoning-plus',
-    'microsoft/Phi-4-reasoning-plus-onnx',
-    'microsoft/phi-4',
-    'microsoft/phi-4-onnx',
-    'microsoft/phi-4-gguf',
+    #'microsoft/Phi-4-mini-reasoning',
+    #'microsoft/Phi-4-reasoning',
+    #'microsoft/Phi-4-reasoning-plus',
+    #'microsoft/phi-4',
     
-    'microsoft/phi-2',
+    #'microsoft/phi-2',
     
-    'microsoft/phi-1_5',
+    #'microsoft/phi-1_5',
     
-    'microsoft/phi-1',
+    #'microsoft/phi-1',
     
     'microsoft/bitnet-b1.58-2B-4T',
     'microsoft/bitnet-b1.58-2B-4T-bf16',
-    'microsoft/bitnet-b1.58-2B-4T-gguf',
     
     # OPENAI
     #'openai/gpt-oss-120b',
     #'openai/gpt-oss-20b',
     
-    'openai-community/gpt2-xl',
-    'openai-community/gpt2-large',
-    'openai-community/gpt2-medium',
-    'openai-community/gpt2',
+    #'openai-community/gpt2-xl',
+    #'openai-community/gpt2-large',
+    #'openai-community/gpt2-medium',
+    #'openai-community/gpt2',
     
-    'openai-community/openai-gpt',
+    #'openai-community/openai-gpt',
 ]
 
 # Models that cant be downloaded in online mode
