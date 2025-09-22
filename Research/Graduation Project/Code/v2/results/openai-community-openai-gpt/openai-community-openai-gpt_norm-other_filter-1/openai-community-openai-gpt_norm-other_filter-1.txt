@@ -1,0 +1,18 @@
+Model: openai-community/openai-gpt
+Types: norm, other
+Filter: 1 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 63913969
+ > Min: -0.05509788542985916
+ > Max: 0.05773907154798508
+ > Mean: 0.001170658485998305
+ > Standard Deviation: 0.028765582106415707
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 503
+ > Shannon Entropy: 6.188170433044434
+ > Desequilibrium: 0.0001243838923983276
+ > Complexity: 0.0007697087252863111

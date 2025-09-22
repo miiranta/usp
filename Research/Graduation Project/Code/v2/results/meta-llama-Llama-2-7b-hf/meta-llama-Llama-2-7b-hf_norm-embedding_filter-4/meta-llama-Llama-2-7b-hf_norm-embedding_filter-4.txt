@@ -1,0 +1,18 @@
+Model: meta-llama/Llama-2-7b-hf
+Types: norm, embedding
+Filter: 4 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 131085723
+ > Min: -0.1015625
+ > Max: 0.103515625
+ > Mean: -4.24299396815987e-05
+ > Standard Deviation: 0.016969500461035878
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 2307
+ > Shannon Entropy: 6.493209362030029
+ > Desequilibrium: 0.0012452767696231604
+ > Complexity: 0.008085842778835617

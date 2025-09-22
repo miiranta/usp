@@ -1,0 +1,18 @@
+Model: meta-llama/Llama-2-13b-hf
+Types: bias, norm, other
+Filter: 2 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 12107912281
+ > Min: -0.037353515625
+ > Max: 0.037353515625
+ > Mean: -2.4101408046854693e-06
+ > Standard Deviation: 0.015967731497234378
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 3799
+ > Shannon Entropy: 7.010227680206299
+ > Desequilibrium: 0.0007174115162342787
+ > Complexity: 0.005029218069204311

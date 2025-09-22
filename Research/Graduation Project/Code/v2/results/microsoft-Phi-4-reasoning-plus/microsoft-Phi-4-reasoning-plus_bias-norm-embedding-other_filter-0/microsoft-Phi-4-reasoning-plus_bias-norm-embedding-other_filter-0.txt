@@ -1,0 +1,18 @@
+Model: microsoft/Phi-4-reasoning-plus
+Types: bias, norm, embedding, other
+Filter: 0 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 14145704960
+ > Min: -3.59375
+ > Max: 4.46875
+ > Mean: 8.824183591947392e-06
+ > Standard Deviation: 0.018951932618576427
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 399339
+ > Shannon Entropy: 7.102456092834473
+ > Desequilibrium: 0.0009189136326313019
+ > Complexity: 0.006526543728870848

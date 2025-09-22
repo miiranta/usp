@@ -1,0 +1,18 @@
+Model: google/recurrentgemma-2b
+Types: bias, embedding, other
+Filter: 1 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 1957346939
+ > Min: -0.0859375
+ > Max: 0.0859375
+ > Mean: -3.9552779208938e-05
+ > Standard Deviation: 0.04520923182007894
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 1488
+ > Shannon Entropy: 6.713321685791016
+ > Desequilibrium: 0.0006292392499744892
+ > Complexity: 0.004224285502404612

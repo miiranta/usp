@@ -12,7 +12,7 @@ Data Stats:
 
 === HISTOGRAM STATS ===
 Histogram Stats:
- > Bin Count: 323191
- > Shannon Entropy: 7.261465072631836
- > Desequilibrium: 0.0007750330842100084
- > Complexity: 0.005627875671125104
+ > Bin Count: 325462
+ > Shannon Entropy: 7.2639617919921875
+ > Desequilibrium: 0.0007737554260529578
+ > Complexity: 0.005620529851195322

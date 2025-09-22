@@ -1,0 +1,18 @@
+Model: microsoft/Phi-4-reasoning
+Types: norm
+Filter: 4 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 409612
+ > Min: -0.00016498565673828125
+ > Max: 1.3203125
+ > Mean: 0.371514917417633
+ > Standard Deviation: 0.15225379654209084
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 221
+ > Shannon Entropy: 4.56001091003418
+ > Desequilibrium: 0.007414291612803936
+ > Complexity: 0.03380925064456086

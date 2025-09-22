@@ -1,0 +1,18 @@
+Model: openai-community/gpt2
+Types: bias, other
+Filter: 0 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 124401408
+ > Min: -11.050446510314941
+ > Max: 17.10232925415039
+ > Mean: -0.0005590972139533642
+ > Standard Deviation: 0.13480666560544233
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 43279
+ > Shannon Entropy: 6.730259418487549
+ > Desequilibrium: 0.0014475765638053417
+ > Complexity: 0.009742565802532743
