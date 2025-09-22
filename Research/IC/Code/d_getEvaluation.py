@@ -5,6 +5,7 @@ import csv
 import time
 import openai
 import torch
+import unicodedata
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from dotenv import load_dotenv
 
@@ -141,7 +142,8 @@ class Evaluation:
             self.grade = -2
             return
         try:
-            prompt_with_input = PROMPT + self.sentence + "\nRESPOSTA:"
+            norm = unicodedata.normalize('NFKC', self.sentence)
+            prompt_with_input = PROMPT + norm + "\nRESPOSTA:"
             inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
             with torch.no_grad():
                 generated = loaded_model.generate(
@@ -153,7 +155,7 @@ class Evaluation:
 
             decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
             sanitized = decoded.replace('\r', ' ').replace('\n', ' ').strip()
-            print(f'-->: "{sanitized[-15:]}"')
+            print(f' -->: {sanitized[-15:]}')
 
             for ch in reversed(sanitized):
                 if ch in ("O", "N", "P"):
