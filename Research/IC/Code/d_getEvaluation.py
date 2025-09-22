@@ -157,14 +157,7 @@ class Evaluation:
             if decoded.startswith(prompt_upper):
                 decoded = decoded[len(prompt_upper):].strip()
 
-            for ch in decoded:
-                if ch in ("O", "N", "P"):
-                    self.grade = ch
-                    return
-
-            print(f"Unexpected model output when evaluating with {model}: '{decoded}'. Setting to -2.")
-            self.grade = -2
-            return
+            return decoded
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
             self.grade = -2
