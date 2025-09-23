@@ -2,7 +2,7 @@ import os
 import random
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
-INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences")
+INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences_selected")
 OUTPUT_FILE = os.path.join(SCRIPT_FOLDER, "randomPhrases.txt")
 
 def read_phrases_from_folder(folder: str) -> list:
@@ -20,6 +20,7 @@ def read_phrases_from_folder(folder: str) -> list:
                             phrases.append(s)
             except Exception:
                 continue
+    print(f"Read {len(phrases)} phrases from: {folder}")
     return phrases
 
 def sample_phrases(phrases: list, k: int) -> list:
