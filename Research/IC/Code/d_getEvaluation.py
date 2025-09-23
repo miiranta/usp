@@ -152,10 +152,11 @@ class Evaluation:
                 )
 
             decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
-            sanitized = decoded.replace('\r', ' ').replace('\n', ' ').strip()
+            sanitized = decoded.replace('\r', ' ').replace('\n', ' ')
+            sanitized = sanitized.replace('"', '').replace("'", "").replace('´', "").strip()
             
-            resposta_index = sanitized.find("response:")
-            response_part = sanitized[resposta_index + len("response:"):].strip()
+            resposta_index = sanitized.find("RESPONSE:")
+            response_part = sanitized[resposta_index + len("RESPONSE:"):].strip()
             print(f' --> {response_part}')
             
             self.grade = response_part[0]
