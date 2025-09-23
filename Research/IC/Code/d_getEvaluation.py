@@ -43,7 +43,7 @@ AVALIE A FRASE COMO
 O para OTIMISTA
 N para NEUTRA
 P para PESSIMISTA
-SUA RESPOSTA DEVE SER APENAS UMA LETRA, SEM QUALQUER OUTRO TEXTO (EXEMPLO: "A FRASE É: abcdefg RESPOSTA: N")
+SUA RESPOSTA DEVE SER APENAS UMA LETRA, SEM QUALQUER OUTRO TEXTO
 
 A FRASE É:
 """
@@ -61,8 +61,8 @@ OPEN_MODELS = [
     # OPEN -------------
     
     # META
-    'meta-llama/Llama-4-Scout-17B-16E',
     'meta-llama/Llama-3.2-3B',
+    'meta-llama/Llama-4-Scout-17B-16E',
     'meta-llama/Llama-3.1-70B',
     'meta-llama/Meta-Llama-3-70B',
     'meta-llama/Llama-2-70b-hf',
@@ -143,7 +143,7 @@ class Evaluation:
             self.grade = -2
             return
         try:
-            prompt_with_input = PROMPT + self.sentence + "\nRESPOSTA:"
+            prompt_with_input = "{user:" + (PROMPT + self.sentence).replace('"', "'") + "},{response:"
             inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
             with torch.no_grad():
                 generated = loaded_model.generate(
@@ -154,8 +154,8 @@ class Evaluation:
             decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
             sanitized = decoded.replace('\r', ' ').replace('\n', ' ').strip()
             
-            resposta_index = sanitized.find("RESPOSTA:")
-            response_part = sanitized[resposta_index + len("RESPOSTA:"):].strip()
+            resposta_index = sanitized.find("response:")
+            response_part = sanitized[resposta_index + len("response:"):].strip()
             print(f' --> {response_part}')
             
             self.grade = response_part[0]
@@ -169,7 +169,7 @@ class Evaluation:
         try:
             response = openai_client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": PROMPT + self.sentence + "\nRESPOSTA:"}],
+                messages=[{"role": "user", "content": PROMPT + self.sentence}],
                 max_tokens=1
             )
             self.grade = response.choices[0].message.content.upper()
@@ -182,7 +182,7 @@ class Evaluation:
         try:
             response = openai_client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": PROMPT + self.sentence + "\nRESPOSTA:"}],
+                messages=[{"role": "user", "content": PROMPT + self.sentence}],
                 max_completion_tokens=5000
             )
             self.grade = response.choices[0].message.content.upper()
