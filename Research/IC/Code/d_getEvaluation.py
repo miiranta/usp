@@ -169,7 +169,7 @@ class Evaluation:
         try:
             response = openai_client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": PROMPT + self.sentence}],
+                messages=[{"role": "user", "content": PROMPT + self.sentence + "\nRESPOSTA:"}],
                 max_tokens=1
             )
             self.grade = response.choices[0].message.content.upper()
@@ -182,7 +182,7 @@ class Evaluation:
         try:
             response = openai_client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": PROMPT + self.sentence}],
+                messages=[{"role": "user", "content": PROMPT + self.sentence + "\nRESPOSTA:"}],
                 max_completion_tokens=5000
             )
             self.grade = response.choices[0].message.content.upper()
