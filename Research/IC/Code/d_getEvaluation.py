@@ -167,7 +167,7 @@ class Evaluation:
 
             response_part = sanitized.split("RESPOSTA:")[-1].strip()
 
-            valid = re.findall(r"\[([ONP])\]", response_part)
+            valid = re.findall(r"\b[ONP]\b", response_part)
             self.grade = valid[0]
 
             return
