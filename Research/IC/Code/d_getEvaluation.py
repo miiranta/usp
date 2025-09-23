@@ -151,8 +151,12 @@ class Evaluation:
                     pad_token_id=loaded_tokenizer.eos_token_id,
                 )
 
-            decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
-            sanitized = decoded.replace('\r', ' ').replace('\n', ' ')
+            decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True)
+            
+            print(f"Raw output: {decoded}")
+            
+            sanitized = decoded.upper().strip()
+            sanitized = sanitized.replace('\r', ' ').replace('\n', ' ')
             sanitized = sanitized.replace('"', '').replace("'", '').replace('´', '').strip()
             
             resposta_index = sanitized.find("ANSWER:")
