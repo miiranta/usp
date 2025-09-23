@@ -155,8 +155,8 @@ class Evaluation:
             sanitized = decoded.replace('\r', ' ').replace('\n', ' ')
             sanitized = sanitized.replace('"', '').replace("'", '').replace('´', '').strip()
             
-            resposta_index = sanitized.find("RESPONSE:")
-            response_part = sanitized[resposta_index + len("RESPONSE:"):].strip()
+            resposta_index = sanitized.find("MODEL:")
+            response_part = sanitized[resposta_index + len("MODEL:"):].strip()
             print(f' --> {response_part}')
             
             self.grade = response_part[0]
