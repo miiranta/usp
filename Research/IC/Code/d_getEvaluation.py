@@ -146,13 +146,14 @@ class Evaluation:
             prompt_with_input = (
                 PROMPT
                 + self.sentence
-                + "\n\nResponda apenas com UMA letra (O, N ou P).\nResposta:"
+                + "\n\nResponda apenas com UMA letra (O, N ou P). "
+                "Coloque a letra entre colchetes. Exemplo: [O]\nResposta:"
             )
             inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
             with torch.no_grad():
                 generated = loaded_model.generate(
                     **inputs,
-                    max_new_tokens=2,
+                    max_new_tokens=16,
                     pad_token_id=loaded_tokenizer.eos_token_id,
                 )
 
@@ -163,12 +164,17 @@ class Evaluation:
             sanitized = decoded.upper().strip()
             sanitized = sanitized.replace('\r', ' ').replace('\n', ' ')
             sanitized = sanitized.replace('"', '').replace("'", '').replace('´', '').strip()
-            
-            resposta_index = sanitized.find("RESPOSTA:")
-            response_part = sanitized[resposta_index + len("RESPOSTA:"):].strip()
-            print(f' --> {response_part}')
-            
-            self.grade = response_part[0]
+
+            response_part = sanitized.split("RESPOSTA:")[-1].strip()
+
+            valid = re.findall(r"\[([ONP])\]", response_part)
+
+            if valid:
+                self.grade = valid[0]
+                print(f" --> {self.grade}")
+            else:
+                print("No valid grade found in output.")
+                self.grade = -2
             return
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
