@@ -143,7 +143,7 @@ class Evaluation:
             self.grade = -2
             return
         try:
-            prompt_with_input = "{user:" + (PROMPT + self.sentence).replace('"', "'") + "},{response:"
+            prompt_with_input = "{'user':'" + (PROMPT + self.sentence).replace('"', '').replace("'", '') + "'},{'model':'"
             inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
             with torch.no_grad():
                 generated = loaded_model.generate(
@@ -153,7 +153,7 @@ class Evaluation:
 
             decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
             sanitized = decoded.replace('\r', ' ').replace('\n', ' ')
-            sanitized = sanitized.replace('"', '').replace("'", "").replace('´', "").strip()
+            sanitized = sanitized.replace('"', '').replace("'", '').replace('´', '').strip()
             
             resposta_index = sanitized.find("RESPONSE:")
             response_part = sanitized[resposta_index + len("RESPONSE:"):].strip()
