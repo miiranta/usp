@@ -43,7 +43,7 @@ AVALIE A FRASE COMO
 O para OTIMISTA
 N para NEUTRA
 P para PESSIMISTA
-SUA RESPOSTA DEVE SER APENAS UMA LETRA, SEM QUALQUER OUTRO TEXTO.
+SUA RESPOSTA DEVE SER APENAS UMA LETRA, SEM QUALQUER OUTRO TEXTO (EXEMPLO: "A FRASE É: abcdefg RESPOSTA: N")
 
 A FRASE É:
 """
@@ -61,8 +61,8 @@ OPEN_MODELS = [
     # OPEN -------------
     
     # META
-    'meta-llama/Llama-3.2-3B',
     'meta-llama/Llama-4-Scout-17B-16E',
+    'meta-llama/Llama-3.2-3B',
     'meta-llama/Llama-3.1-70B',
     'meta-llama/Meta-Llama-3-70B',
     'meta-llama/Llama-2-70b-hf',
