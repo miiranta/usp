@@ -61,9 +61,8 @@ OPEN_MODELS = [
     # OPEN -------------
     
     # META
-    'meta-llama/Llama-3.2-3B',
     'meta-llama/Llama-4-Scout-17B-16E',
-    
+    'meta-llama/Llama-3.2-3B',
     'meta-llama/Llama-3.1-70B',
     'meta-llama/Meta-Llama-3-70B',
     'meta-llama/Llama-2-70b-hf',
@@ -147,7 +146,7 @@ class Evaluation:
             prompt_with_input = (
                 PROMPT
                 + self.sentence
-                + "\n\nResponda apenas com UMA letra (O, N ou P).\n Resposta:"
+                + "\n\nResponda apenas com UMA letra (O, N ou P).\nResposta:"
             )
             inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
             with torch.no_grad():
