@@ -168,13 +168,8 @@ class Evaluation:
             response_part = sanitized.split("RESPOSTA:")[-1].strip()
 
             valid = re.findall(r"\[([ONP])\]", response_part)
+            self.grade = valid[0]
 
-            if valid:
-                self.grade = valid[0]
-                print(f" --> {self.grade}")
-            else:
-                print("No valid grade found in output.")
-                self.grade = -2
             return
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
