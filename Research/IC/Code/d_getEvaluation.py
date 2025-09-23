@@ -147,7 +147,7 @@ class Evaluation:
             prompt_with_input = (
                 PROMPT
                 + self.sentence
-                + "\n\nResponda apenas com UMA letra (O, N ou P).\n Formate assim <<O, N ou P>>\n Resposta:"
+                + "\n\nResponda apenas com UMA letra (O, N ou P).\n Resposta:"
             )
             inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
             with torch.no_grad():
@@ -164,8 +164,8 @@ class Evaluation:
             sanitized = sanitized.replace('\r', ' ').replace('\n', ' ')
             sanitized = sanitized.replace('"', '').replace("'", '').replace('´', '').strip()
             
-            resposta_index = sanitized.find("<<")
-            response_part = sanitized[resposta_index + len("<<"):].strip()
+            resposta_index = sanitized.find("RESPOSTA:")
+            response_part = sanitized[resposta_index + len("RESPOSTA:"):].strip()
             print(f' --> {response_part}')
             
             self.grade = response_part[0]
