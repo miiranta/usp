@@ -70,14 +70,14 @@ OPEN_MODELS = [
     
     # META
     'meta-llama/Llama-3.2-3B',
-    'meta-llama/Llama-3.1-70B',
-    'meta-llama/Meta-Llama-3-70B',
-    'meta-llama/Llama-2-70b-hf',
+    #'meta-llama/Llama-3.1-70B',
+    #'meta-llama/Meta-Llama-3-70B',
+    #'meta-llama/Llama-2-70b-hf',
     
     # GOOGLE
-    'google/gemma-3n-E4B',
-    'google/gemma-3-27b-pt',
-    'google/gemma-2-27b',
+    #'google/gemma-3n-E4B',
+    #'google/gemma-3-27b-pt',
+    #'google/gemma-2-27b',
     'google/gemma-7b',
     'google/recurrentgemma-9b',
 
@@ -89,7 +89,7 @@ OPEN_MODELS = [
     'microsoft/phi-1',
     
     # OPENAI
-    'openai/gpt-oss-120b',
+    #'openai/gpt-oss-120b',
     'openai-community/gpt2-xl',
     'openai-community/openai-gpt',
 ]
