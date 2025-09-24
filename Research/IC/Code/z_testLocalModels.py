@@ -2,6 +2,7 @@ import time
 import torch
 from typing import Tuple
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from dotenv import load_dotenv
 from huggingface_hub import login
 
 MODEL_NAME = "meta-llama/Llama-4-Scout-17B-16E"
