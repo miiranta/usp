@@ -9,7 +9,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, LlamaTokenizer
 # ---------------- CONFIG ----------------
 MODEL_NAME = "meta-llama/Llama-4-Scout-17B-16E"
 USE_8BIT = False  # Set to True for memory savings if needed
-USE_FLASH_ATTENTION = True  # Enable flash attention for speed
 MAX_NEW_TOKENS = 256
 
 # Load Hugging Face token from .env
@@ -131,14 +130,21 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
         "trust_remote_code": True,
         "token": HF_TOKEN,
         "low_cpu_mem_usage": True,
-        "attn_implementation": "flash_attention_2" if USE_FLASH_ATTENTION else "eager",
     }
+    
+    # Try to enable flash attention if available
+    try:
+        import flash_attn
+        load_kwargs["attn_implementation"] = "flash_attention_2"
+        print("  ✅ Flash Attention 2 will be used for faster inference")
+    except ImportError:
+        print("  ℹ️ Flash Attention not available - using standard attention")
+        load_kwargs["attn_implementation"] = "eager"
     
     if device == "cuda":
         load_kwargs.update({
             "device_map": "auto",
             "dtype": torch.float16,  # Use half precision for speed
-            "torch_compile": True,  # Enable torch.compile for faster inference
         })
     else:
         load_kwargs.update({
@@ -175,7 +181,6 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
         print("  🔄 Trying alternative loading approach...")
         load_kwargs.pop("low_cpu_mem_usage", None)
         load_kwargs.pop("attn_implementation", None)
-        load_kwargs.pop("torch_compile", None)
         if "load_in_8bit" in load_kwargs:
             load_kwargs.pop("load_in_8bit")
         model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
