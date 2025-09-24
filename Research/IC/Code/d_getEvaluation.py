@@ -9,9 +9,9 @@ import torch
 import unicodedata
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from dotenv import load_dotenv
+from huggingface_hub import login
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
-
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences_selected")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "csvs")
 
@@ -24,7 +24,10 @@ if not os.path.exists(OUTPUT_FOLDER):
 
 load_dotenv(os.path.join(SCRIPT_FOLDER, '.env'))
 
+HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+login(token=HUGGINGFACE_API_KEY)
 openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 loaded_model = None

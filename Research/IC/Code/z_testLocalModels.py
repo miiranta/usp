@@ -2,8 +2,13 @@ import time
 import torch
 from typing import Tuple
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from huggingface_hub import login
 
 MODEL_NAME = "meta-llama/Llama-4-Scout-17B-16E"
+
+load_dotenv(os.path.join(SCRIPT_FOLDER, '.env'))
+HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY')
+login(token=HUGGINGFACE_API_KEY)
 
 def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokenizer, AutoModelForCausalLM]:
     print(f"Loading tokenizer for '{model_name}'...")
