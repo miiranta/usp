@@ -36,7 +36,11 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
     )
 
     if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token or tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+        if tokenizer.eos_token is not None:
+            tokenizer.pad_token = tokenizer.eos_token
+        else:
+            tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+            tokenizer.pad_token = "[PAD]"
 
     print(f"🔄 Loading model '{model_name}' (8bit={use_8bit}) on {device}...")
     load_kwargs = {"device_map": "auto", "torch_dtype": torch.float16} if device == "cuda" else {
@@ -58,7 +62,10 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
         **load_kwargs,
     )
 
-    model.resize_token_embeddings(len(tokenizer))
+    # Only resize embeddings if we added new tokens
+    if tokenizer.pad_token == "[PAD]":
+        model.resize_token_embeddings(len(tokenizer))
+    
     return tokenizer, model
 
 
