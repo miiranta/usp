@@ -9,28 +9,24 @@ from huggingface_hub import login
 MODEL_NAME = "meta-llama/Llama-4-Scout-17B-16E"
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(SCRIPT_FOLDER, '.env'))
-HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY')
+load_dotenv(os.path.join(SCRIPT_FOLDER, ".env"))
+HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 login(token=HUGGINGFACE_API_KEY)
 
 def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokenizer, AutoModelForCausalLM]:
     print(f"Loading tokenizer for '{model_name}'...")
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
-            use_fast=False,
-            trust_remote_code=True,
-        )
-    except Exception as e:
-        print("❌ Failed to load tokenizer:", repr(e))
-        raise
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name,
+        use_fast=False,
+        trust_remote_code=True,
+        token=HUGGINGFACE_API_KEY,
+    )
 
-    # Debugging safety
     if tokenizer is None or not hasattr(tokenizer, "encode"):
-        print("❌ Unexpected tokenizer object:", type(tokenizer), repr(tokenizer)[:400])
-        raise RuntimeError("AutoTokenizer.from_pretrained did not return a tokenizer object.")
+        raise RuntimeError(
+            "❌ Failed to load tokenizer. Make sure you accepted the model license and your token has access."
+        )
 
-    # Ensure tokenizer has a pad token
     if getattr(tokenizer, "pad_token", None) is None:
         if getattr(tokenizer, "eos_token", None) is not None:
             tokenizer.pad_token = tokenizer.eos_token
@@ -52,17 +48,13 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
         load_kwargs["device_map"] = {"": "cpu"}
         load_kwargs["torch_dtype"] = torch.float32
 
-    try:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            trust_remote_code=True,
-            **load_kwargs,
-        )
-    except Exception as e:
-        print("❌ Failed to load model:", repr(e))
-        raise
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        trust_remote_code=True,
+        token=HUGGINGFACE_API_KEY,
+        **load_kwargs,
+    )
 
-    # Resize embeddings if we added a pad token
     model.resize_token_embeddings(len(tokenizer))
 
     if device == "cpu":
@@ -96,7 +88,7 @@ def generate_reply(
         )
         t1 = time.time()
 
-    output_ids = generated[0][input_ids.shape[-1] :]
+    output_ids = generated[0][input_ids.shape[-1]:]
     assistant_response = tokenizer.decode(output_ids, skip_special_tokens=True)
     return assistant_response, t1 - t0
 
