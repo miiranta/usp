@@ -43,12 +43,25 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
     print(f"Loading tokenizer for '{model_name}'...")
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
-    # ensure tokenizer has a pad token
-    if tokenizer.pad_token is None:
-        if tokenizer.eos_token is not None:
+    if not hasattr(tokenizer, 'pad_token') or not hasattr(tokenizer, 'decode'):
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False, trust_remote_code=True)
+        except Exception:
+            raise RuntimeError(f"Failed to load a valid tokenizer for '{model_name}'.")
+
+    if getattr(tokenizer, 'pad_token', None) is None:
+        if getattr(tokenizer, 'eos_token', None) is not None:
             tokenizer.pad_token = tokenizer.eos_token
         else:
-            tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+            if hasattr(tokenizer, 'add_special_tokens'):
+                tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+            else:
+                try:
+                    tokenizer.pad_token = '[PAD]'
+                    if not hasattr(tokenizer, 'pad_token_id'):
+                        tokenizer.pad_token_id = None
+                except Exception:
+                    raise RuntimeError(f"Tokenizer for '{model_name}' doesn't support adding special tokens.")
 
     print(f"Loading model '{model_name}' (8bit={use_8bit}) on {device}...")
     load_kwargs = {}
