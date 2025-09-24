@@ -69,9 +69,16 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
     # Configure pad token more safely
     print("🔄 Configuring tokenizer...")
     try:
+        # Verify we have a valid tokenizer object
+        if tokenizer is None or not hasattr(tokenizer, 'pad_token'):
+            raise RuntimeError("Invalid tokenizer object")
+        
+        print(f"  Current pad_token: {getattr(tokenizer, 'pad_token', 'None')}")
+        print(f"  Current eos_token: {getattr(tokenizer, 'eos_token', 'None')}")
+        
         # Check if tokenizer has necessary attributes
-        if not hasattr(tokenizer, 'pad_token') or tokenizer.pad_token is None:
-            if hasattr(tokenizer, 'eos_token') and tokenizer.eos_token is not None:
+        if tokenizer.pad_token is None:
+            if tokenizer.eos_token is not None:
                 tokenizer.pad_token = tokenizer.eos_token
                 print("  ✅ Set pad_token to eos_token")
             elif hasattr(tokenizer, 'bos_token') and tokenizer.bos_token is not None:
@@ -79,17 +86,31 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
                 print("  ✅ Set pad_token to bos_token")
             else:
                 # Last resort - add a new pad token
-                num_added = tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-                print(f"  ✅ Added new pad token, {num_added} tokens added")
+                try:
+                    num_added = tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+                    if num_added > 0:
+                        print(f"  ✅ Added new pad token, {num_added} tokens added")
+                    else:
+                        print("  ℹ️ Pad token already exists")
+                except Exception as add_token_error:
+                    print(f"  ⚠️ Could not add pad token: {add_token_error}")
+                    # Set a default pad token manually
+                    tokenizer.pad_token = "<pad>"
+                    print("  ✅ Set pad_token to <pad> manually")
+        else:
+            print("  ✅ Pad token already configured")
         
         # Ensure pad_token_id is set
-        if not hasattr(tokenizer, 'pad_token_id') or tokenizer.pad_token_id is None:
-            if tokenizer.pad_token:
+        if tokenizer.pad_token_id is None and tokenizer.pad_token is not None:
+            try:
                 tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids(tokenizer.pad_token)
-                print("  ✅ Set pad_token_id")
+                print(f"  ✅ Set pad_token_id to {tokenizer.pad_token_id}")
+            except Exception as convert_error:
+                print(f"  ⚠️ Could not set pad_token_id: {convert_error}")
     
     except Exception as e:
         print(f"  ⚠️ Warning: Could not configure pad token: {e}")
+        print(f"  ⚠️ Tokenizer type: {type(tokenizer)}")
         # Continue anyway, some models work without explicit pad tokens
 
     print(f"🔄 Loading model '{model_name}' (8bit={use_8bit}) on {device}...")
@@ -104,12 +125,12 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
     if device == "cuda":
         load_kwargs.update({
             "device_map": "auto",
-            "torch_dtype": torch.float16,
+            "dtype": torch.float16,  # Updated from torch_dtype
         })
     else:
         load_kwargs.update({
             "device_map": {"": "cpu"},
-            "torch_dtype": torch.float32,
+            "dtype": torch.float32,  # Updated from torch_dtype
         })
 
     # Add quantization if requested
