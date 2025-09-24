@@ -1,110 +1,104 @@
+import os
 import time
 import torch
-import os
 from typing import Tuple
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from dotenv import load_dotenv
-from huggingface_hub import login
+from huggingface_hub import login, HfApi
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
+# ---------------- CONFIG ----------------
 MODEL_NAME = "meta-llama/Llama-4-Scout-17B-16E"
+USE_8BIT = False
+MAX_NEW_TOKENS = 256
+TEMPERATURE = 0.8
+TOP_P = 0.9
+TOP_K = 50
 
+# Load Hugging Face token from .env
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(SCRIPT_FOLDER, ".env"))
-HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
-login(token=HUGGINGFACE_API_KEY)
+HF_TOKEN = os.getenv("HUGGINGFACE_API_KEY")
 
+if not HF_TOKEN:
+    raise RuntimeError("❌ No Hugging Face API token found in .env (HUGGINGFACE_API_KEY).")
+
+# Login
+login(token=HF_TOKEN)
+
+# ---------------- MODEL LOADING ----------------
 def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokenizer, AutoModelForCausalLM]:
-    print(f"Loading tokenizer for '{model_name}'...")
+    print(f"🔄 Loading tokenizer for '{model_name}'...")
     tokenizer = AutoTokenizer.from_pretrained(
         model_name,
         use_fast=False,
         trust_remote_code=True,
-        token=HUGGINGFACE_API_KEY,
+        token=HF_TOKEN,
     )
 
-    if tokenizer is None or not hasattr(tokenizer, "encode"):
-        raise RuntimeError(
-            "❌ Failed to load tokenizer. Make sure you accepted the model license and your token has access."
-        )
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token or tokenizer.add_special_tokens({"pad_token": "[PAD]"})
 
-    if getattr(tokenizer, "pad_token", None) is None:
-        if getattr(tokenizer, "eos_token", None) is not None:
-            tokenizer.pad_token = tokenizer.eos_token
-        else:
-            tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+    print(f"🔄 Loading model '{model_name}' (8bit={use_8bit}) on {device}...")
+    load_kwargs = {"device_map": "auto", "torch_dtype": torch.float16} if device == "cuda" else {
+        "device_map": {"": "cpu"},
+        "torch_dtype": torch.float32,
+    }
 
-    print(f"Loading model '{model_name}' (8bit={use_8bit}) on {device}...")
-    load_kwargs = {}
-    if device.startswith("cuda"):
-        load_kwargs["device_map"] = "auto"
-        load_kwargs["torch_dtype"] = torch.float16
-        if use_8bit:
-            try:
-                import bitsandbytes  # noqa: F401
-                load_kwargs["load_in_8bit"] = True
-            except Exception:
-                print("⚠️ bitsandbytes not available; continuing without 8-bit.")
-    else:
-        load_kwargs["device_map"] = {"": "cpu"}
-        load_kwargs["torch_dtype"] = torch.float32
+    if use_8bit and device == "cuda":
+        try:
+            import bitsandbytes  # noqa: F401
+            load_kwargs["load_in_8bit"] = True
+        except ImportError:
+            print("⚠️ bitsandbytes not installed; continuing without 8-bit.")
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         trust_remote_code=True,
-        token=HUGGINGFACE_API_KEY,
+        token=HF_TOKEN,
         **load_kwargs,
     )
 
     model.resize_token_embeddings(len(tokenizer))
-
-    if device == "cpu":
-        model.to("cpu")
-
     return tokenizer, model
 
-def generate_reply(
-    model: AutoModelForCausalLM,
-    tokenizer: AutoTokenizer,
-    prompt: str,
-    max_new_tokens: int = 256,
-    temperature: float = 0.8,
-    top_p: float = 0.9,
-    top_k: int = 50,
-) -> Tuple[str, float]:
-    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
-    input_ids = input_ids.to(next(model.parameters()).device)
+
+# ---------------- GENERATION ----------------
+def generate_reply(model, tokenizer, prompt: str) -> Tuple[str, float]:
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(model.device)
 
     with torch.no_grad():
         t0 = time.time()
         generated = model.generate(
             input_ids,
-            max_new_tokens=max_new_tokens,
+            max_new_tokens=MAX_NEW_TOKENS,
             do_sample=True,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
+            temperature=TEMPERATURE,
+            top_p=TOP_P,
+            top_k=TOP_K,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
         )
         t1 = time.time()
 
     output_ids = generated[0][input_ids.shape[-1]:]
-    assistant_response = tokenizer.decode(output_ids, skip_special_tokens=True)
-    return assistant_response, t1 - t0
+    response = tokenizer.decode(output_ids, skip_special_tokens=True)
+    return response, t1 - t0
 
 
-def main() -> None:
-    model_name = MODEL_NAME
-    use_8bit = False
+# ---------------- MAIN ----------------
+def main():
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = "cuda"
+    try:
+        tokenizer, model = load_model(MODEL_NAME, USE_8BIT, device)
+    except Exception as e:
+        print(f"❌ Could not load model '{MODEL_NAME}': {e}")
+        print("➡️ Make sure you accepted the license at:")
+        print(f"   https://huggingface.co/{MODEL_NAME}")
+        return
 
-    tokenizer, model = load_model(model_name, use_8bit, device)
     model.eval()
-
-    print("\n✅ Interactive chat ready. Type your message and press Enter.")
+    print("\n✅ Chat ready. Type a message and press Enter.")
     print("Type 'exit' or 'quit' to stop.\n")
 
     history = ""
@@ -119,26 +113,12 @@ def main() -> None:
             print("Goodbye.")
             break
 
-        if history:
-            prompt = history + "\nUser: " + user + "\nAssistant:"
-        else:
-            prompt = "User: " + user + "\nAssistant:"
+        prompt = f"{history}\nUser: {user}\nAssistant:" if history else f"User: {user}\nAssistant:"
+        reply, elapsed = generate_reply(model, tokenizer, prompt)
 
-        assistant_response, elapsed = generate_reply(
-            model,
-            tokenizer,
-            prompt,
-            max_new_tokens=256,
-            temperature=0.8,
-            top_p=0.9,
-            top_k=50,
-        )
+        history = prompt + " " + reply
+        print(f"\nAssistant:\n{reply.strip()}\n(Generated in {elapsed:.2f}s)\n")
 
-        history = prompt + " " + assistant_response
-
-        print("\nAssistant:")
-        print(assistant_response.strip())
-        print(f"\n(Generated in {elapsed:.2f}s)\n")
 
 if __name__ == "__main__":
     main()
