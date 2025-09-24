@@ -148,44 +148,23 @@ class Evaluation:
             print("No model or tokenizer loaded.")
             self.grade = -2
             return
-        
         try:
-            prompt_with_input = PROMPT + self.sentence + "\n\nRESPOSTA:"
+            prompt_with_input = PROMPT + self.sentence + "\nRESPOSTA:"
             inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
-            input_ids = inputs.get("input_ids")
-            attention_mask = inputs.get("attention_mask")
-
-            pad_token_id = getattr(loaded_tokenizer, "pad_token_id", None)
-            if pad_token_id is None:
-                pad_token_id = getattr(loaded_tokenizer, "eos_token_id", None)
-                try:
-                    loaded_tokenizer.pad_token = loaded_tokenizer.eos_token
-                except Exception:
-                    pass
-            try:
-                loaded_model.config.pad_token_id = pad_token_id
-            except Exception:
-                pass
-
             with torch.no_grad():
                 generated = loaded_model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    max_new_tokens=5000,
-                    pad_token_id=pad_token_id,
-                    eos_token_id=getattr(loaded_tokenizer, "eos_token_id", None),
+                    **inputs,
+                    pad_token_id=loaded_tokenizer.eos_token_id,
                 )
 
-            gen_start = input_ids.shape[-1]
-            gen_ids = generated[0][gen_start:]
-            decoded = loaded_tokenizer.decode(gen_ids, skip_special_tokens=True)
-
-            print(f"Raw output: {decoded}")
-
-            sanitized = decoded.upper()
-            sanitized = sanitized.replace('\r', ' ').replace('\n', ' ').strip()
-            self.grade = sanitized[0]
-
+            decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
+            sanitized = decoded.replace('\r', ' ').replace('\n', ' ').strip()
+            
+            resposta_index = sanitized.find("RESPOSTA:")
+            response_part = sanitized[resposta_index + len("RESPOSTA:"):].strip()
+            print(f' --> {response_part}')
+            
+            self.grade = response_part[0]
             return
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
