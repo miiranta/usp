@@ -153,11 +153,27 @@ class Evaluation:
             prompt_with_input = PROMPT + self.sentence + "\n\nRESPOSTA:"
             inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
             input_ids = inputs.get("input_ids")
+            attention_mask = inputs.get("attention_mask")
+
+            pad_token_id = getattr(loaded_tokenizer, "pad_token_id", None)
+            if pad_token_id is None:
+                pad_token_id = getattr(loaded_tokenizer, "eos_token_id", None)
+                try:
+                    loaded_tokenizer.pad_token = loaded_tokenizer.eos_token
+                except Exception:
+                    pass
+            try:
+                loaded_model.config.pad_token_id = pad_token_id
+            except Exception:
+                pass
 
             with torch.no_grad():
                 generated = loaded_model.generate(
                     input_ids=input_ids,
+                    attention_mask=attention_mask,
                     max_new_tokens=5000,
+                    pad_token_id=pad_token_id,
+                    eos_token_id=getattr(loaded_tokenizer, "eos_token_id", None),
                 )
 
             gen_start = input_ids.shape[-1]
