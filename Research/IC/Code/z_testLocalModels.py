@@ -8,11 +8,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, LlamaTokenizer
 
 # ---------------- CONFIG ----------------
 MODEL_NAME = "meta-llama/Llama-4-Scout-17B-16E"
-USE_8BIT = False
+USE_8BIT = False  # Set to True for memory savings if needed
+USE_FLASH_ATTENTION = True  # Enable flash attention for speed
 MAX_NEW_TOKENS = 256
-TEMPERATURE = 0.8
-TOP_P = 0.9
-TOP_K = 50
 
 # Load Hugging Face token from .env
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
@@ -128,22 +126,24 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
 
     print(f"🔄 Loading model '{model_name}' (8bit={use_8bit}) on {device}...")
     
-    # Configure model loading parameters
+    # Configure model loading parameters for speed optimization
     load_kwargs = {
         "trust_remote_code": True,
         "token": HF_TOKEN,
-        "low_cpu_mem_usage": True,  # Help with memory efficiency
+        "low_cpu_mem_usage": True,
+        "attn_implementation": "flash_attention_2" if USE_FLASH_ATTENTION else "eager",
     }
     
     if device == "cuda":
         load_kwargs.update({
             "device_map": "auto",
-            "dtype": torch.float16,  # Updated from torch_dtype
+            "dtype": torch.float16,  # Use half precision for speed
+            "torch_compile": True,  # Enable torch.compile for faster inference
         })
     else:
         load_kwargs.update({
             "device_map": {"": "cpu"},
-            "dtype": torch.float32,  # Updated from torch_dtype
+            "dtype": torch.float32,
         })
 
     # Add quantization if requested
@@ -158,11 +158,24 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
     try:
         model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
         print("  ✅ Model loaded successfully")
+        
+        # Optimize model for inference speed
+        if device == "cuda":
+            try:
+                # Try to compile the model for faster inference (PyTorch 2.0+)
+                print("  🔄 Optimizing model with torch.compile...")
+                model = torch.compile(model, mode="reduce-overhead")
+                print("  ✅ Model compiled for faster inference")
+            except Exception as compile_error:
+                print(f"  ⚠️ Could not compile model: {compile_error}")
+        
     except Exception as e:
         print(f"  ❌ Model loading failed: {e}")
         # Try alternative loading approach
         print("  🔄 Trying alternative loading approach...")
         load_kwargs.pop("low_cpu_mem_usage", None)
+        load_kwargs.pop("attn_implementation", None)
+        load_kwargs.pop("torch_compile", None)
         if "load_in_8bit" in load_kwargs:
             load_kwargs.pop("load_in_8bit")
         model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
@@ -209,15 +222,13 @@ def generate_reply(model, tokenizer, prompt: str) -> Tuple[str, float]:
         with torch.no_grad():
             t0 = time.time()
             
-            # Prepare generation arguments with more conservative settings
+            # Prepare generation arguments - using defaults for sampling
             gen_kwargs = {
                 "input_ids": input_ids,
-                "max_new_tokens": min(MAX_NEW_TOKENS, 128),  # More conservative
+                "max_new_tokens": MAX_NEW_TOKENS,  # Removed conservative limit
                 "do_sample": True,
-                "temperature": TEMPERATURE,
-                "top_p": TOP_P,
-                "top_k": TOP_K,
                 "use_cache": True,
+                # Using default temperature=1.0, top_p=1.0, no top_k
             }
             
             # Add optional parameters if available
