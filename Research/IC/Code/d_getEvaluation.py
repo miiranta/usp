@@ -143,32 +143,46 @@ class Evaluation:
             self.grade = -2
             return
         try:
-            prompt_with_input = (
-                PROMPT
-                + self.sentence
-                + "\n\nResponda apenas com UMA letra (O, N ou P). "
-                + "\nResposta:"
-            )
-            inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
+           
+            try: 
+                messages = [
+                    {"role": "user", "content": PROMPT + self.sentence},
+                ]
+                inputs = loaded_tokenizer.apply_chat_template(
+                    messages,
+                    add_generation_prompt=True,
+                    return_tensors="pt",
+                    return_dict=True,
+                )
+                input_ids = inputs.get("input_ids")
+                attention_mask = inputs.get("attention_mask")
+            except Exception:
+                prompt_with_input = PROMPT + self.sentence + "\n\nResposta:"
+                inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
+                input_ids = inputs.get("input_ids")
+                attention_mask = inputs.get("attention_mask")
+
             with torch.no_grad():
                 generated = loaded_model.generate(
-                    **inputs,
-                    max_new_tokens=5000,
+                    input_ids=input_ids,
+                    max_new_tokens=8,
+                    attention_mask=attention_mask,
                     pad_token_id=loaded_tokenizer.eos_token_id,
+                    eos_token_id=loaded_tokenizer.eos_token_id,
                 )
 
-            decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True)
-            
+            gen_start = input_ids.shape[-1]
+            gen_ids = generated[0][gen_start:]
+            decoded = loaded_tokenizer.decode(gen_ids, skip_special_tokens=True)
+
             print(f"Raw output: {decoded}")
-            
-            sanitized = decoded.upper().strip()
-            sanitized = sanitized.replace('\r', ' ').replace('\n', ' ')
-            sanitized = sanitized.replace('"', '').replace("'", '').replace('´', '').strip()
 
-            response_part = sanitized.split("RESPOSTA:")[-1].strip()
+            sanitized = decoded.upper()
+            sanitized = sanitized.replace('\r', ' ').replace('\n', ' ').strip()
 
-            valid = re.findall(r"\b[ONP]\b", response_part)
-            self.grade = valid[0]
+            for ch in sanitized:
+                if ch in ("O", "N", "P"):
+                    self.grade = ch
 
             return
         except Exception as e:
