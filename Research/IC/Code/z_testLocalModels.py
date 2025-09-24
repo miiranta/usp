@@ -225,30 +225,46 @@ def generate_reply(model, tokenizer, prompt: str) -> Tuple[str, float]:
         # Move inputs to model device
         inputs = {k: v.to(model.device) for k, v in inputs.items()}
         print(f"  ✅ Applied chat template: {inputs['input_ids'].shape}")
+        print(f"  ✅ Input device: {inputs['input_ids'].device}")
+        print(f"  ✅ Model device: {next(model.parameters()).device}")
         
         print("  🔄 Starting model.generate()...")
         
         with torch.no_grad():
             t0 = time.time()
             
-            # Use the recommended generation approach from docs
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=MAX_NEW_TOKENS,
-                do_sample=True,  # Keep sampling as requested
-                use_cache=True,
-            )
-            t1 = time.time()
+            # Try minimal parameters first
+            try:
+                outputs = model.generate(
+                    inputs['input_ids'],
+                    attention_mask=inputs.get('attention_mask'),
+                    max_new_tokens=10,  # Very small for testing
+                    do_sample=False,  # Greedy decoding - most reliable
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
+                )
+                print(f"  ✅ Basic generation worked!")
+                
+            except Exception as gen_error:
+                print(f"  ❌ Basic generation failed: {gen_error}")
+                # Try even more minimal approach
+                print("  🔄 Trying minimal generation...")
+                outputs = model.generate(
+                    inputs['input_ids'],
+                    max_new_tokens=5,
+                    do_sample=False,
+                )
             
+            t1 = time.time()
             print(f"  ✅ Generation completed in {t1-t0:.2f}s")
 
         # Extract only the new tokens (after the input)
         output_ids = outputs[0][inputs["input_ids"].shape[-1]:]
-        print(f"  ✅ Generated {len(output_ids)} new tokens")
+        print(f"  ✅ Generated {len(output_ids)} new tokens: {output_ids}")
         
         # Decode using batch_decode as shown in docs
         response = tokenizer.decode(output_ids, skip_special_tokens=True)
-        print(f"  ✅ Decoded response: '{response[:100]}...'")
+        print(f"  ✅ Decoded response: '{response}'")
         
         return response, t1 - t0
     
