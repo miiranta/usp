@@ -206,56 +206,56 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
 # ---------------- GENERATION ----------------
 def generate_reply(model, tokenizer, prompt: str) -> Tuple[str, float]:
     try:
-        # Tokenize input with proper error handling
-        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
-        input_ids = inputs.input_ids.to(model.device)
+        print(f"🔄 Starting generation for prompt: '{prompt[:50]}...'")
         
-        # Get attention mask if available
-        attention_mask = None
-        if "attention_mask" in inputs:
-            attention_mask = inputs.attention_mask.to(model.device)
-
-        # Check for vocab size issues before generation
-        max_token_id = input_ids.max().item()
-        if hasattr(model, 'get_input_embeddings'):
-            model_vocab_size = model.get_input_embeddings().num_embeddings
-            if max_token_id >= model_vocab_size:
-                print(f"  ⚠️ Token ID {max_token_id} exceeds model vocab size {model_vocab_size}")
-                # Filter out problematic tokens
-                input_ids = torch.clamp(input_ids, 0, model_vocab_size - 1)
-
+        # Use the official recommended approach with messages format
+        messages = [
+            {"role": "user", "content": prompt},
+        ]
+        
+        # Apply chat template as recommended in the docs
+        inputs = tokenizer.apply_chat_template(
+            messages, 
+            add_generation_prompt=True, 
+            tokenize=True, 
+            return_dict=True, 
+            return_tensors="pt"
+        )
+        
+        # Move inputs to model device
+        inputs = {k: v.to(model.device) for k, v in inputs.items()}
+        print(f"  ✅ Applied chat template: {inputs['input_ids'].shape}")
+        
+        print("  🔄 Starting model.generate()...")
+        
         with torch.no_grad():
             t0 = time.time()
             
-            # Prepare generation arguments - using defaults for sampling
-            gen_kwargs = {
-                "input_ids": input_ids,
-                "max_new_tokens": MAX_NEW_TOKENS,  # Removed conservative limit
-                "do_sample": True,
-                "use_cache": True,
-                # Using default temperature=1.0, top_p=1.0, no top_k
-            }
-            
-            # Add optional parameters if available
-            if attention_mask is not None:
-                gen_kwargs["attention_mask"] = attention_mask
-            
-            if hasattr(tokenizer, 'pad_token_id') and tokenizer.pad_token_id is not None:
-                gen_kwargs["pad_token_id"] = tokenizer.pad_token_id
-            
-            if hasattr(tokenizer, 'eos_token_id') and tokenizer.eos_token_id is not None:
-                gen_kwargs["eos_token_id"] = tokenizer.eos_token_id
-            
-            generated = model.generate(**gen_kwargs)
+            # Use the recommended generation approach from docs
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=MAX_NEW_TOKENS,
+                do_sample=True,  # Keep sampling as requested
+                use_cache=True,
+            )
             t1 = time.time()
+            
+            print(f"  ✅ Generation completed in {t1-t0:.2f}s")
 
-        # Extract only the new tokens
-        output_ids = generated[0][input_ids.shape[-1]:]
+        # Extract only the new tokens (after the input)
+        output_ids = outputs[0][inputs["input_ids"].shape[-1]:]
+        print(f"  ✅ Generated {len(output_ids)} new tokens")
+        
+        # Decode using batch_decode as shown in docs
         response = tokenizer.decode(output_ids, skip_special_tokens=True)
+        print(f"  ✅ Decoded response: '{response[:100]}...'")
+        
         return response, t1 - t0
     
     except Exception as e:
         print(f"❌ Generation error: {e}")
+        import traceback
+        traceback.print_exc()
         return f"[Error during generation: {e}]", 0.0
 
 
