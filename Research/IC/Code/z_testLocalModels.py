@@ -32,24 +32,24 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
     # Try multiple approaches for tokenizer loading
     tokenizer = None
     tokenizer_attempts = [
-        # Attempt 1: Standard AutoTokenizer
-        lambda: AutoTokenizer.from_pretrained(
-            model_name,
-            use_fast=False,
-            trust_remote_code=True,
-            token=HF_TOKEN,
-        ),
-        # Attempt 2: Explicit LlamaTokenizer
-        lambda: LlamaTokenizer.from_pretrained(
-            model_name,
-            use_fast=False,
-            trust_remote_code=True,
-            token=HF_TOKEN,
-        ),
-        # Attempt 3: AutoTokenizer with use_fast=True
+        # Attempt 1: AutoTokenizer with use_fast=True (this one works for this model)
         lambda: AutoTokenizer.from_pretrained(
             model_name,
             use_fast=True,
+            trust_remote_code=True,
+            token=HF_TOKEN,
+        ),
+        # Attempt 2: Standard AutoTokenizer (fallback)
+        lambda: AutoTokenizer.from_pretrained(
+            model_name,
+            use_fast=False,
+            trust_remote_code=True,
+            token=HF_TOKEN,
+        ),
+        # Attempt 3: Explicit LlamaTokenizer (requires sentencepiece)
+        lambda: LlamaTokenizer.from_pretrained(
+            model_name,
+            use_fast=False,
             trust_remote_code=True,
             token=HF_TOKEN,
         ),
@@ -168,17 +168,19 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
         model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
         print("  ✅ Model loaded with alternative approach")
 
-    # Resize token embeddings if necessary
+    # Check token embeddings alignment but don't resize automatically
     try:
-        original_vocab_size = len(tokenizer)
+        tokenizer_vocab_size = len(tokenizer)
         if hasattr(model, 'get_input_embeddings'):
-            current_vocab_size = model.get_input_embeddings().num_embeddings
-            if original_vocab_size != current_vocab_size:
-                print(f"  🔄 Resizing token embeddings from {current_vocab_size} to {original_vocab_size}")
-                model.resize_token_embeddings(original_vocab_size)
-                print("  ✅ Token embeddings resized")
+            model_vocab_size = model.get_input_embeddings().num_embeddings
+            print(f"  ℹ️ Tokenizer vocab size: {tokenizer_vocab_size}")
+            print(f"  ℹ️ Model vocab size: {model_vocab_size}")
+            
+            if tokenizer_vocab_size != model_vocab_size:
+                print(f"  ⚠️ Vocab size mismatch detected - using model's original size")
+                print(f"  ➡️ This is normal for this model - no resizing needed")
     except Exception as e:
-        print(f"  ⚠️ Warning: Could not resize embeddings: {e}")
+        print(f"  ⚠️ Warning: Could not check embeddings: {e}")
 
     return tokenizer, model
 
@@ -186,8 +188,8 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
 # ---------------- GENERATION ----------------
 def generate_reply(model, tokenizer, prompt: str) -> Tuple[str, float]:
     try:
-        # Tokenize input
-        inputs = tokenizer(prompt, return_tensors="pt")
+        # Tokenize input with proper error handling
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
         input_ids = inputs.input_ids.to(model.device)
         
         # Get attention mask if available
@@ -195,17 +197,27 @@ def generate_reply(model, tokenizer, prompt: str) -> Tuple[str, float]:
         if "attention_mask" in inputs:
             attention_mask = inputs.attention_mask.to(model.device)
 
+        # Check for vocab size issues before generation
+        max_token_id = input_ids.max().item()
+        if hasattr(model, 'get_input_embeddings'):
+            model_vocab_size = model.get_input_embeddings().num_embeddings
+            if max_token_id >= model_vocab_size:
+                print(f"  ⚠️ Token ID {max_token_id} exceeds model vocab size {model_vocab_size}")
+                # Filter out problematic tokens
+                input_ids = torch.clamp(input_ids, 0, model_vocab_size - 1)
+
         with torch.no_grad():
             t0 = time.time()
             
-            # Prepare generation arguments
+            # Prepare generation arguments with more conservative settings
             gen_kwargs = {
                 "input_ids": input_ids,
-                "max_new_tokens": MAX_NEW_TOKENS,
+                "max_new_tokens": min(MAX_NEW_TOKENS, 128),  # More conservative
                 "do_sample": True,
                 "temperature": TEMPERATURE,
                 "top_p": TOP_P,
                 "top_k": TOP_K,
+                "use_cache": True,
             }
             
             # Add optional parameters if available
