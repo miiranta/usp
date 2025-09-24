@@ -228,13 +228,6 @@ def main():
         if model in OPEN_MODELS:
             print(f"Loading model {model}...")
 
-            original_cuda_available = torch.cuda.is_available
-            original_get_device_capability = torch.cuda.get_device_capability
-            original_get_device_properties = torch.cuda.get_device_properties
-            torch.cuda.is_available = lambda: False
-            torch.cuda.get_device_capability = lambda device=None: (0, 0)
-            torch.cuda.get_device_properties = lambda device: None
-            
             try:
                 loaded_model = AutoModelForCausalLM.from_pretrained(
                     pretrained_model_name_or_path=model,
@@ -257,12 +250,6 @@ def main():
                 print(f"Error loading model {model}: {e}")
                 print("Skipping this model...")
                 continue
-                
-            finally:
-                torch.cuda.is_available = original_cuda_available
-                torch.cuda.get_device_capability = original_get_device_capability
-                torch.cuda.get_device_properties = original_get_device_properties
-                torch.cuda.empty_cache()
                 
         for text_file in text_files:
             
