@@ -1,5 +1,6 @@
 import time
 import torch
+import os
 from typing import Tuple
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from dotenv import load_dotenv
