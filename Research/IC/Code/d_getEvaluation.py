@@ -58,13 +58,17 @@ MODELS = [
     #"gpt-3.5-turbo",
     #"gpt-4o",
     #"gpt-5",
+    
+    # 'meta-llama/Llama-4-Scout-17B-16E'
+    # 
+    # 
+    # 
 ]
 
 OPEN_MODELS = [
     # OPEN -------------
     
     # META
-    'meta-llama/Llama-4-Scout-17B-16E',
     'meta-llama/Llama-3.2-3B',
     'meta-llama/Llama-3.1-70B',
     'meta-llama/Meta-Llama-3-70B',
@@ -86,7 +90,6 @@ OPEN_MODELS = [
     
     # OPENAI
     'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
     'openai-community/gpt2-xl',
     'openai-community/openai-gpt',
 ]
@@ -145,35 +148,16 @@ class Evaluation:
             print("No model or tokenizer loaded.")
             self.grade = -2
             return
+        
         try:
-           
-            try: 
-                print("Using chat template...")
-                messages = [
-                    {"role": "user", "content": PROMPT + self.sentence},
-                ]
-                inputs = loaded_tokenizer.apply_chat_template(
-                    messages,
-                    add_generation_prompt=True,
-                    return_tensors="pt",
-                    return_dict=True,
-                )
-                input_ids = inputs.get("input_ids")
-                attention_mask = inputs.get("attention_mask")
-            except Exception:
-                print("Chat template failed, using basic prompt...")
-                prompt_with_input = PROMPT + self.sentence + "\n\nResposta:"
-                inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
-                input_ids = inputs.get("input_ids")
-                attention_mask = inputs.get("attention_mask")
+            prompt_with_input = PROMPT + self.sentence + "\n\nRESPOSTA:"
+            inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
+            input_ids = inputs.get("input_ids")
 
             with torch.no_grad():
                 generated = loaded_model.generate(
                     input_ids=input_ids,
                     max_new_tokens=5000,
-                    attention_mask=attention_mask,
-                    pad_token_id=loaded_tokenizer.eos_token_id,
-                    eos_token_id=loaded_tokenizer.eos_token_id,
                 )
 
             gen_start = input_ids.shape[-1]
@@ -184,11 +168,7 @@ class Evaluation:
 
             sanitized = decoded.upper()
             sanitized = sanitized.replace('\r', ' ').replace('\n', ' ').strip()
-
-            for ch in reversed(sanitized):
-                if ch in ("O", "N", "P"):
-                    self.grade = ch
-                    return
+            self.grade = sanitized[0]
 
             return
         except Exception as e:
