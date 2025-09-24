@@ -145,6 +145,7 @@ class Evaluation:
         try:
            
             try: 
+                print("Using chat template...")
                 messages = [
                     {"role": "user", "content": PROMPT + self.sentence},
                 ]
@@ -157,6 +158,7 @@ class Evaluation:
                 input_ids = inputs.get("input_ids")
                 attention_mask = inputs.get("attention_mask")
             except Exception:
+                print("Chat template failed, using basic prompt...")
                 prompt_with_input = PROMPT + self.sentence + "\n\nResposta:"
                 inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
                 input_ids = inputs.get("input_ids")
@@ -180,9 +182,10 @@ class Evaluation:
             sanitized = decoded.upper()
             sanitized = sanitized.replace('\r', ' ').replace('\n', ' ').strip()
 
-            for ch in sanitized:
+            for ch in reversed(sanitized):
                 if ch in ("O", "N", "P"):
                     self.grade = ch
+                    return
 
             return
         except Exception as e:
