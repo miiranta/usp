@@ -1,15 +1,10 @@
 import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-import re
 import csv
 import time
 import openai
-import torch
-import unicodedata
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from dotenv import load_dotenv
-from huggingface_hub import login
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "sentences_selected")
@@ -24,14 +19,11 @@ if not os.path.exists(OUTPUT_FOLDER):
 
 load_dotenv(os.path.join(SCRIPT_FOLDER, '.env'))
 
-HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-
-login(token=HUGGINGFACE_API_KEY)
-openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
-
-loaded_model = None
-loaded_tokenizer = None
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+openrouter_client = openai.OpenAI(
+    api_key=OPENROUTER_API_KEY,
+    base_url="https://openrouter.ai/api/v1",
+)
 
 PROMPT = """
 DEFINIÇÃO DE OTIMISMO:
@@ -55,43 +47,42 @@ MODELS = [
     # CLOSED -----------
     
     # OPENAI
-    #"gpt-3.5-turbo",
-    #"gpt-4o",
-    #"gpt-5",
+    #"openai/gpt-5",
     
-    # 'meta-llama/Llama-4-Scout-17B-16E'
-    # 
-    # 
-    # 
-]
-
-OPEN_MODELS = [
-    # OPEN -------------
-    
-    # META
-    'meta-llama/Llama-3.2-3B',
-    #'meta-llama/Llama-3.1-70B',
-    #'meta-llama/Meta-Llama-3-70B',
-    #'meta-llama/Llama-2-70b-hf',
+    # ANTHROPIC
+    #"anthropic/claude-sonnet-4",
     
     # GOOGLE
-    #'google/gemma-3n-E4B',
-    #'google/gemma-3-27b-pt',
-    #'google/gemma-2-27b',
-    'google/gemma-7b',
-    'google/recurrentgemma-9b',
-
-    # MICROSOFT
-    'microsoft/Phi-4-reasoning-plus',
-    'microsoft/phi-4',
-    'microsoft/phi-2',
-    'microsoft/phi-1_5',
-    'microsoft/phi-1',
+    #"google/gemini-2.5-pro",
+    
+    # OPEN -------------
     
     # OPENAI
-    #'openai/gpt-oss-120b',
-    'openai-community/gpt2-xl',
-    'openai-community/openai-gpt',
+    "openai/gpt-oss-120b:free",
+    
+    # META
+    "meta-llama/llama-4-maverick:free",
+    
+    # GOOGLE
+    "google/gemma-3-27b-it:free",
+
+    # MICROSOFT
+    "microsoft/phi-4",
+    
+    # XAI
+    "x-ai/grok-4-fast:free",
+    
+    # DEEPSEEK
+    "deepseek/deepseek-chat-v3.1:free"
+    
+]
+
+TIMER_MODELS = [
+    "openai/gpt-oss-120b:free",
+    "meta-llama/llama-4-maverick:free",
+    "google/gemma-3-27b-it:free",
+    "x-ai/grok-4-fast:free",
+    "deepseek/deepseek-chat-v3.1:free"
 ]
 
 RETRIES = 5
@@ -121,89 +112,69 @@ class Evaluation:
 
     def evaluate(self, model):
         self.model = model
-        
-        if model == "gpt-3.5-turbo":
-            self.evaluate_openai(model)
+    
+        if model == "openai/gpt-5":
+            self.evaluate_openrouter(model, 512)
+            self.string_grade_to_int()
+            print(f" -> {self.grade}")   
+        elif model == "openai/gpt-oss-120b:free":
+            self.evaluate_openrouter(model, 256)
+            self.string_grade_to_int()
+            print(f" -> {self.grade}")    
+        elif model == "google/gemini-2.5-pro":
+            self.evaluate_openrouter(model, 128)
             self.string_grade_to_int()
             print(f" -> {self.grade}")
-            
-        elif model == "gpt-4o":
-            self.evaluate_openai(model)
+        elif model == "google/gemma-3-27b-it:free":
+            self.evaluate_openrouter(model, 8)
             self.string_grade_to_int()
             print(f" -> {self.grade}")
-            
-        elif model == "gpt-5":
-            self.evaluate_openai_gpt5(model)
-            self.string_grade_to_int()
-            print(f" -> {self.grade}")
-            
         else:
-            self.evaluate_open_model(model)
+            self.evaluate_openrouter(model, 1)
             self.string_grade_to_int()
             print(f" -> {self.grade}")
-           
-    def evaluate_open_model(self, model):
-        global loaded_model, loaded_tokenizer
-        if loaded_model is None or loaded_tokenizer is None:
-            print("No model or tokenizer loaded.")
-            self.grade = -2
-            return
-        try:
-            prompt_with_input = PROMPT + self.sentence + "\nRESPOSTA:"
-            inputs = loaded_tokenizer(prompt_with_input, return_tensors="pt")
-            with torch.no_grad():
-                generated = loaded_model.generate(
-                    **inputs,
-                    pad_token_id=loaded_tokenizer.eos_token_id,
-                )
 
-            decoded = loaded_tokenizer.decode(generated[0], skip_special_tokens=True).upper().strip()
-            sanitized = decoded.replace('\r', ' ').replace('\n', ' ').strip()
-            
-            resposta_index = sanitized.find("RESPOSTA:")
-            response_part = sanitized[resposta_index + len("RESPOSTA:"):].strip()
-            print(f' --> {response_part}')
-            
-            self.grade = response_part[0]
-            return
-        except Exception as e:
-            print(f"Error evaluating with {model}: {e}")
-            self.grade = -2
-            return
-     
-    def evaluate_openai(self, model):
-        try:
-            response = openai_client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": PROMPT + self.sentence}],
-                max_tokens=1
-            )
-            self.grade = response.choices[0].message.content.upper()
-            return
-        except Exception as e:
-            print(f"Error evaluating with {model}: {e}")
-            return
+    def evaluate_openrouter(self, model, max_tokens=1):
+        free = False
+        if ":free" in model:
+            free = True
+            model_without_free = model.replace(":free", "")
+        else:
+            model_without_free = model
         
-    def evaluate_openai_gpt5(self, model):
+        # Try free model first if applicable
+        if free:
+            print(f" - Trying free.")
+            try:
+                response = openrouter_client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": PROMPT + self.sentence}],
+                    max_tokens=max_tokens,
+                )
+                self.grade = response.choices[0].message.content.upper().replace('\n', '').strip()
+                return
+            except Exception as e:
+                print(f"Error evaluating with {model}: {e}")
+        
+        # Then try paid model
         try:
-            response = openai_client.chat.completions.create(
-                model=model,
+            print(f" - Trying paid.")
+            response = openrouter_client.chat.completions.create(
+                model=model_without_free,
                 messages=[{"role": "user", "content": PROMPT + self.sentence}],
-                max_completion_tokens=5000
+                max_tokens=max_tokens,
             )
-            self.grade = response.choices[0].message.content.upper()
+            self.grade = response.choices[0].message.content.upper().replace('\n', '').strip()
             return
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
             return
-
+    
 def _date_key(d):
     day, month, year = map(int, d.split('/'))
     return (year, month, day)
 
 def main():
-    global loaded_model, loaded_tokenizer
-    
     raw_text_files = [f for f in os.listdir(INPUT_FOLDER) if f.endswith('.txt')]
     if not raw_text_files:
         print("No text files found in the input directory.")
@@ -217,38 +188,10 @@ def main():
         
     text_files.sort(key=lambda f: _date_key(f.date))
 
-    for model in MODELS + OPEN_MODELS:
-        
-        # Open model? Load it
-        if model in OPEN_MODELS:
-            print(f"Loading model {model}...")
-
-            try:
-                loaded_model = AutoModelForCausalLM.from_pretrained(
-                    pretrained_model_name_or_path=model,
-                    device_map="cpu",
-                    dtype=torch.float32,
-                    low_cpu_mem_usage=True,
-                    trust_remote_code=True,
-                    use_safetensors=True,
-                    attn_implementation="eager",
-                )
-                
-                loaded_tokenizer = AutoTokenizer.from_pretrained(
-                    pretrained_model_name_or_path=model,
-                    trust_remote_code=True,
-                )
-                
-                print(f"Successfully loaded {model}")
-                
-            except Exception as e:
-                print(f"Error loading model {model}: {e}")
-                print("Skipping this model...")
-                continue
-                
+    for model in MODELS:
         for text_file in text_files:
             
-            safe_model = model.replace('/', '_')
+            safe_model = model.replace(':free', '').replace('/', '-')
             output_file_path = os.path.join(OUTPUT_FOLDER, f"{safe_model}_{text_file.date.replace('/', '')}.csv")
             if os.path.exists(output_file_path):
                 print(f"Output file for {model} on {text_file.date} already exists. Skipping...")
@@ -282,7 +225,7 @@ def main():
                             return
                                 
                     # Sleep to avoid rate limits
-                    if model not in OPEN_MODELS:
+                    if model in TIMER_MODELS:
                         time.sleep(0.15)
                         
             with open(output_file_path, 'w', encoding='utf-8-sig', newline='') as f:
@@ -291,17 +234,10 @@ def main():
                 for evaluation in evaluations:
                     writer.writerow([
                         evaluation.date,
-                        evaluation.model,
+                        evaluation.model.replace(':free', ''),
                         evaluation.grade,
                         evaluation.sentence
                     ])
-                    
-        # Unload model
-        if model in OPEN_MODELS:
-            del loaded_model
-            del loaded_tokenizer
-            torch.cuda.empty_cache()
-            print(f"Unloaded model {model}.")
 
 if __name__ == "__main__":
     main()
