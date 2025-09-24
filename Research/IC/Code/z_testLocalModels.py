@@ -58,8 +58,20 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
     for i, attempt in enumerate(tokenizer_attempts, 1):
         try:
             print(f"  Attempt {i}: Loading tokenizer...")
-            tokenizer = attempt()
-            print(f"  ✅ Successfully loaded tokenizer with attempt {i}")
+            result = attempt()
+            
+            # Validate that we got a proper tokenizer object
+            if result is None or isinstance(result, bool):
+                print(f"  ❌ Attempt {i} returned invalid type: {type(result)}")
+                continue
+            
+            # Check if it has essential tokenizer methods
+            if not (hasattr(result, 'encode') and hasattr(result, 'decode')):
+                print(f"  ❌ Attempt {i} returned object without tokenizer methods: {type(result)}")
+                continue
+                
+            tokenizer = result
+            print(f"  ✅ Successfully loaded tokenizer with attempt {i} (type: {type(tokenizer)})")
             break
         except Exception as e:
             print(f"  ❌ Attempt {i} failed: {e}")
@@ -70,9 +82,10 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
     print("🔄 Configuring tokenizer...")
     try:
         # Verify we have a valid tokenizer object
-        if tokenizer is None or not hasattr(tokenizer, 'pad_token'):
-            raise RuntimeError("Invalid tokenizer object")
+        if tokenizer is None or isinstance(tokenizer, bool) or not hasattr(tokenizer, 'pad_token'):
+            raise RuntimeError(f"Invalid tokenizer object of type: {type(tokenizer)}")
         
+        print(f"  Tokenizer type: {type(tokenizer)}")
         print(f"  Current pad_token: {getattr(tokenizer, 'pad_token', 'None')}")
         print(f"  Current eos_token: {getattr(tokenizer, 'eos_token', 'None')}")
         
@@ -109,9 +122,9 @@ def load_model(model_name: str, use_8bit: bool, device: str) -> Tuple[AutoTokeni
                 print(f"  ⚠️ Could not set pad_token_id: {convert_error}")
     
     except Exception as e:
-        print(f"  ⚠️ Warning: Could not configure pad token: {e}")
-        print(f"  ⚠️ Tokenizer type: {type(tokenizer)}")
-        # Continue anyway, some models work without explicit pad tokens
+        print(f"  ❌ Error: Could not configure tokenizer: {e}")
+        print("  ➡️ This suggests a fundamental issue with tokenizer loading.")
+        raise RuntimeError(f"Tokenizer configuration failed: {e}")
 
     print(f"🔄 Loading model '{model_name}' (8bit={use_8bit}) on {device}...")
     
