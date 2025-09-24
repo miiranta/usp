@@ -8,6 +8,7 @@ from huggingface_hub import login
 
 MODEL_NAME = "meta-llama/Llama-4-Scout-17B-16E"
 
+SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(SCRIPT_FOLDER, '.env'))
 HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY')
 login(token=HUGGINGFACE_API_KEY)
