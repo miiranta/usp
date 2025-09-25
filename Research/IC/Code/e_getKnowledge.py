@@ -1,6 +1,7 @@
 import csv
 import os
 import math
+import time
 import matplotlib.pyplot as plt
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
@@ -205,7 +206,7 @@ def plot_average_by_date_and_model(result_csv_data):
         print("No models found to plot.")
         return
     
-    fig, ax = plt.subplots(figsize=(24, 6))
+    fig, ax = plt.subplots(figsize=(29, 9))
     x_positions = list(range(len(dates_sorted)))
 
     for model in models:
@@ -237,13 +238,14 @@ def plot_average_by_date_and_model(result_csv_data):
     ax.set_xticklabels(tick_labels, rotation=60, ha='right')
     ax.tick_params(axis='x', pad=12)
 
-    ax.set_xlabel('Date')
+    #ax.set_xlabel('Date')
     ax.set_ylabel('Average Grade')
     ax.set_title('Average Grade by Date')
 
     ax.legend()
     fig.tight_layout()
-    fig.subplots_adjust(bottom=0.35)
+    fig.subplots_adjust(bottom=0.2)
+    fig.subplots_adjust(top=0.9)
 
     output_file_path = os.path.join(OUTPUT_FOLDER, "average_grade_by_date.png")
     fig.savefig(output_file_path)
@@ -327,4 +329,7 @@ def main():
     print("Processing completed.")
     
 if __name__ == "__main__":
-    main()
+    while True:
+        main()
+        print("Refreshing...")
+        time.sleep(10)
