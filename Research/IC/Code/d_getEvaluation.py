@@ -55,10 +55,13 @@ MODELS = [
     # GOOGLE
     #"google/gemini-2.5-pro",
     
+    # XAI
+    "x-ai/grok-4-fast:free",
+    
     # OPEN -------------
     
     # OPENAI
-    "openai/gpt-oss-120b:free",
+    "openai/gpt-oss-120b", #"openai/gpt-oss-120b:free",
     
     # META
     "meta-llama/llama-4-maverick:free",
@@ -68,9 +71,6 @@ MODELS = [
 
     # MICROSOFT
     "microsoft/phi-4",
-    
-    # XAI
-    "x-ai/grok-4-fast:free",
     
     # DEEPSEEK
     "deepseek/deepseek-chat-v3.1:free"
@@ -117,8 +117,8 @@ class Evaluation:
             self.evaluate_openrouter(model, 512)
             self.string_grade_to_int()
             print(f" -> {self.grade}")   
-        elif model == "openai/gpt-oss-120b:free":
-            self.evaluate_openrouter(model, 256)
+        elif model == "openai/gpt-oss-120b":
+            self.evaluate_openrouter(model, 512)
             self.string_grade_to_int()
             print(f" -> {self.grade}")    
         elif model == "google/gemini-2.5-pro":
