@@ -3,10 +3,13 @@ import os
 import math
 import time
 import matplotlib.pyplot as plt
+from scipy import stats
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "csvs")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "info_and_graphs")
+
+confidences_to_check = [0.95, 0.99]
 
 if not os.path.exists(INPUT_FOLDER):
     print("Input folder does not exist.")
@@ -163,11 +166,14 @@ def get_grade_standard_deviation_global(result_csv_data):
     if not grades:
         print("No valid grades found.")
         return None
-    
+
+    if len(grades) == 1:
+        return 0.0
+
     mean = sum(grades) / len(grades)
     variance = sum((x - mean) ** 2 for x in grades) / (len(grades) - 1)
     std_dev = math.sqrt(variance)
-    
+
     return std_dev
 
 def get_grade_standard_deviation_model(result_csv_data, model):
@@ -184,12 +190,70 @@ def get_grade_standard_deviation_model(result_csv_data, model):
     if not grades:
         print(f"No valid grades found for model: {model}")
         return None
-    
+
+    if len(grades) == 1:
+        return 0.0
+
     mean = sum(grades) / len(grades)
     variance = sum((x - mean) ** 2 for x in grades) / (len(grades) - 1)
     std_dev = math.sqrt(variance)
-    
+
     return std_dev
+
+def get_grade_confidence_interval_global(result_csv_data, confidence=0.95):
+    grades = []
+    
+    for row in result_csv_data[1:]:
+        try:
+            grade = int(row[2])
+            grades.append(grade)
+        except ValueError:
+            print(f"Invalid grade value in row: {row}")
+    
+    if not grades:
+        print("No valid grades found.")
+        return None
+    mean = sum(grades) / len(grades)
+
+    if len(grades) == 1:
+        return (mean, mean)
+
+    variance = sum((x - mean) ** 2 for x in grades) / (len(grades) - 1)
+    std_dev = math.sqrt(variance)
+
+    z_score = stats.norm.ppf((1 + confidence) / 2)
+    margin_of_error = z_score * (std_dev / math.sqrt(len(grades)))
+
+    confidence_interval = (mean - margin_of_error, mean + margin_of_error)
+    return confidence_interval
+
+def get_grade_confidence_interval_model(result_csv_data, model, confidence=0.95):
+    grades = []
+    
+    for row in result_csv_data[1:]:
+        if row[1].strip() == model:
+            try:
+                grade = int(row[2])
+                grades.append(grade)
+            except ValueError:
+                print(f"Invalid grade value in row: {row}")
+    
+    if not grades:
+        print(f"No valid grades found for model: {model}")
+        return None
+    mean = sum(grades) / len(grades)
+
+    if len(grades) == 1:
+        return (mean, mean)
+
+    variance = sum((x - mean) ** 2 for x in grades) / (len(grades) - 1)
+    std_dev = math.sqrt(variance)
+
+    z_score = stats.norm.ppf((1 + confidence) / 2)
+    margin_of_error = z_score * (std_dev / math.sqrt(len(grades)))
+
+    confidence_interval = (mean - margin_of_error, mean + margin_of_error)
+    return confidence_interval
 
 ## 
 
@@ -251,9 +315,63 @@ def plot_average_by_date_and_model(result_csv_data):
     fig.savefig(output_file_path)
     plt.close(fig)
 
-##
+def plot_average_and_confidence_interval_by_model(result_csv_data, confidence=0.95):
+    models = get_available_models()
+    if not models:
+        print("No models found to plot.")
+        return
+    
+    fig, ax = plt.subplots(figsize=(max(8, len(models) * 0.8 + 4), 9))
+    x_positions = list(range(len(models) + 1))  # +1 for global
+    labels = models + ['Global']
+
+    cmap = plt.get_cmap('tab20')
+
+    for i, model in enumerate(models):
+        avg = get_grade_avarage_model(result_csv_data, model)
+        ci = get_grade_confidence_interval_model(result_csv_data, model, confidence)
+        pos = i
+
+        color = cmap(i % cmap.N)
+
+        if avg is not None and ci is not None:
+            lower = avg - ci[0]
+            upper = ci[1] - avg
+
+            ax.errorbar([pos], [avg], yerr=[[lower], [upper]], fmt='o', color=color, ecolor=color, capsize=5, markersize=7, linestyle='none')
+            ax.axhline(avg, color=color, linestyle=':', linewidth=1, alpha=0.8, zorder=0)
+        else:
+            ax.plot([pos], [float('nan')], marker='o', color=color)
+
+    avg_global = get_grade_avarage_global(result_csv_data)
+    ci_global = get_grade_confidence_interval_global(result_csv_data, confidence)
+    global_pos = len(models)
+    global_color = cmap(len(models) % cmap.N)
+
+    if avg_global is not None and ci_global is not None:
+        lower_g = avg_global - ci_global[0]
+        upper_g = ci_global[1] - avg_global
+        ax.errorbar([global_pos], [avg_global], yerr=[[lower_g], [upper_g]], fmt='o',
+                    color=global_color, ecolor=global_color, capsize=5, markersize=7, linestyle='none')
+        ax.axhline(avg_global, color=global_color, linestyle=':', linewidth=1, alpha=0.8, zorder=0)
+    else:
+        ax.plot([global_pos], [float('nan')], marker='o', color=global_color)
+
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(labels, rotation=45, ha='right')
+    ax.set_ylabel('Average Grade')
+    ax.set_title(f"Average Grade with {int(confidence*100)}% Confidence Interval by Model")
+
+    ax.axhline(0, color='gray', linestyle='--', linewidth=1, zorder=0)
+
+    plt.tight_layout()
+    output_file_path = os.path.join(OUTPUT_FOLDER, "average_ci_by_model_" + str(int(confidence*100)) + "perc.png")
+    fig.savefig(output_file_path)
+    plt.close(fig)
 
 def main():
+    global confidences_to_check
+    
     # Append CSVs
 
     result_csv_data = get_appended_csvs()
@@ -267,6 +385,9 @@ def main():
     # Plot dates
     
     plot_average_by_date_and_model(result_csv_data)
+    
+    for confidence in confidences_to_check:
+        plot_average_and_confidence_interval_by_model(result_csv_data, confidence)
     
     # Frequency and average
     
@@ -323,7 +444,20 @@ def main():
             if std_dev_model is not None:
                 f.write(f" > Standard Deviation for {model}: {std_dev_model:.64f}")
             f.write("\n")
+        
+        # Confidence Interval
+        
+        for confidence in confidences_to_check:
+            conf_int = get_grade_confidence_interval_global(result_csv_data, confidence)
             
+            if conf_int is not None:
+                f.write(f"{int(confidence*100)}% Confidence Interval (global): ({conf_int[0]:.64f}, {conf_int[1]:.64f})\n")
+            
+            for model in available_model:
+                conf_int_model = get_grade_confidence_interval_model(result_csv_data, model, confidence)
+                if conf_int_model is not None:
+                    f.write(f" > {int(confidence*100)}% Confidence Interval for {model}: ({conf_int_model[0]:.64f}, {conf_int_model[1]:.64f})\n")
+        
         f.write("--------\n")
     
     print("Processing completed.")
