@@ -255,6 +255,66 @@ def get_grade_confidence_interval_model(result_csv_data, model, confidence=0.95)
     confidence_interval = (mean - margin_of_error, mean + margin_of_error)
     return confidence_interval
 
+def get_grade_EQM_all(result_csv_data): # GLOBAL 1/n Sum (Global_mean - Model_mean)^2 PER MODEL (Global_mean - Model_mean)^2
+    models = get_available_models()
+    global_mean = get_grade_avarage_global(result_csv_data)
+
+    if global_mean is None or not models:
+        return 0.0, {}
+
+    eqm_total = 0.0
+    per_model = {}
+
+    valid_models_count = 0
+
+    for model in models:
+        model_mean = get_grade_avarage_model(result_csv_data, model)
+        if model_mean is None:
+            continue
+        diff = global_mean - model_mean
+        sq = diff * diff
+        per_model[model] = sq
+        eqm_total += sq
+        valid_models_count += 1
+
+    if valid_models_count == 0:
+        return 0.0, per_model
+
+    eqm_total = eqm_total / valid_models_count
+    return eqm_total, per_model
+
+def get_grade_discordance_per_phrase(result_csv_data): # PER PHRASE 1/n Sum (grade - average_grade)^2
+    phrase_dict = {}
+
+    for row in result_csv_data[1:]:
+        phrase = row[3].strip()
+        try:
+            grade = int(row[2])
+            if phrase in phrase_dict:
+                phrase_dict[phrase].append(grade)
+            else:
+                phrase_dict[phrase] = [grade]
+        except ValueError:
+            print(f"Invalid grade value in row: {row}")
+
+    discordance_per_phrase = {}
+    phrase_counts = {}
+    phrase_grades = {}
+
+    for phrase, grades in phrase_dict.items():
+        if not grades:
+            continue
+        mean = sum(grades) / len(grades)
+        variance = sum((x - mean) ** 2 for x in grades) / len(grades)
+        discordance_per_phrase[phrase] = variance
+        phrase_counts[phrase] = len(grades)
+        phrase_grades[phrase] = list(grades)
+
+    # Order bigger discordance first
+    discordance_per_phrase = dict(sorted(discordance_per_phrase.items(), key=lambda item: item[1], reverse=True))
+
+    return discordance_per_phrase, phrase_counts, phrase_grades
+
 ## 
 
 def plot_average_by_date_and_model(result_csv_data):
@@ -389,7 +449,7 @@ def main():
     for confidence in confidences_to_check:
         plot_average_and_confidence_interval_by_model(result_csv_data, confidence)
     
-    # Frequency and average
+    # Frequency and average (between models)
     
     freq_avg_file_path = os.path.join(OUTPUT_FOLDER, "info.txt")
     with open(freq_avg_file_path, 'w', encoding='utf-8') as f:
@@ -402,7 +462,7 @@ def main():
             f.write(f"Available models: {', '.join(available_model)}\n")
         f.write("--------\n")
         
-        # Average
+        # Average (between models)
         
         average_grade = get_grade_avarage_global(result_csv_data)
         
@@ -414,7 +474,7 @@ def main():
             if average_grade_model is not None:
                 f.write(f" > Average grade for {model}: {average_grade_model:.64f}\n")
         
-        # Frequency
+        # Frequency (between models)
         
         f.write("--------\n")
         frequency_grade = get_grade_frequency_global(result_csv_data)
@@ -433,7 +493,7 @@ def main():
                     f.write(f"[{grade}]: {frequency} ")
                 f.write("\n")
                 
-        # Standard Deviation
+        # Standard Deviation (between models)
         
         f.write("--------\n")
         std_dev = get_grade_standard_deviation_global(result_csv_data)
@@ -447,7 +507,7 @@ def main():
                 f.write(f" > Standard Deviation for {model}: {std_dev_model:.64f}")
             f.write("\n")
         
-        # Confidence Interval
+        # Confidence Interval (between models)
         
         for confidence in confidences_to_check:
             f.write("--------\n")
@@ -461,6 +521,28 @@ def main():
                 if conf_int_model is not None:
                     f.write(f" > {int(confidence*100)}% Confidence Interval for {model}: ({conf_int_model[0]:.64f}, {conf_int_model[1]:.64f})\n")
         
+        # EQM (between models)
+        
+        f.write("--------\n")
+        eqm_total, per_model = get_grade_EQM_all(result_csv_data)
+        
+        f.write(f"EQM Total (global): {eqm_total:.64f}\n")
+        for model, eqm in per_model.items():
+            f.write(f" > EQM for {model}: {eqm:.64f}\n")
+        
+        # Discordance per phrase (between models)
+
+        f.write("--------\n")
+        discordance_per_phrase, phrase_counts, phrase_grades = get_grade_discordance_per_phrase(result_csv_data)
+
+        f.write("Top 100 phrases with highest discordance (variance):\n")
+        for i, (phrase, discordance) in enumerate(discordance_per_phrase.items()):
+            if i >= 100:
+                break
+            count = phrase_counts.get(phrase, 0)
+            grades_list = phrase_grades.get(phrase, [])
+            f.write(f"{i + 1}. Discordance: {discordance:.64f} | Count: {count} | Grades: {grades_list} | Phrase: {phrase}\n")
+
         f.write("--------\n")
     
     print("Processing completed.")
