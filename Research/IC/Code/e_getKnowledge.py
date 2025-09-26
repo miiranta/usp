@@ -287,13 +287,15 @@ def get_grade_discordance_per_phrase(result_csv_data): # PER PHRASE 1/n Sum (gra
     phrase_dict = {}
 
     for row in result_csv_data[1:]:
+        date = row[0].strip()
         phrase = row[3].strip()
+        phrase_key = f"{phrase} | {date}"
         try:
             grade = int(row[2])
-            if phrase in phrase_dict:
-                phrase_dict[phrase].append(grade)
+            if phrase_key in phrase_dict:
+                phrase_dict[phrase_key].append(grade)
             else:
-                phrase_dict[phrase] = [grade]
+                phrase_dict[phrase_key] = [grade]
         except ValueError:
             print(f"Invalid grade value in row: {row}")
 
@@ -310,7 +312,6 @@ def get_grade_discordance_per_phrase(result_csv_data): # PER PHRASE 1/n Sum (gra
         phrase_counts[phrase] = len(grades)
         phrase_grades[phrase] = list(grades)
 
-    # Order bigger discordance first
     discordance_per_phrase = dict(sorted(discordance_per_phrase.items(), key=lambda item: item[1], reverse=True))
 
     return discordance_per_phrase, phrase_counts, phrase_grades
@@ -442,7 +443,7 @@ def main():
         for row in result_csv_data:
             writer.writerow(row)
 
-    # Plot dates
+    # Plots
     
     plot_average_by_date_and_model(result_csv_data)
     
@@ -460,6 +461,16 @@ def main():
         f.write(f"Found {len(result_csv_data)} rows in total across all CSV files.\n")
         if available_model:
             f.write(f"Available models: {', '.join(available_model)}\n")
+        unique_phrases = {row[3].strip() for row in result_csv_data[1:]}
+        f.write(f"Unique phrases evaluated: {len(unique_phrases)}\n")    
+        unique_dates = {row[0].strip() for row in result_csv_data[1:]}
+        f.write(f"Unique dates evaluated: {len(unique_dates)}\n")
+        max_rows_per_model = 0
+        for model in available_model:
+            model_rows = sum(1 for row in result_csv_data[1:] if row[1].strip() == model)
+            if model_rows > max_rows_per_model:
+                max_rows_per_model = model_rows
+        f.write(f"Maximum number rows for a single model: {max_rows_per_model}\n")
         f.write("--------\n")
         
         # Average (between models)
