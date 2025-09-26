@@ -80,9 +80,9 @@ MODELS = [
 TIMER_MODELS = [
     "openai/gpt-oss-120b:free",
     "meta-llama/llama-4-maverick:free",
-    "google/gemma-3-27b-it:free",
+    #"google/gemma-3-27b-it:free",
     "x-ai/grok-4-fast:free",
-    "deepseek/deepseek-chat-v3.1:free"
+    #"deepseek/deepseek-chat-v3.1:free"
 ]
 
 RETRIES = 5
@@ -151,7 +151,7 @@ class Evaluation:
                     messages=[{"role": "user", "content": PROMPT + self.sentence}],
                     max_tokens=max_tokens,
                 )
-                self.grade = response.choices[0].message.content.upper().replace('\n', '').strip()
+                self.grade = response.choices[0].message.content.upper().replace('\n', '').replace('.', '').strip()
                 return
             except Exception as e:
                 print(f"Error evaluating with {model}: {e}")
@@ -164,7 +164,7 @@ class Evaluation:
                 messages=[{"role": "user", "content": PROMPT + self.sentence}],
                 max_tokens=max_tokens,
             )
-            self.grade = response.choices[0].message.content.upper().replace('\n', '').strip()
+            self.grade = response.choices[0].message.content.upper().replace('\n', '').replace('.', '').strip()
             return
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
