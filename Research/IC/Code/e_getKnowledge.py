@@ -360,7 +360,7 @@ def plot_average_and_confidence_interval_by_model(result_csv_data, confidence=0.
     ax.set_xticks(x_positions)
     ax.set_xticklabels(labels, rotation=45, ha='right')
     ax.set_ylabel('Average Grade')
-    ax.set_title(f"Average Grade with {int(confidence*100)}% Confidence Interval by Model")
+    ax.set_title(f"Average Grade by Model (Interval with {int(confidence*100)}% Confidence)")
 
     ax.axhline(0, color='gray', linestyle='--', linewidth=1, zorder=0)
 
@@ -416,6 +416,7 @@ def main():
         
         # Frequency
         
+        f.write("--------\n")
         frequency_grade = get_grade_frequency_global(result_csv_data)
         
         if frequency_grade:
@@ -434,6 +435,7 @@ def main():
                 
         # Standard Deviation
         
+        f.write("--------\n")
         std_dev = get_grade_standard_deviation_global(result_csv_data)
         
         if std_dev is not None:
@@ -448,6 +450,7 @@ def main():
         # Confidence Interval
         
         for confidence in confidences_to_check:
+            f.write("--------\n")
             conf_int = get_grade_confidence_interval_global(result_csv_data, confidence)
             
             if conf_int is not None:
