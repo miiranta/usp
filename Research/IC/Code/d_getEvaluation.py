@@ -47,42 +47,42 @@ MODELS = [
     # CLOSED -----------
     
     # OPENAI
-    #"openai/gpt-5",
+    "openai/gpt-5",
     
     # ANTHROPIC
-    #"anthropic/claude-sonnet-4",
+    "anthropic/claude-sonnet-4",
     
     # GOOGLE
-    #"google/gemini-2.5-pro",
+    "google/gemini-2.5-pro",
     
     # XAI
-    "x-ai/grok-4-fast:free",
+    #"x-ai/grok-4-fast:free",
     
     # OPEN -------------
     
     # OPENAI
-    "openai/gpt-oss-120b", #"openai/gpt-oss-120b:free",
+    #"openai/gpt-oss-120b", #"openai/gpt-oss-120b:free",
     
     # META
-    "meta-llama/llama-4-maverick:free",
+    #"meta-llama/llama-4-maverick:free",
     
     # GOOGLE
-    "google/gemma-3-27b-it:free",
+    #"google/gemma-3-27b-it:free",
 
     # MICROSOFT
-    "microsoft/phi-4",
+    #"microsoft/phi-4",
     
     # DEEPSEEK
-    "deepseek/deepseek-chat-v3.1:free"
+    #"deepseek/deepseek-chat-v3.1:free"
     
 ]
 
 TIMER_MODELS = [
     "openai/gpt-oss-120b:free",
     "meta-llama/llama-4-maverick:free",
-    #"google/gemma-3-27b-it:free",
+    "google/gemma-3-27b-it:free",
     "x-ai/grok-4-fast:free",
-    #"deepseek/deepseek-chat-v3.1:free"
+    "deepseek/deepseek-chat-v3.1:free"
 ]
 
 RETRIES = 10
@@ -114,7 +114,7 @@ class Evaluation:
         self.model = model
     
         if model == "openai/gpt-5":
-            self.evaluate_openrouter(model, 512)
+            self.evaluate_openrouter(model, 1024)
             self.string_grade_to_int()
             print(f" -> {self.grade}")   
         elif model == "openai/gpt-oss-120b":
