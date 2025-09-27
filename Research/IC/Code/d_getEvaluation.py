@@ -121,16 +121,16 @@ class Evaluation:
             self.evaluate_openrouter(model, 512)
             self.string_grade_to_int()
             print(f" -> {self.grade}")
-        elif model == "deepseek/deepseek-chat-v3.1:free":
-            self.evaluate_openrouter(model, 512)
-            self.string_grade_to_int()
-            print(f" -> {self.grade}")
         elif model == "google/gemini-2.5-pro":
             self.evaluate_openrouter(model, 128)
             self.string_grade_to_int()
             print(f" -> {self.grade}")
         elif model == "google/gemma-3-27b-it:free":
             self.evaluate_openrouter(model, 8)
+            self.string_grade_to_int()
+            print(f" -> {self.grade}")
+        elif model == "deepseek/deepseek-chat-v3.1:free":
+            self.evaluate_openrouter(model, 4)
             self.string_grade_to_int()
             print(f" -> {self.grade}")
         else:
