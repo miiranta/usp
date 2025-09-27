@@ -85,7 +85,7 @@ TIMER_MODELS = [
     #"deepseek/deepseek-chat-v3.1:free"
 ]
 
-RETRIES = 5
+RETRIES = 10
 
 class File:
     def __init__(self, file, date):
@@ -120,7 +120,11 @@ class Evaluation:
         elif model == "openai/gpt-oss-120b":
             self.evaluate_openrouter(model, 512)
             self.string_grade_to_int()
-            print(f" -> {self.grade}")    
+            print(f" -> {self.grade}")
+        elif model == "deepseek/deepseek-chat-v3.1:free":
+            self.evaluate_openrouter(model, 512)
+            self.string_grade_to_int()
+            print(f" -> {self.grade}")
         elif model == "google/gemini-2.5-pro":
             self.evaluate_openrouter(model, 128)
             self.string_grade_to_int()
@@ -151,7 +155,7 @@ class Evaluation:
                     messages=[{"role": "user", "content": PROMPT + self.sentence}],
                     max_tokens=max_tokens,
                 )
-                self.grade = response.choices[0].message.content.upper().replace('\n', '').replace('.', '').strip()
+                self.grade = response.choices[0].message.content.upper().replace('\n', '').replace('.', '').replace('<｜BEGIN▁OF▁SENTENCE｜>', '').strip()
                 return
             except Exception as e:
                 print(f"Error evaluating with {model}: {e}")
@@ -164,7 +168,7 @@ class Evaluation:
                 messages=[{"role": "user", "content": PROMPT + self.sentence}],
                 max_tokens=max_tokens,
             )
-            self.grade = response.choices[0].message.content.upper().replace('\n', '').replace('.', '').strip()
+            self.grade = response.choices[0].message.content.upper().replace('\n', '').replace('.', '').replace('<｜BEGIN▁OF▁SENTENCE｜>', '').strip()
             return
         except Exception as e:
             print(f"Error evaluating with {model}: {e}")
