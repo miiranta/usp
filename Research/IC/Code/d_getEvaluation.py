@@ -47,7 +47,7 @@ MODELS = [
     # CLOSED -----------
     
     # OPENAI
-    "openai/gpt-5",
+    #"openai/gpt-5",
     
     # ANTHROPIC
     "anthropic/claude-sonnet-4",
