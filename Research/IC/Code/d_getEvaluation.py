@@ -56,24 +56,24 @@ MODELS = [
     "google/gemini-2.5-pro",
     
     # XAI
-    #"x-ai/grok-4-fast:free",
+    "x-ai/grok-4-fast:free",
     
     # OPEN -------------
     
     # OPENAI
-    #"openai/gpt-oss-120b", #"openai/gpt-oss-120b:free",
+    "openai/gpt-oss-120b", #"openai/gpt-oss-120b:free",
     
     # META
-    #"meta-llama/llama-4-maverick:free",
+    "meta-llama/llama-4-maverick:free",
     
     # GOOGLE
-    #"google/gemma-3-27b-it:free",
+    "google/gemma-3-27b-it:free",
 
     # MICROSOFT
-    #"microsoft/phi-4",
+    "microsoft/phi-4",
     
     # DEEPSEEK
-    #"deepseek/deepseek-chat-v3.1:free"
+    "deepseek/deepseek-chat-v3.1:free"
     
 ]
 
