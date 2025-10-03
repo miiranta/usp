@@ -26,30 +26,41 @@ def _date_key(d):
 
 def read_csv(file_path):
     data = []
+    data_human = []
     with open(file_path, 'r', encoding='utf-8') as file:
         reader = csv.reader(file, delimiter='|')
         for row in reader:
             if row:
-                data.append(row)
-    return data
+                if 'human' in row[1].strip().lower():
+                    data_human.append(row)
+                else:
+                    data.append(row)
+    return data, data_human
 
 def get_appended_csvs():
     csv_files = [f for f in os.listdir(INPUT_FOLDER) if f.endswith('.csv')]
     if not csv_files:
         print("No CSV files found in the input directory.")
-        return []
+        return [], []
     
     result_csv_data = []
+    result_human_data = []
     header = None
+    header_human = None
     for csv_file in csv_files:
         file_path = os.path.join(INPUT_FOLDER, csv_file)
-        csv_data = read_csv(file_path)
+        csv_data, csv_human_data = read_csv(file_path)
         if csv_data:
             header = csv_data[0]
             csv_data = csv_data[1:]
             result_csv_data.extend(csv_data)
+        if csv_human_data:
+            header_human = csv_human_data[0]
+            csv_human_data = csv_human_data[1:]
+            result_human_data.extend(csv_human_data)
        
     result_csv_data.sort(key=lambda row: (row[1], _date_key(row[0])))
+    result_human_data.sort(key=lambda row: (row[1], _date_key(row[0])))
     
     # Check if any grade values are invalid (anything other than -1, 0, 1)
     valid_grades = {-1, 0, 1}
@@ -60,18 +71,25 @@ def get_appended_csvs():
                 print(f"Warning: Invalid grade value '{grade}' found in row: {row}\n")
         except ValueError:
             print(f"Warning: Non-integer grade value '{row[2]}' found in row: {row}\n")
-    
+    for row in result_human_data:
+        try:
+            grade = int(row[2])
+            if grade not in valid_grades:
+                print(f"Warning: Invalid grade value '{grade}' found in row: {row}\n")
+        except ValueError:
+            print(f"Warning: Non-integer grade value '{row[2]}' found in row: {row}\n")
        
     if header:
         result_csv_data.insert(0, header)
+    if header_human:
+        result_human_data.insert(0, header_human)
 
-    return result_csv_data
+    return result_csv_data, result_human_data
 
 ##
 
-def get_available_models():
+def get_available_models(result_csv_data):
     models = set()
-    result_csv_data = get_appended_csvs()
     
     for row in result_csv_data[1:]:
         if len(row) > 1:
@@ -79,7 +97,14 @@ def get_available_models():
             if model:
                 models.add(model)
     
-    return sorted(models)
+    response = sorted(models)
+    
+    # Move human to the end if present
+    if 'human' in response:
+        response.remove('human')
+        response.append('human')
+    
+    return response
 
 ##
 
@@ -255,34 +280,6 @@ def get_grade_confidence_interval_model(result_csv_data, model, confidence=0.95)
     confidence_interval = (mean - margin_of_error, mean + margin_of_error)
     return confidence_interval
 
-def get_grade_EQM_all(result_csv_data): # GLOBAL 1/n Sum (Global_mean - Model_mean)^2 PER MODEL (Global_mean - Model_mean)^2
-    models = get_available_models()
-    global_mean = get_grade_avarage_global(result_csv_data)
-
-    if global_mean is None or not models:
-        return 0.0, {}
-
-    eqm_total = 0.0
-    per_model = {}
-
-    valid_models_count = 0
-
-    for model in models:
-        model_mean = get_grade_avarage_model(result_csv_data, model)
-        if model_mean is None:
-            continue
-        diff = global_mean - model_mean
-        sq = diff * diff
-        per_model[model] = sq
-        eqm_total += sq
-        valid_models_count += 1
-
-    if valid_models_count == 0:
-        return 0.0, per_model
-
-    eqm_total = eqm_total / valid_models_count
-    return eqm_total, per_model
-
 def get_grade_discordance_per_phrase(result_csv_data): # PER PHRASE 1/n Sum (grade - average_grade)^2
     phrase_dict = {}
 
@@ -312,7 +309,7 @@ def get_grade_discordance_per_phrase(result_csv_data): # PER PHRASE 1/n Sum (gra
         phrase_counts[phrase] = len(grades)
         phrase_grades[phrase] = list(grades)
 
-    discordance_per_phrase = dict(sorted(discordance_per_phrase.items(), key=lambda item: item[1], reverse=True))
+    discordance_per_phrase = dict(sorted(discordance_per_phrase.items(), key=lambda item: (-item[1], -phrase_counts[item[0]])))
 
     return discordance_per_phrase, phrase_counts, phrase_grades
 
@@ -326,7 +323,7 @@ def plot_average_by_date_and_model(result_csv_data):
 
     dates_sorted = sorted(dates_set, key=_date_key)
 
-    models = get_available_models()
+    models = get_available_models(result_csv_data)
     if not models:
         print("No models found to plot.")
         return
@@ -376,21 +373,21 @@ def plot_average_by_date_and_model(result_csv_data):
     fig.savefig(output_file_path)
     plt.close(fig)
 
-def plot_average_and_confidence_interval_by_model(result_csv_data, confidence=0.95):
-    models = get_available_models()
+def plot_average_and_confidence_interval_by_model(result_csv_data, result_csv_data_human, confidence=0.95):
+    models = get_available_models(result_csv_data + result_csv_data_human)
     if not models:
         print("No models found to plot.")
         return
     
     fig, ax = plt.subplots(figsize=(max(8, len(models) * 0.8 + 4), 9))
-    x_positions = list(range(len(models) + 1))  # +1 for global
-    labels = models + ['Global']
+    x_positions = list(range(len(models) + 2))  # +2 for global
+    labels = models + ['Global (models only)', 'Global (models + human)']
 
     cmap = plt.get_cmap('tab20')
 
     for i, model in enumerate(models):
-        avg = get_grade_avarage_model(result_csv_data, model)
-        ci = get_grade_confidence_interval_model(result_csv_data, model, confidence)
+        avg = get_grade_avarage_model(result_csv_data + result_csv_data_human, model)
+        ci = get_grade_confidence_interval_model(result_csv_data + result_csv_data_human, model, confidence)
         pos = i
 
         color = cmap(i % cmap.N)
@@ -408,6 +405,11 @@ def plot_average_and_confidence_interval_by_model(result_csv_data, confidence=0.
     ci_global = get_grade_confidence_interval_global(result_csv_data, confidence)
     global_pos = len(models)
     global_color = cmap(len(models) % cmap.N)
+    
+    avg_global_human = get_grade_avarage_global(result_csv_data + result_csv_data_human)
+    ci_global_human = get_grade_confidence_interval_global(result_csv_data + result_csv_data_human, confidence)
+    global_pos_human = len(models) + 1
+    global_color_human = cmap((len(models) + 1) % cmap.N)
 
     if avg_global is not None and ci_global is not None:
         lower_g = avg_global - ci_global[0]
@@ -417,6 +419,15 @@ def plot_average_and_confidence_interval_by_model(result_csv_data, confidence=0.
         ax.axhline(avg_global, color=global_color, linestyle=':', linewidth=1, alpha=0.8, zorder=0)
     else:
         ax.plot([global_pos], [float('nan')], marker='o', color=global_color)
+    
+    if avg_global_human is not None and ci_global_human is not None:
+        lower_gh = avg_global_human - ci_global_human[0]
+        upper_gh = ci_global_human[1] - avg_global_human
+        ax.errorbar([global_pos_human], [avg_global_human], yerr=[[lower_gh], [upper_gh]], fmt='o',
+                    color=global_color_human, ecolor=global_color_human, capsize=5, markersize=7, linestyle='none')
+        ax.axhline(avg_global_human, color=global_color_human, linestyle=':', linewidth=1, alpha=0.8, zorder=0)
+    else:
+        ax.plot([global_pos_human], [float('nan')], marker='o', color=global_color_human)
 
     ax.set_xticks(x_positions)
     ax.set_xticklabels(labels, rotation=45, ha='right')
@@ -430,17 +441,44 @@ def plot_average_and_confidence_interval_by_model(result_csv_data, confidence=0.
     fig.savefig(output_file_path)
     plt.close(fig)
 
+def plot_discordance_histogram(discordance_dict, type_str):
+    if not discordance_dict:
+        print(f"No discordance data to plot for {type_str}.")
+        return
+    
+    discordances = list(discordance_dict.values())
+    
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.hist(discordances, bins=15, edgecolor='black', alpha=0.7)
+    ax.set_xlabel('Discordance')
+    ax.set_ylabel('Frequency')
+    ax.set_title(f"Discordance Histogram ({type_str.capitalize()})")
+    ax.grid(True, alpha=0.3)
+    
+    fig.tight_layout()
+    output_path = os.path.join(OUTPUT_FOLDER, f"discordance_histogram_{type_str}.png")
+    fig.savefig(output_path)
+    plt.close(fig)
+
+##
+
 def main():
     global confidences_to_check
     
     # Append CSVs
 
-    result_csv_data = get_appended_csvs()
+    result_csv_data, result_csv_data_human = get_appended_csvs()
 
     output_file_path = os.path.join(OUTPUT_FOLDER, "appended_results.csv")
     with open(output_file_path, 'w', encoding='utf-8-sig', newline='') as f:
         writer = csv.writer(f, delimiter="|")
         for row in result_csv_data:
+            writer.writerow(row)
+            
+    output_human_file_path = os.path.join(OUTPUT_FOLDER, "appended_results_human.csv")
+    with open(output_human_file_path, 'w', encoding='utf-8-sig', newline='') as f:
+        writer = csv.writer(f, delimiter="|")
+        for row in result_csv_data_human:
             writer.writerow(row)
 
     # Plots
@@ -448,16 +486,25 @@ def main():
     plot_average_by_date_and_model(result_csv_data)
     
     for confidence in confidences_to_check:
-        plot_average_and_confidence_interval_by_model(result_csv_data, confidence)
+        plot_average_and_confidence_interval_by_model(result_csv_data, result_csv_data_human, confidence)
     
-    # Frequency and average (between models)
+    # Discordance histograms
+    
+    discordance_models, _, _ = get_grade_discordance_per_phrase(result_csv_data)
+    plot_discordance_histogram(discordance_models, "models")
+    
+    discordance_human, _, _ = get_grade_discordance_per_phrase(result_csv_data_human)
+    plot_discordance_histogram(discordance_human, "humans")
+    
+    # Info.txt
     
     freq_avg_file_path = os.path.join(OUTPUT_FOLDER, "info.txt")
     with open(freq_avg_file_path, 'w', encoding='utf-8') as f:
         
-        available_model = get_available_models()
-        
+        available_model = get_available_models(result_csv_data + result_csv_data_human)
+
         f.write("--------\n")
+        f.write("General Information:\n")
         f.write(f"Found {len(result_csv_data)} rows in total across all CSV files.\n")
         if available_model:
             f.write(f"Available models: {', '.join(available_model)}\n")
@@ -471,49 +518,65 @@ def main():
             if model_rows > max_rows_per_model:
                 max_rows_per_model = model_rows
         f.write(f"Maximum number rows for a single model: {max_rows_per_model}\n")
+        
+        
+        # Average
+        
         f.write("--------\n")
         
-        # Average (between models)
-        
-        average_grade = get_grade_avarage_global(result_csv_data)
-        
-        if average_grade is not None:
-            f.write(f"Average grade (global): {average_grade:.64f}\n")
+        average_grade_models = get_grade_avarage_global(result_csv_data)
+        if average_grade_models is not None:
+            f.write(f"Average grade (global models only): {average_grade_models:.64f}\n")
+            
+        average_grade_all = get_grade_avarage_global(result_csv_data + result_csv_data_human)
+        if average_grade_all is not None:
+            f.write(f"Average grade (global models + human): {average_grade_all:.64f}\n")
             
         for model in available_model:
-            average_grade_model = get_grade_avarage_model(result_csv_data, model)
+            average_grade_model = get_grade_avarage_model(result_csv_data + result_csv_data_human, model)
             if average_grade_model is not None:
                 f.write(f" > Average grade for {model}: {average_grade_model:.64f}\n")
         
-        # Frequency (between models)
+        # Frequency
         
         f.write("--------\n")
-        frequency_grade = get_grade_frequency_global(result_csv_data)
         
-        if frequency_grade:
-            f.write("Grade frequency (global): ")
-            for grade, frequency in sorted(frequency_grade.items()):
+        frequency_grade_models = get_grade_frequency_global(result_csv_data)
+        if frequency_grade_models:
+            f.write("Grade frequency (global models only): ")
+            for grade, frequency in sorted(frequency_grade_models.items()):
+                f.write(f"[{grade}]: {frequency} ")
+            f.write("\n")
+        
+        frequency_grade_all = get_grade_frequency_global(result_csv_data + result_csv_data_human)
+        if frequency_grade_all:
+            f.write("Grade frequency (global models + human): ")
+            for grade, frequency in sorted(frequency_grade_all.items()):
                 f.write(f"[{grade}]: {frequency} ")
             f.write("\n")
         
         for model in available_model:
-            frequency_grade_model = get_grade_frequency_model(result_csv_data, model)
+            frequency_grade_model = get_grade_frequency_model(result_csv_data + result_csv_data_human, model)
             if frequency_grade_model:
                 f.write(f" > Grade frequency for {model}: ")
                 for grade, frequency in sorted(frequency_grade_model.items()):
                     f.write(f"[{grade}]: {frequency} ")
                 f.write("\n")
                 
-        # Standard Deviation (between models)
+        # Standard Deviation
         
         f.write("--------\n")
-        std_dev = get_grade_standard_deviation_global(result_csv_data)
         
-        if std_dev is not None:
-            f.write(f"Standard Deviation (global): {std_dev:.64f}\n")
+        std_dev_models = get_grade_standard_deviation_global(result_csv_data)
+        if std_dev_models is not None:
+            f.write(f"Standard Deviation (global models only): {std_dev_models:.64f}\n")
+            
+        std_dev_all = get_grade_standard_deviation_global(result_csv_data + result_csv_data_human)
+        if std_dev_all is not None:
+            f.write(f"Standard Deviation (global models + human): {std_dev_all:.64f}\n")
             
         for model in available_model:
-            std_dev_model = get_grade_standard_deviation_model(result_csv_data, model)
+            std_dev_model = get_grade_standard_deviation_model(result_csv_data + result_csv_data_human, model)
             if std_dev_model is not None:
                 f.write(f" > Standard Deviation for {model}: {std_dev_model:.64f}")
             f.write("\n")
@@ -521,29 +584,26 @@ def main():
         # Confidence Interval (between models)
         
         for confidence in confidences_to_check:
-            f.write("--------\n")
-            conf_int = get_grade_confidence_interval_global(result_csv_data, confidence)
             
-            if conf_int is not None:
-                f.write(f"{int(confidence*100)}% Confidence Interval (global): ({conf_int[0]:.64f}, {conf_int[1]:.64f})\n")
+            f.write("--------\n")
+            
+            conf_int_models = get_grade_confidence_interval_global(result_csv_data, confidence)
+            if conf_int_models is not None:
+                f.write(f"{int(confidence*100)}% Confidence Interval (global models only): ({conf_int_models[0]:.64f}, {conf_int_models[1]:.64f})\n")
+            
+            conf_int_all = get_grade_confidence_interval_global(result_csv_data + result_csv_data_human, confidence)
+            if conf_int_all is not None:
+                f.write(f"{int(confidence*100)}% Confidence Interval (global models + human): ({conf_int_all[0]:.64f}, {conf_int_all[1]:.64f})\n")
             
             for model in available_model:
-                conf_int_model = get_grade_confidence_interval_model(result_csv_data, model, confidence)
+                conf_int_model = get_grade_confidence_interval_model(result_csv_data + result_csv_data_human, model, confidence)
                 if conf_int_model is not None:
                     f.write(f" > {int(confidence*100)}% Confidence Interval for {model}: ({conf_int_model[0]:.64f}, {conf_int_model[1]:.64f})\n")
-        
-        # EQM (between models)
-        
-        f.write("--------\n")
-        eqm_total, per_model = get_grade_EQM_all(result_csv_data)
-        
-        f.write(f"EQM Total (global): {eqm_total:.64f}\n")
-        for model, eqm in per_model.items():
-            f.write(f" > EQM for {model}: {eqm:.64f}\n")
-        
+       
         # Discordance per phrase (between models)
 
         f.write("--------\n")
+        
         discordance_per_phrase, phrase_counts, phrase_grades = get_grade_discordance_per_phrase(result_csv_data)
 
         f.write("Top 100 phrases with highest discordance (variance):\n")
@@ -555,11 +615,42 @@ def main():
             f.write(f"{i + 1}. Discordance: {discordance:.64f} | Count: {count} | Grades: {grades_list} | Phrase: {phrase}\n")
 
         f.write("--------\n")
-    
+        
+        f.write("Top 100 phrases with lowest discordance (variance):\n")
+        for i, (phrase, discordance) in enumerate(sorted(discordance_per_phrase.items(), key=lambda item: (item[1], -phrase_counts[item[0]]))):
+            if i >= 100:
+                break
+            count = phrase_counts.get(phrase, 0)
+            grades_list = phrase_grades.get(phrase, [])
+            f.write(f"{i + 1}. Discordance: {discordance:.64f} | Count: {count} | Grades: {grades_list} | Phrase: {phrase}\n")
+
+        f.write("--------\n\n")
+
+        if result_csv_data_human:
+            discordance_per_phrase_human, phrase_counts_human, phrase_grades_human = get_grade_discordance_per_phrase(result_csv_data_human)
+
+            f.write("Top 100 phrases with highest discordance (variance) for humans:\n")
+            for i, (phrase, discordance) in enumerate(discordance_per_phrase_human.items()):
+                if i >= 100:
+                    break
+                count = phrase_counts_human.get(phrase, 0)
+                grades_list = phrase_grades_human.get(phrase, [])
+                f.write(f"{i + 1}. Discordance: {discordance:.64f} | Count: {count} | Grades: {grades_list} | Phrase: {phrase}\n")
+
+            f.write("--------\n")
+            
+            f.write("Top 100 phrases with lowest discordance (variance) for humans:\n")
+            for i, (phrase, discordance) in enumerate(sorted(discordance_per_phrase_human.items(), key=lambda item: (item[1], -phrase_counts_human[item[0]]))):
+                if i >= 100:
+                    break
+                count = phrase_counts_human.get(phrase, 0)
+                grades_list = phrase_grades_human.get(phrase, [])
+                f.write(f"{i + 1}. Discordance: {discordance:.64f} | Count: {count} | Grades: {grades_list} | Phrase: {phrase}\n")
+
+            f.write("--------\n\n")
+
     print("Processing completed.")
     
 if __name__ == "__main__":
-    while True:
-        main()
-        print("Refreshing...")
-        time.sleep(10)
+    main()
+
