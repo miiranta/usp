@@ -3,6 +3,8 @@ import os
 import math
 import time
 import matplotlib.pyplot as plt
+import requests
+import datetime
 from scipy import stats
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
@@ -328,6 +330,72 @@ def plot_average_by_date_and_model(result_csv_data):
         print("No models found to plot.")
         return
     
+    # Get SELIC data
+    min_date = dates_sorted[0]
+    max_date = dates_sorted[-1]
+    selic_file = os.path.join(OUTPUT_FOLDER, "selic_data.csv")
+    if os.path.exists(selic_file):
+        print("Loading SELIC data from file...")
+        
+        # Load from file
+        with open(selic_file, 'r', encoding='utf-8') as f:
+            selic_reader = csv.reader(f)
+            next(selic_reader)  # skip header
+            selic_dict = {}
+            for row in selic_reader:
+                if row:
+                    date = row[0]
+                    value = float(row[1])
+                    selic_dict[date] = value
+    else:
+        print("Fetching SELIC data from API...")
+        
+        # Fetch SELIC data in chunks of 10 years
+        def parse_date(d):
+            day, month, year = map(int, d.split('/'))
+            return datetime.datetime(year, month, day)
+        
+        min_dt = parse_date(min_date)
+        max_dt = parse_date(max_date)
+        selic_dict = {}
+        current_start = min_dt
+        while current_start <= max_dt:
+            current_end = min(current_start.replace(year=current_start.year + 10), max_dt)
+            start_str = current_start.strftime('%d/%m/%Y')
+            end_str = current_end.strftime('%d/%m/%Y')
+            selic_url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados?formato=csv&dataInicial={start_str}&dataFinal={end_str}"
+            try:
+                response = requests.get(selic_url)
+                response.raise_for_status()
+                selic_data = response.text
+                selic_reader = csv.reader(selic_data.splitlines(), delimiter=';')
+                next(selic_reader)  # skip header
+                for row in selic_reader:
+                    if row:
+                        date = row[0]
+                        value = float(row[1].replace(',', '.'))
+                        selic_dict[date] = value
+            except Exception as e:
+                print(f"Failed to fetch SELIC data for {start_str} to {end_str}: {e}")
+            current_start = current_end + datetime.timedelta(days=1)
+        
+        # Save to file
+        with open(selic_file, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['data', 'valor'])
+            sorted_selic = sorted(selic_dict.items(), key=lambda x: _date_key(x[0]))
+            for date, value in sorted_selic:
+                writer.writerow([date, value])
+    
+    # Create SELIC series
+    selic_series = []
+    for d in dates_sorted:
+        if d in selic_dict:
+            selic_series.append(selic_dict[d])
+        else:
+            selic_series.append(float('nan'))
+    
+    # Plot without SELIC
     fig, ax = plt.subplots(figsize=(29, 9))
     x_positions = list(range(len(dates_sorted)))
 
@@ -371,6 +439,53 @@ def plot_average_by_date_and_model(result_csv_data):
 
     output_file_path = os.path.join(OUTPUT_FOLDER, "average_grade_by_date.png")
     fig.savefig(output_file_path)
+    plt.close(fig)
+    
+    # Plot with SELIC
+    fig, ax = plt.subplots(figsize=(29, 9))
+    ax2 = ax.twinx()
+
+    for model in models:
+        series = []
+        for d in dates_sorted:
+            grades = [float(row[2]) for row in result_csv_data[1:] if row[0].strip() == d and row[1].strip() == model]
+            if grades:
+                series.append(sum(grades) / len(grades))
+            else:
+                series.append(float('nan'))
+        line, = ax.plot(x_positions, series, marker='o', label=model)
+
+        try:
+            avg = get_grade_avarage_model(result_csv_data, model)
+            if avg is not None:
+                ax.axhline(avg, color=line.get_color(), linestyle=':', linewidth=1, alpha=0.8, zorder=0)
+        except Exception:
+            pass
+
+    ax.axhline(0, color='gray', linestyle='--', linewidth=1, zorder=0)
+
+    # Plot SELIC
+    ax2.plot(x_positions, selic_series, color='red', linestyle='-', linewidth=2, label='SELIC (%)', alpha=0.7)
+
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, rotation=60, ha='right')
+    ax.tick_params(axis='x', pad=12)
+
+    ax.set_ylabel('Average Grade')
+    ax2.set_ylabel('SELIC (%)', color='black')
+    ax.set_title('Average Grade and SELIC by Date')
+
+    # Combine legends
+    lines1, labels1 = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.2)
+    fig.subplots_adjust(top=0.9)
+
+    output_file_path_selic = os.path.join(OUTPUT_FOLDER, "average_grade_by_date_with_selic.png")
+    fig.savefig(output_file_path_selic)
     plt.close(fig)
 
 def plot_average_and_confidence_interval_by_model(result_csv_data, result_csv_data_human, confidence=0.95):
