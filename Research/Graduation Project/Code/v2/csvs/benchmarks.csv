@@ -1,7 +1,7 @@
-MODELS|OPEN-LLM_AVERAGE|LMARENA_SCORE|MMLU|MMLU-Pro
+MODELS|OPEN-LLM_AVERAGE|LMARENA_SCORE|MMLU_5|MMLU-Pro_5
 meta-llama/Llama-4-Scout-17B-16E||1319|79.6|58.2
-meta-llama/Llama-3.2-3B|8.7|1165|58|
-meta-llama/Llama-3.2-1B|4.2|1111|32.2|
+meta-llama/Llama-3.2-3B|8.7|1165|58|22.2
+meta-llama/Llama-3.2-1B|4.2|1111|32.2|11.9
 meta-llama/Llama-3.1-70B|26.2|1291|79.3|53.8
 meta-llama/Llama-3.1-8B|14.42|1210|66.7|37.1
 meta-llama/Meta-Llama-3-70B|26.71|1273|79.5|55
@@ -16,8 +16,8 @@ google/gemma-3-12b-pt||1339|74.5|45.3
 google/gemma-3-4b-pt||1301|59.6|29.2
 google/gemma-3-1b-pt|||26.5|
 google/gemma-3-270m||||
-google/gemma-2-27b|23.93|1284|75.2|
-google/gemma-2-9b|21.21|1261|71.3|
+google/gemma-2-27b|23.93|1284|75.2|56.5
+google/gemma-2-9b|21.21|1261|71.3|52.1
 google/gemma-2-2b|10.36|1195|51.3|
 google/gemma-7b|15.44|1131|64.3|
 google/gemma-2b|7.32|1087|42.3|
