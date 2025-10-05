@@ -3,21 +3,21 @@ TYPES VS MAXIMUM COMPLEXITY
 
 Types                          Maximum Complexity   Count     
 ----------------------------------------------------------------------
-norm                           0.25306678           185       
-embedding-norm                 0.22856438           185       
-bias-norm                      0.22436058           185       
-bias                           0.15850994           90        
-norm-other                     0.11456728           180       
-other                          0.11456714           185       
-bias-other                     0.11456129           180       
-bias-norm-other                0.11455728           180       
-embedding-other                0.11255854           180       
-embedding-norm-other           0.11255818           180       
-bias-embedding-other           0.11253049           180       
-bias-embedding-norm-other      0.11253011           180       
-bias-embedding-norm            0.07157813           185       
-bias-embedding                 0.06994907           190       
-embedding                      0.01337504           170       
+norm                           0.2530667802834685   185       
+embedding-norm                 0.2285643825791083   185       
+bias-norm                      0.2243605825258328   185       
+bias                           0.1585099398971801   90        
+norm-other                     0.1145672816382443   180       
+other                          0.1145671418692906   185       
+bias-other                     0.1145612907795481   180       
+bias-norm-other                0.1145572800873395   180       
+embedding-other                0.1125585424918398   180       
+embedding-norm-other           0.1125581751147155   180       
+bias-embedding-other           0.1125304910264191   180       
+bias-embedding-norm-other      0.1125301134321343   180       
+bias-embedding-norm            0.0715781301716411   185       
+bias-embedding                 0.0699490700113898   190       
+embedding                      0.0133750387787312   170       
 
-Overall max of maxes: 0.25306678
+Overall max of maxes: 0.2530667802834685
 Number of unique type combinations: 15

@@ -62,12 +62,37 @@ best_equation = None
 
 # ALL DATA
 FUNCTIONS_TO_TEST = {
-    'linear': {
-        'func': lambda x, a, b: a * x + b,
-        'equation': lambda params: f'y = {params[0]:.8f}x + {params[1]:.8f}',
-        'initial_guess': [1, 1]
-    },
-}
+        'linear': {
+            'func': lambda x, a, b: a * x + b,
+            'equation': lambda params: f'y = {params[0]:.16f}x + {params[1]:.16f}',
+            'initial_guess': [1, 1]
+        },
+        'quadratic': {
+            'func': lambda x, a, b, c: a * x**2 + b * x + c,
+            'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
+            'initial_guess': [1, 1, 1]
+        },
+        'cubic': {
+            'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
+            'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
+            'initial_guess': [1, 1, 1, 1]
+        },
+        'exponential': {
+            'func': lambda x, a, b, c: a * np.exp(b * x) + c,
+            'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
+            'initial_guess': [1, 0.1, 1]
+        },
+        'logarithmic': {
+            'func': lambda x, a, b, c: a * np.log(x + 1) + b * x + c,
+            'equation': lambda params: f'y = {params[0]:.16f}·ln(x+1) + {params[1]:.16f}x + {params[2]:.16f}',
+            'initial_guess': [1, 1, 1]
+        },
+        'power': {
+            'func': lambda x, a, b, c: a * (x + 1)**b + c,
+            'equation': lambda params: f'y = {params[0]:.16f}·(x+1)^{params[1]:.16f} + {params[2]:.16f}',
+            'initial_guess': [1, 0.5, 1]
+        }
+    }
 
 for name, func_info in FUNCTIONS_TO_TEST.items():
     try:
@@ -108,32 +133,32 @@ best_equation_max = None
 FUNCTIONS_TO_TEST = {
     'linear': {
         'func': lambda x, a, b: a * x + b,
-        'equation': lambda params: f'y = {params[0]:.8f}x + {params[1]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}x + {params[1]:.16f}',
         'initial_guess': [1, 1]
     },
     'quadratic': {
         'func': lambda x, a, b, c: a * x**2 + b * x + c,
-        'equation': lambda params: f'y = {params[0]:.8f}x² + {params[1]:.8f}x + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
         'initial_guess': [1, 1, 1]
     },
     'cubic': {
         'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-        'equation': lambda params: f'y = {params[0]:.8f}x³ + {params[1]:.8f}x² + {params[2]:.8f}x + {params[3]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
         'initial_guess': [1, 1, 1, 1]
     },
     'exponential': {
         'func': lambda x, a, b, c: a * np.exp(b * x) + c,
-        'equation': lambda params: f'y = {params[0]:.8f}·e^({params[1]:.8f}x) + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
         'initial_guess': [1, 0.1, 1]
     },
     'logarithmic': {
         'func': lambda x, a, b, c: a * np.log(x + 1) + b * x + c,
-        'equation': lambda params: f'y = {params[0]:.8f}·ln(x+1) + {params[1]:.8f}x + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}·ln(x+1) + {params[1]:.16f}x + {params[2]:.16f}',
         'initial_guess': [1, 1, 1]
     },
     'power': {
         'func': lambda x, a, b, c: a * (x + 1)**b + c,
-        'equation': lambda params: f'y = {params[0]:.8f}·(x+1)^{params[1]:.8f} + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}·(x+1)^{params[1]:.16f} + {params[2]:.16f}',
         'initial_guess': [1, 0.5, 1]
     }
 }
@@ -178,9 +203,9 @@ plt.ylabel('Complexity')
 plt.title('Filter vs Complexity')
 plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.19), ncol=2, frameon=True, fancybox=True, shadow=True)
 plt.subplots_adjust(bottom=0.28)
-plt.figtext(0.5, 0.14, f'All data: {best_equation}     R² = {best_r2:.8f}', 
+plt.figtext(0.5, 0.14, f'All data: {best_equation}     R² = {best_r2:.16f}', 
             ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-plt.figtext(0.5, 0.11, f'Max values: {best_equation_max}     R² = {best_r2_max:.8f}', 
+plt.figtext(0.5, 0.11, f'Max values: {best_equation_max}     R² = {best_r2_max:.16f}', 
             ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8))
 plt.savefig(os.path.join(filter_complexity_folder, 'regression.png'))
 plt.close()
@@ -225,14 +250,14 @@ with open(os.path.join(filter_complexity_folder, 'regression_info.txt'), 'w', en
     f.write("-" * 70 + "\n")
     f.write(f"Best fit function: {best_name}\n")
     f.write(f"Equation: {best_equation}\n")
-    f.write(f"R² score: {best_r2:.8f}\n")
+    f.write(f"R² score: {best_r2:.16f}\n")
     f.write(f"Parameters: {best_params}\n\n")
     
     f.write("MAXIMUM VALUES REGRESSION:\n")
     f.write("-" * 70 + "\n")
     f.write(f"Best fit function: {best_name_max}\n")
     f.write(f"Equation: {best_equation_max}\n")
-    f.write(f"R² score: {best_r2_max:.8f}\n")
+    f.write(f"R² score: {best_r2_max:.16f}\n")
     f.write(f"Parameters: {best_params_max}\n")
 
 # Save average complexity data to text file
@@ -242,10 +267,10 @@ with open(os.path.join(filter_complexity_folder, 'average_complexity.txt'), 'w',
     f.write(f"{'Filter':<15} {'Average Complexity':<20}\n")
     f.write("-" * 70 + "\n")
     for x, y in zip(x_avg, y_avg):
-        f.write(f"{x:<15} {y:<20.8f}\n")
+        f.write(f"{x:<15} {y:<20.16f}\n")
     f.write("\n")
-    f.write(f"Overall mean: {y_avg.mean():.8f}\n")
-    f.write(f"Overall std: {y_avg.std():.8f}\n")
+    f.write(f"Overall mean: {y_avg.mean():.16f}\n")
+    f.write(f"Overall std: {y_avg.std():.16f}\n")
 
 # Save maximum complexity data to text file
 with open(os.path.join(filter_complexity_folder, 'maximum_complexity.txt'), 'w', encoding='utf-8') as f:
@@ -254,7 +279,7 @@ with open(os.path.join(filter_complexity_folder, 'maximum_complexity.txt'), 'w',
     f.write(f"{'Filter':<15} {'Maximum Complexity':<20}\n")
     f.write("-" * 70 + "\n")
     for x, y in zip(x_max, y_max):
-        f.write(f"{x:<15} {y:<20.8f}\n")
+        f.write(f"{x:<15} {y:<20.16f}\n")
 
 # --------------------------------------------------------------
 # Plot graphs: COMPLEXITY vs TYPES
@@ -321,10 +346,10 @@ with open(os.path.join(types_complexity_folder, 'average_complexity.txt'), 'w', 
     for types_str in x_types_avg:
         avg_val = avg_complexity_by_types[avg_complexity_by_types['types_str'] == types_str]['complexity'].values[0]
         count = len(types_df[types_df['types_str'] == types_str])
-        f.write(f"{types_str:<30} {avg_val:<20.8f} {count:<10}\n")
+        f.write(f"{types_str:<30} {avg_val:<20.16f} {count:<10}\n")
     f.write("\n")
-    f.write(f"Overall mean: {y_types_avg.mean():.8f}\n")
-    f.write(f"Overall std: {y_types_avg.std():.8f}\n")
+    f.write(f"Overall mean: {y_types_avg.mean():.16f}\n")
+    f.write(f"Overall std: {y_types_avg.std():.16f}\n")
     f.write(f"Number of unique type combinations: {len(x_types_avg)}\n")
 
 # Save maximum complexity data to text file
@@ -336,9 +361,9 @@ with open(os.path.join(types_complexity_folder, 'maximum_complexity.txt'), 'w', 
     for types_str in x_types_max:
         max_val = max_complexity_by_types[max_complexity_by_types['types_str'] == types_str]['complexity'].values[0]
         count = len(types_df[types_df['types_str'] == types_str])
-        f.write(f"{types_str:<30} {max_val:<20.8f} {count:<10}\n")
+        f.write(f"{types_str:<30} {max_val:<20.16f} {count:<10}\n")
     f.write("\n")
-    f.write(f"Overall max of maxes: {y_types_max.max():.8f}\n")
+    f.write(f"Overall max of maxes: {y_types_max.max():.16f}\n")
     f.write(f"Number of unique type combinations: {len(x_types_max)}\n")
 
 # --------------------------------------------------------------
@@ -360,32 +385,32 @@ best_equation_params = None
 FUNCTIONS_TO_TEST_PARAMS = {
     'linear': {
         'func': lambda x, a, b: a * x + b,
-        'equation': lambda params: f'y = {params[0]:.8f}x + {params[1]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}x + {params[1]:.16f}',
         'initial_guess': [1, 1]
     },
     'quadratic': {
         'func': lambda x, a, b, c: a * x**2 + b * x + c,
-        'equation': lambda params: f'y = {params[0]:.8f}x² + {params[1]:.8f}x + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
         'initial_guess': [1, 1, 1]
     },
     'cubic': {
         'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-        'equation': lambda params: f'y = {params[0]:.8f}x³ + {params[1]:.8f}x² + {params[2]:.8f}x + {params[3]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
         'initial_guess': [1, 1, 1, 1]
     },
     'exponential': {
         'func': lambda x, a, b, c: a * np.exp(b * x) + c,
-        'equation': lambda params: f'y = {params[0]:.8f}·e^({params[1]:.8f}x) + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
         'initial_guess': [1, 0.1, 1]
     },
     'logarithmic': {
         'func': lambda x, a, b, c: a * np.log(x + 1) + b * x + c,
-        'equation': lambda params: f'y = {params[0]:.8f}·ln(x+1) + {params[1]:.8f}x + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}·ln(x+1) + {params[1]:.16f}x + {params[2]:.16f}',
         'initial_guess': [1, 1, 1]
     },
     'power': {
         'func': lambda x, a, b, c: a * (x + 1)**b + c,
-        'equation': lambda params: f'y = {params[0]:.8f}·(x+1)^{params[1]:.8f} + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}·(x+1)^{params[1]:.16f} + {params[2]:.16f}',
         'initial_guess': [1, 0.5, 1]
     }
 }
@@ -427,7 +452,7 @@ plt.ylabel('Complexity')
 plt.title('Number of Parameters vs Complexity')
 plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
 plt.subplots_adjust(bottom=0.22)
-plt.figtext(0.5, 0.07, f'{best_equation_params}     R² = {best_r2_params:.8f}', 
+plt.figtext(0.5, 0.07, f'{best_equation_params}     R² = {best_r2_params:.16f}', 
             ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
 plt.savefig(os.path.join(params_complexity_folder, 'regression.png'))
 plt.close()
@@ -489,7 +514,7 @@ with open(os.path.join(params_complexity_folder, 'regression_info.txt'), 'w', en
     f.write("-" * 70 + "\n")
     f.write(f"Best fit function: {best_name_params}\n")
     f.write(f"Equation: {best_equation_params}\n")
-    f.write(f"R² score: {best_r2_params:.8f}\n")
+    f.write(f"R² score: {best_r2_params:.16f}\n")
     f.write(f"Parameters: {best_params_params}\n\n")
     
     f.write("HISTOGRAM INFORMATION:\n")
@@ -508,10 +533,10 @@ with open(os.path.join(params_complexity_folder, 'average_complexity_per_bin.txt
     for i, (center, avg_comp, count) in enumerate(zip(bin_centers, avg_complexity_per_bin, bin_counts)):
         range_start = param_bins[i]
         range_end = param_bins[i + 1]
-        f.write(f"{range_start:<20.2f} {range_end:<20.2f} {avg_comp:<20.8f} {count:<10}\n")
+        f.write(f"{range_start:<20.2f} {range_end:<20.2f} {avg_comp:<20.16f} {count:<10}\n")
     f.write("\n")
     overall_avg = np.average(avg_complexity_per_bin, weights=bin_counts)
-    f.write(f"Overall weighted average: {overall_avg:.8f}\n")
+    f.write(f"Overall weighted average: {overall_avg:.16f}\n")
     f.write(f"Total data points: {sum(bin_counts)}\n")
 
 # Save overall statistics to text file
@@ -522,11 +547,11 @@ with open(os.path.join(params_complexity_folder, 'statistics.txt'), 'w', encodin
     f.write("COMPLEXITY STATISTICS:\n")
     f.write("-" * 70 + "\n")
     f.write(f"Number of data points: {len(y_data_params)}\n")
-    f.write(f"Mean complexity: {y_data_params.mean():.8f}\n")
-    f.write(f"Median complexity: {np.median(y_data_params):.8f}\n")
-    f.write(f"Std complexity: {y_data_params.std():.8f}\n")
-    f.write(f"Min complexity: {y_data_params.min():.8f}\n")
-    f.write(f"Max complexity: {y_data_params.max():.8f}\n\n")
+    f.write(f"Mean complexity: {y_data_params.mean():.16f}\n")
+    f.write(f"Median complexity: {np.median(y_data_params):.16f}\n")
+    f.write(f"Std complexity: {y_data_params.std():.16f}\n")
+    f.write(f"Min complexity: {y_data_params.min():.16f}\n")
+    f.write(f"Max complexity: {y_data_params.max():.16f}\n\n")
     
     f.write("PARAMETER COUNT STATISTICS:\n")
     f.write("-" * 70 + "\n")
@@ -557,32 +582,32 @@ best_equation_bins = None
 FUNCTIONS_TO_TEST_BINS = {
     'linear': {
         'func': lambda x, a, b: a * x + b,
-        'equation': lambda params: f'y = {params[0]:.8f}x + {params[1]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}x + {params[1]:.16f}',
         'initial_guess': [1, 1]
     },
     'quadratic': {
         'func': lambda x, a, b, c: a * x**2 + b * x + c,
-        'equation': lambda params: f'y = {params[0]:.8f}x² + {params[1]:.8f}x + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
         'initial_guess': [1, 1, 1]
     },
     'cubic': {
         'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-        'equation': lambda params: f'y = {params[0]:.8f}x³ + {params[1]:.8f}x² + {params[2]:.8f}x + {params[3]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
         'initial_guess': [1, 1, 1, 1]
     },
     'exponential': {
         'func': lambda x, a, b, c: a * np.exp(b * x) + c,
-        'equation': lambda params: f'y = {params[0]:.8f}·e^({params[1]:.8f}x) + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
         'initial_guess': [1, 0.1, 1]
     },
     'logarithmic': {
         'func': lambda x, a, b, c: a * np.log(x + 1) + b * x + c,
-        'equation': lambda params: f'y = {params[0]:.8f}·ln(x+1) + {params[1]:.8f}x + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}·ln(x+1) + {params[1]:.16f}x + {params[2]:.16f}',
         'initial_guess': [1, 1, 1]
     },
     'power': {
         'func': lambda x, a, b, c: a * (x + 1)**b + c,
-        'equation': lambda params: f'y = {params[0]:.8f}·(x+1)^{params[1]:.8f} + {params[2]:.8f}',
+        'equation': lambda params: f'y = {params[0]:.16f}·(x+1)^{params[1]:.16f} + {params[2]:.16f}',
         'initial_guess': [1, 0.5, 1]
     }
 }
@@ -624,7 +649,7 @@ plt.ylabel('Complexity')
 plt.title('Number of Bins vs Complexity')
 plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
 plt.subplots_adjust(bottom=0.22)
-plt.figtext(0.5, 0.07, f'{best_equation_bins}     R² = {best_r2_bins:.8f}', 
+plt.figtext(0.5, 0.07, f'{best_equation_bins}     R² = {best_r2_bins:.16f}', 
             ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
 plt.savefig(os.path.join(bins_complexity_folder, 'regression.png'))
 plt.close()
@@ -686,7 +711,7 @@ with open(os.path.join(bins_complexity_folder, 'regression_info.txt'), 'w', enco
     f.write("-" * 70 + "\n")
     f.write(f"Best fit function: {best_name_bins}\n")
     f.write(f"Equation: {best_equation_bins}\n")
-    f.write(f"R² score: {best_r2_bins:.8f}\n")
+    f.write(f"R² score: {best_r2_bins:.16f}\n")
     f.write(f"Parameters: {best_params_bins}\n\n")
     
     f.write("HISTOGRAM INFORMATION:\n")
@@ -705,10 +730,10 @@ with open(os.path.join(bins_complexity_folder, 'average_complexity_per_bin.txt')
     for i, (center, avg_comp, count) in enumerate(zip(bin_centers_bins, avg_complexity_per_bin_bins, bin_counts_bins)):
         range_start = bin_bins[i]
         range_end = bin_bins[i + 1]
-        f.write(f"{range_start:<20.2f} {range_end:<20.2f} {avg_comp:<20.8f} {count:<10}\n")
+        f.write(f"{range_start:<20.2f} {range_end:<20.2f} {avg_comp:<20.16f} {count:<10}\n")
     f.write("\n")
     overall_avg_bins = np.average(avg_complexity_per_bin_bins, weights=bin_counts_bins)
-    f.write(f"Overall weighted average: {overall_avg_bins:.8f}\n")
+    f.write(f"Overall weighted average: {overall_avg_bins:.16f}\n")
     f.write(f"Total data points: {sum(bin_counts_bins)}\n")
 
 # Save overall statistics to text file
@@ -719,11 +744,11 @@ with open(os.path.join(bins_complexity_folder, 'statistics.txt'), 'w', encoding=
     f.write("COMPLEXITY STATISTICS:\n")
     f.write("-" * 70 + "\n")
     f.write(f"Number of data points: {len(y_data_bins)}\n")
-    f.write(f"Mean complexity: {y_data_bins.mean():.8f}\n")
-    f.write(f"Median complexity: {np.median(y_data_bins):.8f}\n")
-    f.write(f"Std complexity: {y_data_bins.std():.8f}\n")
-    f.write(f"Min complexity: {y_data_bins.min():.8f}\n")
-    f.write(f"Max complexity: {y_data_bins.max():.8f}\n\n")
+    f.write(f"Mean complexity: {y_data_bins.mean():.16f}\n")
+    f.write(f"Median complexity: {np.median(y_data_bins):.16f}\n")
+    f.write(f"Std complexity: {y_data_bins.std():.16f}\n")
+    f.write(f"Min complexity: {y_data_bins.min():.16f}\n")
+    f.write(f"Max complexity: {y_data_bins.max():.16f}\n\n")
     
     f.write("BIN COUNT STATISTICS:\n")
     f.write("-" * 70 + "\n")
@@ -734,3 +759,240 @@ with open(os.path.join(bins_complexity_folder, 'statistics.txt'), 'w', encoding=
     f.write(f"Q1 (25%): {q25_bins:.2f}\n")
     f.write(f"Q3 (75%): {q75_bins:.2f}\n")
     f.write(f"IQR: {iqr_bins:.2f}\n")
+
+
+# ================================================================================
+   
+# --------------------------------------------------------------
+# Plot graphs: FOR EACH BENCHMARK - COMPLEXITY vs BENCHMARK
+
+# Create output folder for benchmarks vs complexity
+benchmarks_complexity_folder = os.path.join(OUTPUT_FOLDER, 'benchmarks_vs_complexity')
+if not os.path.exists(benchmarks_complexity_folder):
+    os.makedirs(benchmarks_complexity_folder)
+
+# Dictionary to store all regression results
+all_benchmark_results = {}
+
+# Process each benchmark column
+for bench_name in BENCH_ROWS_NAMES:
+    print(f"Processing benchmark: {bench_name}")
+    
+    # Remove NaN values for regression
+    mask_bench = ~(appended_benchmarks_df[bench_name].isna() | appended_benchmarks_df['complexity'].isna())
+    x_data_bench = appended_benchmarks_df.loc[mask_bench, bench_name].values
+    y_data_bench = appended_benchmarks_df.loc[mask_bench, 'complexity'].values
+    
+    # Skip if not enough data points
+    if len(x_data_bench) < 3:
+        print(f"  Skipping {bench_name}: insufficient data points ({len(x_data_bench)})")
+        continue
+    
+    # Try different functions and find the best fit
+    best_r2_bench = -np.inf
+    best_name_bench = None
+    best_params_bench = None
+    best_func_bench = None
+    best_equation_bench = None
+    
+    FUNCTIONS_TO_TEST_BENCH = {
+        'linear': {
+            'func': lambda x, a, b: a * x + b,
+            'equation': lambda params: f'y = {params[0]:.16f}x + {params[1]:.16f}',
+            'initial_guess': [1, 1]
+        },
+        'quadratic': {
+            'func': lambda x, a, b, c: a * x**2 + b * x + c,
+            'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
+            'initial_guess': [1, 1, 1]
+        },
+        'cubic': {
+            'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
+            'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
+            'initial_guess': [1, 1, 1, 1]
+        },
+        'exponential': {
+            'func': lambda x, a, b, c: a * np.exp(b * x) + c,
+            'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
+            'initial_guess': [1, 0.1, 1]
+        },
+        'logarithmic': {
+            'func': lambda x, a, b, c: a * np.log(x + 1) + b * x + c,
+            'equation': lambda params: f'y = {params[0]:.16f}·ln(x+1) + {params[1]:.16f}x + {params[2]:.16f}',
+            'initial_guess': [1, 1, 1]
+        },
+        'power': {
+            'func': lambda x, a, b, c: a * (x + 1)**b + c,
+            'equation': lambda params: f'y = {params[0]:.16f}·(x+1)^{params[1]:.16f} + {params[2]:.16f}',
+            'initial_guess': [1, 0.5, 1]
+        }
+    }
+    
+    for name, func_info in FUNCTIONS_TO_TEST_BENCH.items():
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                params, _ = curve_fit(func_info['func'], x_data_bench, y_data_bench, 
+                                    p0=func_info['initial_guess'], maxfev=10000)
+            y_pred = func_info['func'](x_data_bench, *params)
+            r2 = 1 - (np.sum((y_data_bench - y_pred)**2) / np.sum((y_data_bench - np.mean(y_data_bench))**2))
+            
+            if r2 > best_r2_bench:
+                best_r2_bench = r2
+                best_name_bench = name
+                best_params_bench = params
+                best_func_bench = func_info['func']
+                best_equation_bench = func_info['equation'](params)
+        except:
+            # Skip if curve fitting fails for this function
+            pass
+    
+    # If no fit was successful, skip this benchmark
+    if best_func_bench is None:
+        print(f"  Skipping {bench_name}: curve fitting failed for all functions")
+        continue
+    
+    # Create regression line with best fit
+    x_line_bench = np.linspace(x_data_bench.min(), x_data_bench.max(), 100)
+    y_line_bench = best_func_bench(x_line_bench, *best_params_bench)
+    
+    # Create subfolder for this benchmark
+    bench_clean_name = bench_name.replace('BENCH-', '').replace('_', '-').lower()
+    bench_folder = os.path.join(benchmarks_complexity_folder, bench_clean_name)
+    if not os.path.exists(bench_folder):
+        os.makedirs(bench_folder)
+    
+    # Plot scatter with regression line
+    fig = plt.figure(figsize=(12, 9))
+    plt.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
+    plt.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Best fit ({best_name_bench})')
+    plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
+    plt.ylabel('Complexity')
+    plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity')
+    plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
+    plt.subplots_adjust(bottom=0.22)
+    plt.figtext(0.5, 0.07, f'{best_equation_bench}     R² = {best_r2_bench:.16f}', 
+                ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    plt.savefig(os.path.join(bench_folder, 'regression.png'))
+    plt.close()
+    
+    # Calculate Pearson correlation coefficient
+    correlation = np.corrcoef(x_data_bench, y_data_bench)[0, 1]
+    
+    # Save regression information to text file
+    with open(os.path.join(bench_folder, 'regression_info.txt'), 'w', encoding='utf-8') as f:
+        f.write(f"{bench_name} VS COMPLEXITY - REGRESSION ANALYSIS\n")
+        f.write("=" * 70 + "\n\n")
+        
+        f.write("REGRESSION:\n")
+        f.write("-" * 70 + "\n")
+        f.write(f"Best fit function: {best_name_bench}\n")
+        f.write(f"Equation: {best_equation_bench}\n")
+        f.write(f"R² score: {best_r2_bench:.16f}\n")
+        f.write(f"Pearson correlation: {correlation:.16f}\n")
+        f.write(f"Parameters: {best_params_bench}\n")
+    
+    # Save statistics to text file
+    with open(os.path.join(bench_folder, 'statistics.txt'), 'w', encoding='utf-8') as f:
+        f.write(f"{bench_name} VS COMPLEXITY - STATISTICS\n")
+        f.write("=" * 70 + "\n\n")
+        
+        f.write("COMPLEXITY STATISTICS:\n")
+        f.write("-" * 70 + "\n")
+        f.write(f"Number of data points: {len(y_data_bench)}\n")
+        f.write(f"Mean complexity: {y_data_bench.mean():.16f}\n")
+        f.write(f"Median complexity: {np.median(y_data_bench):.16f}\n")
+        f.write(f"Std complexity: {y_data_bench.std():.16f}\n")
+        f.write(f"Min complexity: {y_data_bench.min():.16f}\n")
+        f.write(f"Max complexity: {y_data_bench.max():.16f}\n\n")
+        
+        f.write(f"{bench_name} STATISTICS:\n")
+        f.write("-" * 70 + "\n")
+        f.write(f"Min score: {x_data_bench.min():.16f}\n")
+        f.write(f"Max score: {x_data_bench.max():.16f}\n")
+        f.write(f"Mean score: {x_data_bench.mean():.16f}\n")
+        f.write(f"Median score: {np.median(x_data_bench):.16f}\n")
+        f.write(f"Std score: {x_data_bench.std():.16f}\n")
+    
+    # Store results for summary
+    all_benchmark_results[bench_name] = {
+        'best_function': best_name_bench,
+        'r2_score': best_r2_bench,
+        'correlation': correlation,
+        'equation': best_equation_bench,
+        'data_points': len(x_data_bench)
+    }
+    
+    print(f"  Completed {bench_name}: R² = {best_r2_bench:.6f}, Correlation = {correlation:.6f}")
+
+# Create summary file with all benchmark results
+with open(os.path.join(benchmarks_complexity_folder, 'summary.txt'), 'w', encoding='utf-8') as f:
+    f.write("BENCHMARKS VS COMPLEXITY - SUMMARY\n")
+    f.write("=" * 100 + "\n\n")
+    f.write(f"{'Benchmark':<35} {'Best Fit':<15} {'R² Score':<15} {'Correlation':<15} {'Data Points':<15}\n")
+    f.write("-" * 100 + "\n")
+    
+    # Sort by R² score (descending)
+    sorted_results = sorted(all_benchmark_results.items(), key=lambda x: x[1]['r2_score'], reverse=True)
+    
+    for bench_name, results in sorted_results:
+        f.write(f"{bench_name:<35} {results['best_function']:<15} {results['r2_score']:<15.16f} "
+                f"{results['correlation']:<15.16f} {results['data_points']:<15}\n")
+    
+    f.write("\n\n")
+    f.write("DETAILED EQUATIONS:\n")
+    f.write("-" * 100 + "\n")
+    for bench_name, results in sorted_results:
+        f.write(f"\n{bench_name}:\n")
+        f.write(f"  {results['equation']}\n")
+
+# Create comparison plot: R² scores for all benchmarks
+if len(all_benchmark_results) > 0:
+    fig = plt.figure(figsize=(14, 8))
+    bench_names_short = [name.replace('BENCH-', '').replace('_', ' ') for name in all_benchmark_results.keys()]
+    r2_scores = [results['r2_score'] for results in all_benchmark_results.values()]
+    
+    # Sort by R² score
+    sorted_indices = np.argsort(r2_scores)[::-1]
+    bench_names_short = [bench_names_short[i] for i in sorted_indices]
+    r2_scores = [r2_scores[i] for i in sorted_indices]
+    
+    plt.barh(range(len(bench_names_short)), r2_scores, color='steelblue', alpha=0.7, edgecolor='black')
+    plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
+    plt.xlabel('R² Score')
+    plt.ylabel('Benchmark')
+    plt.title('Regression Quality: R² Scores for Each Benchmark vs Complexity')
+    plt.grid(axis='x', alpha=0.3)
+    
+    # Add value labels on bars
+    for i, (name, score) in enumerate(zip(bench_names_short, r2_scores)):
+        plt.text(score, i, f' {score:.4f}', va='center', fontsize=8)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(benchmarks_complexity_folder, 'r2_comparison.png'), dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    # Create comparison plot: Correlation coefficients for all benchmarks
+    fig = plt.figure(figsize=(14, 8))
+    correlations = [all_benchmark_results[list(all_benchmark_results.keys())[i]]['correlation'] 
+                   for i in sorted_indices]
+    
+    colors = ['green' if c > 0 else 'red' for c in correlations]
+    plt.barh(range(len(bench_names_short)), correlations, color=colors, alpha=0.7, edgecolor='black')
+    plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
+    plt.xlabel('Pearson Correlation Coefficient')
+    plt.ylabel('Benchmark')
+    plt.title('Correlation: Benchmark Score vs Complexity')
+    plt.grid(axis='x', alpha=0.3)
+    plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
+    
+    # Add value labels on bars
+    for i, (name, corr) in enumerate(zip(bench_names_short, correlations)):
+        plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=8, 
+                ha='left' if corr > 0 else 'right')
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(benchmarks_complexity_folder, 'correlation_comparison.png'), dpi=150, bbox_inches='tight')
+    plt.close()
+
+print(f"\nCompleted benchmark analysis. Processed {len(all_benchmark_results)} benchmarks.")

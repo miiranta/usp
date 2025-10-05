@@ -4,8 +4,8 @@ NUMBER OF BINS VS COMPLEXITY - REGRESSION ANALYSIS
 REGRESSION:
 ----------------------------------------------------------------------
 Best fit function: logarithmic
-Equation: y = -0.00248093·ln(x+1) + 0.00000000x + 0.03930648
-R² score: 0.04187910
+Equation: y = -0.0024809313045307·ln(x+1) + 0.0000000001504730x + 0.0393064756743226
+R² score: 0.0418791008701910
 Parameters: [-2.48093130e-03  1.50472971e-10  3.93064757e-02]
 
 HISTOGRAM INFORMATION:

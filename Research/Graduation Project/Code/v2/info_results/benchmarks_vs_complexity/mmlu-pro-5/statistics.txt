@@ -1,0 +1,19 @@
+BENCH-MMLU_PRO_5 VS COMPLEXITY - STATISTICS
+======================================================================
+
+COMPLEXITY STATISTICS:
+----------------------------------------------------------------------
+Number of data points: 1125
+Mean complexity: 0.0138612764822134
+Median complexity: 0.0056120979606466
+Std complexity: 0.0258596746102286
+Min complexity: -0.0000000000000000
+Max complexity: 0.2243605825258328
+
+BENCH-MMLU_PRO_5 STATISTICS:
+----------------------------------------------------------------------
+Min score: 11.9000000000000004
+Max score: 76.0000000000000000
+Mean score: 48.6315555555555576
+Median score: 52.2000000000000028
+Std score: 17.5613573197967874

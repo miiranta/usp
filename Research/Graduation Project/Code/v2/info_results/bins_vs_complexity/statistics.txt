@@ -4,11 +4,11 @@ BIN COUNT VS COMPLEXITY - STATISTICS
 COMPLEXITY STATISTICS:
 ----------------------------------------------------------------------
 Number of data points: 2635
-Mean complexity: 0.01849976
-Median complexity: 0.00559889
-Std complexity: 0.03593215
-Min complexity: -0.00000000
-Max complexity: 0.25306678
+Mean complexity: 0.0184997637577029
+Median complexity: 0.0055988894358527
+Std complexity: 0.0359321495181719
+Min complexity: -0.0000000000000000
+Max complexity: 0.2530667802834685
 
 BIN COUNT STATISTICS:
 ----------------------------------------------------------------------

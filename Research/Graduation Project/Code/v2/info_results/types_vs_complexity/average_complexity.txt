@@ -3,22 +3,22 @@ TYPES VS AVERAGE COMPLEXITY
 
 Types                          Average Complexity   Count     
 ----------------------------------------------------------------------
-norm                           0.07393697           185       
-bias                           0.04461820           90        
-bias-norm                      0.04374044           185       
-embedding-norm                 0.02342193           185       
-other                          0.01128569           185       
-bias-norm-other                0.01006179           180       
-norm-other                     0.01005901           180       
-bias-embedding-norm-other      0.00991330           180       
-embedding-norm-other           0.00990915           180       
-bias-other                     0.00979477           180       
-embedding-other                0.00973801           180       
-bias-embedding-other           0.00973757           180       
-bias-embedding-norm            0.00967244           185       
-bias-embedding                 0.00773439           190       
-embedding                      0.00483900           170       
+norm                           0.0739369719577545   185       
+bias                           0.0446181963964050   90        
+bias-norm                      0.0437404392220200   185       
+embedding-norm                 0.0234219256452607   185       
+other                          0.0112856859590451   185       
+bias-norm-other                0.0100617888981967   180       
+norm-other                     0.0100590099866485   180       
+bias-embedding-norm-other      0.0099132952197621   180       
+embedding-norm-other           0.0099091451183464   180       
+bias-other                     0.0097947694594355   180       
+embedding-other                0.0097380101906305   180       
+bias-embedding-other           0.0097375690005644   180       
+bias-embedding-norm            0.0096724424800434   185       
+bias-embedding                 0.0077343881928676   190       
+embedding                      0.0048389951653988   170       
 
-Overall mean: 0.01923084
-Overall std: 0.01890419
+Overall mean: 0.0192308421928253
+Overall std: 0.0189041908381409
 Number of unique type combinations: 15

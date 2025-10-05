@@ -1,0 +1,19 @@
+BENCH-OPEN_LLM_AVERAGE VS COMPLEXITY - STATISTICS
+======================================================================
+
+COMPLEXITY STATISTICS:
+----------------------------------------------------------------------
+Number of data points: 1705
+Mean complexity: 0.0158671291999308
+Median complexity: 0.0053431590993624
+Std complexity: 0.0336504216902379
+Min complexity: 0.0001173055401815
+Max complexity: 0.2348767796343693
+
+BENCH-OPEN_LLM_AVERAGE STATISTICS:
+----------------------------------------------------------------------
+Min score: 4.2000000000000002
+Max score: 30.3599999999999994
+Mean score: 12.9859237536656895
+Median score: 10.3599999999999994
+Std score: 7.5696796079240052
