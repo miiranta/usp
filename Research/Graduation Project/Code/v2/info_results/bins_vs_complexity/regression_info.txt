@@ -1,0 +1,16 @@
+NUMBER OF BINS VS COMPLEXITY - REGRESSION ANALYSIS
+======================================================================
+
+REGRESSION:
+----------------------------------------------------------------------
+Best fit function: logarithmic
+Equation: y = -0.00248093·ln(x+1) + 0.00000000x + 0.03930648
+R² score: 0.04187910
+Parameters: [-2.48093130e-03  1.50472971e-10  3.93064757e-02]
+
+HISTOGRAM INFORMATION:
+----------------------------------------------------------------------
+Method: Freedman-Diaconis rule
+Number of bins: 607367
+Bin width: 1646.45 bins
+IQR: 11370.50

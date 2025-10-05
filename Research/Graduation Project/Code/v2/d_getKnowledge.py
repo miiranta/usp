@@ -540,3 +540,197 @@ with open(os.path.join(params_complexity_folder, 'statistics.txt'), 'w', encodin
 
 # --------------------------------------------------------------
 # Plot graphs: COMPLEXITY vs NUMBER OF BINS
+
+# Remove NaN values for regression
+mask_bins = ~(appended_benchmarks_df['bin_count'].isna() | appended_benchmarks_df['complexity'].isna())
+x_data_bins = appended_benchmarks_df.loc[mask_bins, 'bin_count'].values
+y_data_bins = appended_benchmarks_df.loc[mask_bins, 'complexity'].values
+
+# Try different functions and find the best fit
+best_r2_bins = -np.inf
+best_name_bins = None
+best_params_bins = None
+best_func_bins = None
+best_equation_bins = None
+
+# ALL DATA
+FUNCTIONS_TO_TEST_BINS = {
+    'linear': {
+        'func': lambda x, a, b: a * x + b,
+        'equation': lambda params: f'y = {params[0]:.8f}x + {params[1]:.8f}',
+        'initial_guess': [1, 1]
+    },
+    'quadratic': {
+        'func': lambda x, a, b, c: a * x**2 + b * x + c,
+        'equation': lambda params: f'y = {params[0]:.8f}x² + {params[1]:.8f}x + {params[2]:.8f}',
+        'initial_guess': [1, 1, 1]
+    },
+    'cubic': {
+        'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
+        'equation': lambda params: f'y = {params[0]:.8f}x³ + {params[1]:.8f}x² + {params[2]:.8f}x + {params[3]:.8f}',
+        'initial_guess': [1, 1, 1, 1]
+    },
+    'exponential': {
+        'func': lambda x, a, b, c: a * np.exp(b * x) + c,
+        'equation': lambda params: f'y = {params[0]:.8f}·e^({params[1]:.8f}x) + {params[2]:.8f}',
+        'initial_guess': [1, 0.1, 1]
+    },
+    'logarithmic': {
+        'func': lambda x, a, b, c: a * np.log(x + 1) + b * x + c,
+        'equation': lambda params: f'y = {params[0]:.8f}·ln(x+1) + {params[1]:.8f}x + {params[2]:.8f}',
+        'initial_guess': [1, 1, 1]
+    },
+    'power': {
+        'func': lambda x, a, b, c: a * (x + 1)**b + c,
+        'equation': lambda params: f'y = {params[0]:.8f}·(x+1)^{params[1]:.8f} + {params[2]:.8f}',
+        'initial_guess': [1, 0.5, 1]
+    }
+}
+
+for name, func_info in FUNCTIONS_TO_TEST_BINS.items():
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            params, _ = curve_fit(func_info['func'], x_data_bins, y_data_bins, p0=func_info['initial_guess'], maxfev=10000)
+        y_pred = func_info['func'](x_data_bins, *params)
+        r2 = 1 - (np.sum((y_data_bins - y_pred)**2) / np.sum((y_data_bins - np.mean(y_data_bins))**2))
+        
+        if r2 > best_r2_bins:
+            best_r2_bins = r2
+            best_name_bins = name
+            best_params_bins = params
+            best_func_bins = func_info['func']
+            best_equation_bins = func_info['equation'](params)
+    except:
+        print(f"Curve fitting failed for function: {name}")
+        # Skip if curve fitting fails for this function
+        pass
+
+# Create regression line with best fit
+x_line_bins = np.linspace(x_data_bins.min(), x_data_bins.max(), 100)
+y_line_bins = best_func_bins(x_line_bins, *best_params_bins)
+
+# Create output folder for bins vs complexity
+bins_complexity_folder = os.path.join(OUTPUT_FOLDER, 'bins_vs_complexity')
+if not os.path.exists(bins_complexity_folder):
+    os.makedirs(bins_complexity_folder)
+
+# Plot scatter with regression line
+fig = plt.figure(figsize=(12, 9))
+plt.scatter(x_data_bins, y_data_bins, alpha=0.6, label='Data')
+plt.plot(x_line_bins, y_line_bins, 'r-', linewidth=2, label=f'Best fit ({best_name_bins})')
+plt.xlabel('Number of Bins')
+plt.ylabel('Complexity')
+plt.title('Number of Bins vs Complexity')
+plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
+plt.subplots_adjust(bottom=0.22)
+plt.figtext(0.5, 0.07, f'{best_equation_bins}     R² = {best_r2_bins:.8f}', 
+            ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+plt.savefig(os.path.join(bins_complexity_folder, 'regression.png'))
+plt.close()
+
+# Calculate number of bins using Freedman-Diaconis rule for bin count
+# bin_width = 2 * IQR / n^(1/3)
+q75_bins, q25_bins = np.percentile(x_data_bins, [75, 25])
+iqr_bins = q75_bins - q25_bins
+n_bins_data = len(x_data_bins)
+bin_width_bins = 2 * iqr_bins / (n_bins_data ** (1/3))
+if bin_width_bins > 0:
+    n_bins_fd_bins = int(np.ceil((x_data_bins.max() - x_data_bins.min()) / bin_width_bins))
+    # Limit the number of bins to a reasonable range
+else:
+    n_bins_fd_bins = 30  # Default if calculation fails
+
+# Create bins for bin count and calculate average complexity for each bin
+bin_bins = np.linspace(x_data_bins.min(), x_data_bins.max(), n_bins_fd_bins + 1)
+bin_centers_bins = []
+avg_complexity_per_bin_bins = []
+bin_counts_bins = []
+
+for i in range(n_bins_fd_bins):
+    mask_bin = (x_data_bins >= bin_bins[i]) & (x_data_bins < bin_bins[i + 1])
+    if i == n_bins_fd_bins - 1:  # Include the last edge
+        mask_bin = (x_data_bins >= bin_bins[i]) & (x_data_bins <= bin_bins[i + 1])
+    
+    if mask_bin.any():
+        bin_centers_bins.append((bin_bins[i] + bin_bins[i + 1]) / 2)
+        avg_complexity_per_bin_bins.append(y_data_bins[mask_bin].mean())
+        bin_counts_bins.append(mask_bin.sum())
+
+# Plot histogram: average complexity per bin count interval
+fig = plt.figure(figsize=(14, 9))
+bars = plt.bar(bin_centers_bins, avg_complexity_per_bin_bins, width=(bin_bins[1] - bin_bins[0]) * 0.9, 
+               color='steelblue', alpha=0.7, edgecolor='black')
+plt.xlabel('Number of Bins')
+plt.ylabel('Average Complexity')
+plt.title(f'Average Complexity by Bin Count Range (Freedman-Diaconis: {n_bins_fd_bins} bins)')
+plt.grid(axis='y', alpha=0.3)
+
+# Add overall statistics text
+overall_avg_bins = np.average(avg_complexity_per_bin_bins, weights=bin_counts_bins)
+stats_text = f'Overall Avg: {overall_avg_bins:.4f}\nTotal samples: {sum(bin_counts_bins)}'
+plt.text(0.98, 0.97, stats_text, transform=plt.gca().transAxes, 
+         verticalalignment='top', horizontalalignment='right',
+         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
+
+plt.tight_layout()
+plt.savefig(os.path.join(bins_complexity_folder, 'average_complexity_histogram.png'))
+plt.close()
+
+# Save regression information to text file
+with open(os.path.join(bins_complexity_folder, 'regression_info.txt'), 'w', encoding='utf-8') as f:
+    f.write("NUMBER OF BINS VS COMPLEXITY - REGRESSION ANALYSIS\n")
+    f.write("=" * 70 + "\n\n")
+    
+    f.write("REGRESSION:\n")
+    f.write("-" * 70 + "\n")
+    f.write(f"Best fit function: {best_name_bins}\n")
+    f.write(f"Equation: {best_equation_bins}\n")
+    f.write(f"R² score: {best_r2_bins:.8f}\n")
+    f.write(f"Parameters: {best_params_bins}\n\n")
+    
+    f.write("HISTOGRAM INFORMATION:\n")
+    f.write("-" * 70 + "\n")
+    f.write(f"Method: Freedman-Diaconis rule\n")
+    f.write(f"Number of bins: {n_bins_fd_bins}\n")
+    f.write(f"Bin width: {bin_width_bins:.2f} bins\n")
+    f.write(f"IQR: {iqr_bins:.2f}\n")
+
+# Save average complexity per bin to text file
+with open(os.path.join(bins_complexity_folder, 'average_complexity_per_bin.txt'), 'w', encoding='utf-8') as f:
+    f.write("AVERAGE COMPLEXITY PER BIN COUNT RANGE\n")
+    f.write("=" * 70 + "\n\n")
+    f.write(f"{'Bin Range Start':<20} {'Bin Range End':<20} {'Avg Complexity':<20} {'Count':<10}\n")
+    f.write("-" * 70 + "\n")
+    for i, (center, avg_comp, count) in enumerate(zip(bin_centers_bins, avg_complexity_per_bin_bins, bin_counts_bins)):
+        range_start = bin_bins[i]
+        range_end = bin_bins[i + 1]
+        f.write(f"{range_start:<20.2f} {range_end:<20.2f} {avg_comp:<20.8f} {count:<10}\n")
+    f.write("\n")
+    overall_avg_bins = np.average(avg_complexity_per_bin_bins, weights=bin_counts_bins)
+    f.write(f"Overall weighted average: {overall_avg_bins:.8f}\n")
+    f.write(f"Total data points: {sum(bin_counts_bins)}\n")
+
+# Save overall statistics to text file
+with open(os.path.join(bins_complexity_folder, 'statistics.txt'), 'w', encoding='utf-8') as f:
+    f.write("BIN COUNT VS COMPLEXITY - STATISTICS\n")
+    f.write("=" * 70 + "\n\n")
+    
+    f.write("COMPLEXITY STATISTICS:\n")
+    f.write("-" * 70 + "\n")
+    f.write(f"Number of data points: {len(y_data_bins)}\n")
+    f.write(f"Mean complexity: {y_data_bins.mean():.8f}\n")
+    f.write(f"Median complexity: {np.median(y_data_bins):.8f}\n")
+    f.write(f"Std complexity: {y_data_bins.std():.8f}\n")
+    f.write(f"Min complexity: {y_data_bins.min():.8f}\n")
+    f.write(f"Max complexity: {y_data_bins.max():.8f}\n\n")
+    
+    f.write("BIN COUNT STATISTICS:\n")
+    f.write("-" * 70 + "\n")
+    f.write(f"Min bin count: {x_data_bins.min():.0f}\n")
+    f.write(f"Max bin count: {x_data_bins.max():.0f}\n")
+    f.write(f"Mean bin count: {x_data_bins.mean():.2f}\n")
+    f.write(f"Median bin count: {np.median(x_data_bins):.2f}\n")
+    f.write(f"Q1 (25%): {q25_bins:.2f}\n")
+    f.write(f"Q3 (75%): {q75_bins:.2f}\n")
+    f.write(f"IQR: {iqr_bins:.2f}\n")
