@@ -3,6 +3,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
+import warnings
+from scipy.optimize import OptimizeWarning
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.abspath(os.path.join(SCRIPT_FOLDER, 'appended_csvs'))
@@ -44,8 +46,8 @@ BENCH_ROWS_NAMES = appended_benchmarks_df.columns[appended_benchmarks_df.columns
 # ================================================================================
 
 # --------------------------------------------------------------
+# Plot graphs: COMPLEXITY vs FILTER
 
-# Plot graphs: FILTER vs COMPLEXITY
 # Remove NaN values and filter = 0 for regression
 mask = ~(appended_benchmarks_df['filter'].isna() | appended_benchmarks_df['complexity'].isna()) & (appended_benchmarks_df['filter'] != 0)
 x_data = appended_benchmarks_df.loc[mask, 'filter'].values
@@ -69,7 +71,9 @@ FUNCTIONS_TO_TEST = {
 
 for name, func_info in FUNCTIONS_TO_TEST.items():
     try:
-        params, _ = curve_fit(func_info['func'], x_data, y_data, p0=func_info['initial_guess'], maxfev=10000)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            params, _ = curve_fit(func_info['func'], x_data, y_data, p0=func_info['initial_guess'], maxfev=10000)
         y_pred = func_info['func'](x_data, *params)
         r2 = 1 - (np.sum((y_data - y_pred)**2) / np.sum((y_data - np.mean(y_data))**2))
         
@@ -136,7 +140,9 @@ FUNCTIONS_TO_TEST = {
 
 for name, func_info in FUNCTIONS_TO_TEST.items():
     try:
-        params, _ = curve_fit(func_info['func'], x_max, y_max, p0=func_info['initial_guess'], maxfev=10000)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            params, _ = curve_fit(func_info['func'], x_max, y_max, p0=func_info['initial_guess'], maxfev=10000)
         y_pred = func_info['func'](x_max, *params)
         r2 = 1 - (np.sum((y_max - y_pred)**2) / np.sum((y_max - np.mean(y_max))**2))
         
@@ -251,9 +257,89 @@ with open(os.path.join(filter_complexity_folder, 'maximum_complexity.txt'), 'w',
         f.write(f"{x:<15} {y:<20.8f}\n")
 
 # --------------------------------------------------------------
+# Plot graphs: COMPLEXITY vs TYPES
 
-# Plot graphs: EACH BENCHMARK vs COMPLEXITY
+# Convert types list to string for grouping (join with '-')
+appended_benchmarks_df['types_str'] = appended_benchmarks_df['types'].apply(lambda x: '-'.join(sorted(x)) if isinstance(x, list) and len(x) > 0 else 'unknown')
 
+# Remove rows with NaN complexity
+types_df = appended_benchmarks_df[~appended_benchmarks_df['complexity'].isna()].copy()
+
+# Get average complexity for each type combination
+avg_complexity_by_types = types_df.groupby('types_str')['complexity'].mean().reset_index()
+avg_complexity_by_types = avg_complexity_by_types.sort_values('complexity', ascending=False)
+x_types_avg = avg_complexity_by_types['types_str'].values
+y_types_avg = avg_complexity_by_types['complexity'].values
+
+# Get maximum complexity for each type combination
+max_complexity_by_types = types_df.groupby('types_str')['complexity'].max().reset_index()
+max_complexity_by_types = max_complexity_by_types.sort_values('complexity', ascending=False)
+x_types_max = max_complexity_by_types['types_str'].values
+y_types_max = max_complexity_by_types['complexity'].values
+
+# Create output folder for types vs complexity
+types_complexity_folder = os.path.join(OUTPUT_FOLDER, 'types_vs_complexity')
+if not os.path.exists(types_complexity_folder):
+    os.makedirs(types_complexity_folder)
+
+# Plot bar graph for average complexity by types
+fig = plt.figure(figsize=(14, 10))
+plt.barh(range(len(x_types_avg)), y_types_avg, color='steelblue', alpha=0.7, edgecolor='black')
+plt.yticks(range(len(x_types_avg)), x_types_avg, fontsize=8)
+plt.xlabel('Average Complexity')
+plt.ylabel('Types')
+plt.title('Average Complexity by Type Combination')
+plt.grid(axis='x', alpha=0.3)
+# Add value labels on bars
+for i, (x, y) in enumerate(zip(x_types_avg, y_types_avg)):
+    plt.text(y, i, f' {y:.4f}', va='center', fontsize=7)
+plt.tight_layout()
+plt.savefig(os.path.join(types_complexity_folder, 'average_complexity_bar.png'), dpi=150, bbox_inches='tight')
+plt.close()
+
+# Plot bar graph for maximum complexity by types
+fig = plt.figure(figsize=(14, 10))
+plt.barh(range(len(x_types_max)), y_types_max, color='darkgreen', alpha=0.7, edgecolor='black')
+plt.yticks(range(len(x_types_max)), x_types_max, fontsize=8)
+plt.xlabel('Maximum Complexity')
+plt.ylabel('Types')
+plt.title('Maximum Complexity by Type Combination')
+plt.grid(axis='x', alpha=0.3)
+# Add value labels on bars
+for i, (x, y) in enumerate(zip(x_types_max, y_types_max)):
+    plt.text(y, i, f' {y:.4f}', va='center', fontsize=7)
+plt.tight_layout()
+plt.savefig(os.path.join(types_complexity_folder, 'maximum_complexity_bar.png'), dpi=150, bbox_inches='tight')
+plt.close()
+
+# Save average complexity data to text file
+with open(os.path.join(types_complexity_folder, 'average_complexity.txt'), 'w', encoding='utf-8') as f:
+    f.write("TYPES VS AVERAGE COMPLEXITY\n")
+    f.write("=" * 70 + "\n\n")
+    f.write(f"{'Types':<30} {'Average Complexity':<20} {'Count':<10}\n")
+    f.write("-" * 70 + "\n")
+    for types_str in x_types_avg:
+        avg_val = avg_complexity_by_types[avg_complexity_by_types['types_str'] == types_str]['complexity'].values[0]
+        count = len(types_df[types_df['types_str'] == types_str])
+        f.write(f"{types_str:<30} {avg_val:<20.8f} {count:<10}\n")
+    f.write("\n")
+    f.write(f"Overall mean: {y_types_avg.mean():.8f}\n")
+    f.write(f"Overall std: {y_types_avg.std():.8f}\n")
+    f.write(f"Number of unique type combinations: {len(x_types_avg)}\n")
+
+# Save maximum complexity data to text file
+with open(os.path.join(types_complexity_folder, 'maximum_complexity.txt'), 'w', encoding='utf-8') as f:
+    f.write("TYPES VS MAXIMUM COMPLEXITY\n")
+    f.write("=" * 70 + "\n\n")
+    f.write(f"{'Types':<30} {'Maximum Complexity':<20} {'Count':<10}\n")
+    f.write("-" * 70 + "\n")
+    for types_str in x_types_max:
+        max_val = max_complexity_by_types[max_complexity_by_types['types_str'] == types_str]['complexity'].values[0]
+        count = len(types_df[types_df['types_str'] == types_str])
+        f.write(f"{types_str:<30} {max_val:<20.8f} {count:<10}\n")
+    f.write("\n")
+    f.write(f"Overall max of maxes: {y_types_max.max():.8f}\n")
+    f.write(f"Number of unique type combinations: {len(x_types_max)}\n")
 
 # --------------------------------------------------------------
 

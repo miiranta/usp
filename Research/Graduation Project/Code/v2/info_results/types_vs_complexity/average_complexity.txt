@@ -1,0 +1,24 @@
+TYPES VS AVERAGE COMPLEXITY
+======================================================================
+
+Types                          Average Complexity   Count     
+----------------------------------------------------------------------
+norm                           0.07393697           185       
+bias                           0.04461820           90        
+bias-norm                      0.04374044           185       
+embedding-norm                 0.02342193           185       
+other                          0.01128569           185       
+bias-norm-other                0.01006179           180       
+norm-other                     0.01005901           180       
+bias-embedding-norm-other      0.00991330           180       
+embedding-norm-other           0.00990915           180       
+bias-other                     0.00979477           180       
+embedding-other                0.00973801           180       
+bias-embedding-other           0.00973757           180       
+bias-embedding-norm            0.00967244           185       
+bias-embedding                 0.00773439           190       
+embedding                      0.00483900           170       
+
+Overall mean: 0.01923084
+Overall std: 0.01890419
+Number of unique type combinations: 15
