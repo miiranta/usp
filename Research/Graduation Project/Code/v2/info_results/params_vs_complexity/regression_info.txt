@@ -1,0 +1,16 @@
+NUMBER OF PARAMETERS VS COMPLEXITY - REGRESSION ANALYSIS
+======================================================================
+
+REGRESSION:
+----------------------------------------------------------------------
+Best fit function: logarithmic
+Equation: y = -0.00588027·ln(x+1) + 0.00000000x + 0.12860465
+R² score: 0.33184847
+Parameters: [-5.88027401e-03  6.41127912e-13  1.28604655e-01]
+
+HISTOGRAM INFORMATION:
+----------------------------------------------------------------------
+Method: Freedman-Diaconis rule
+Number of bins: 115
+Bin width: 1019274963.84 parameters
+IQR: 7039171847.00

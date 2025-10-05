@@ -1,0 +1,21 @@
+PARAMETER COUNT VS COMPLEXITY - STATISTICS
+======================================================================
+
+COMPLEXITY STATISTICS:
+----------------------------------------------------------------------
+Number of data points: 2635
+Mean complexity: 0.01849976
+Median complexity: 0.00559889
+Std complexity: 0.03593215
+Min complexity: -0.00000000
+Max complexity: 0.25306678
+
+PARAMETER COUNT STATISTICS:
+----------------------------------------------------------------------
+Min parameter count: 43
+Max parameter count: 116250023232
+Mean parameter count: 9452067719.20
+Median parameter count: 999688179.00
+Q1 (25%): 116516352.00
+Q3 (75%): 7155688199.00
+IQR: 7039171847.00

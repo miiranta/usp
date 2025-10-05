@@ -176,7 +176,7 @@ plt.plot(x_line_max, y_line_max, 'g--', linewidth=2, label=f'Best fit max ({best
 plt.xlabel('Filter')
 plt.ylabel('Complexity')
 plt.title('Filter vs Complexity')
-plt.legend(loc='lower center', bbox_to_anchor=(0.5, -0.19), ncol=2, frameon=True, fancybox=True, shadow=True)
+plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.19), ncol=2, frameon=True, fancybox=True, shadow=True)
 plt.subplots_adjust(bottom=0.28)
 plt.figtext(0.5, 0.14, f'All data: {best_equation}     R² = {best_r2:.8f}', 
             ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
@@ -342,7 +342,201 @@ with open(os.path.join(types_complexity_folder, 'maximum_complexity.txt'), 'w', 
     f.write(f"Number of unique type combinations: {len(x_types_max)}\n")
 
 # --------------------------------------------------------------
+# Plot graphs: COMPLEXITY vs NUMBER OF PARAMS
 
+# Remove NaN values for regression
+mask_params = ~(appended_benchmarks_df['count'].isna() | appended_benchmarks_df['complexity'].isna())
+x_data_params = appended_benchmarks_df.loc[mask_params, 'count'].values
+y_data_params = appended_benchmarks_df.loc[mask_params, 'complexity'].values
 
+# Try different functions and find the best fit
+best_r2_params = -np.inf
+best_name_params = None
+best_params_params = None
+best_func_params = None
+best_equation_params = None
 
-# ================================================================================
+# ALL DATA
+FUNCTIONS_TO_TEST_PARAMS = {
+    'linear': {
+        'func': lambda x, a, b: a * x + b,
+        'equation': lambda params: f'y = {params[0]:.8f}x + {params[1]:.8f}',
+        'initial_guess': [1, 1]
+    },
+    'quadratic': {
+        'func': lambda x, a, b, c: a * x**2 + b * x + c,
+        'equation': lambda params: f'y = {params[0]:.8f}x² + {params[1]:.8f}x + {params[2]:.8f}',
+        'initial_guess': [1, 1, 1]
+    },
+    'cubic': {
+        'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
+        'equation': lambda params: f'y = {params[0]:.8f}x³ + {params[1]:.8f}x² + {params[2]:.8f}x + {params[3]:.8f}',
+        'initial_guess': [1, 1, 1, 1]
+    },
+    'exponential': {
+        'func': lambda x, a, b, c: a * np.exp(b * x) + c,
+        'equation': lambda params: f'y = {params[0]:.8f}·e^({params[1]:.8f}x) + {params[2]:.8f}',
+        'initial_guess': [1, 0.1, 1]
+    },
+    'logarithmic': {
+        'func': lambda x, a, b, c: a * np.log(x + 1) + b * x + c,
+        'equation': lambda params: f'y = {params[0]:.8f}·ln(x+1) + {params[1]:.8f}x + {params[2]:.8f}',
+        'initial_guess': [1, 1, 1]
+    },
+    'power': {
+        'func': lambda x, a, b, c: a * (x + 1)**b + c,
+        'equation': lambda params: f'y = {params[0]:.8f}·(x+1)^{params[1]:.8f} + {params[2]:.8f}',
+        'initial_guess': [1, 0.5, 1]
+    }
+}
+
+for name, func_info in FUNCTIONS_TO_TEST_PARAMS.items():
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            params, _ = curve_fit(func_info['func'], x_data_params, y_data_params, p0=func_info['initial_guess'], maxfev=10000)
+        y_pred = func_info['func'](x_data_params, *params)
+        r2 = 1 - (np.sum((y_data_params - y_pred)**2) / np.sum((y_data_params - np.mean(y_data_params))**2))
+        
+        if r2 > best_r2_params:
+            best_r2_params = r2
+            best_name_params = name
+            best_params_params = params
+            best_func_params = func_info['func']
+            best_equation_params = func_info['equation'](params)
+    except:
+        print(f"Curve fitting failed for function: {name}")
+        # Skip if curve fitting fails for this function
+        pass
+
+# Create regression line with best fit
+x_line_params = np.linspace(x_data_params.min(), x_data_params.max(), 100)
+y_line_params = best_func_params(x_line_params, *best_params_params)
+
+# Create output folder for params vs complexity
+params_complexity_folder = os.path.join(OUTPUT_FOLDER, 'params_vs_complexity')
+if not os.path.exists(params_complexity_folder):
+    os.makedirs(params_complexity_folder)
+
+# Plot scatter with regression line
+fig = plt.figure(figsize=(12, 9))
+plt.scatter(x_data_params, y_data_params, alpha=0.6, label='Data')
+plt.plot(x_line_params, y_line_params, 'r-', linewidth=2, label=f'Best fit ({best_name_params})')
+plt.xlabel('Number of Parameters')
+plt.ylabel('Complexity')
+plt.title('Number of Parameters vs Complexity')
+plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
+plt.subplots_adjust(bottom=0.22)
+plt.figtext(0.5, 0.07, f'{best_equation_params}     R² = {best_r2_params:.8f}', 
+            ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+plt.savefig(os.path.join(params_complexity_folder, 'regression.png'))
+plt.close()
+
+# Calculate number of bins using Freedman-Diaconis rule for parameter count
+# bin_width = 2 * IQR / n^(1/3)
+q75_params, q25_params = np.percentile(x_data_params, [75, 25])
+iqr_params = q75_params - q25_params
+n_params = len(x_data_params)
+bin_width_params = 2 * iqr_params / (n_params ** (1/3))
+if bin_width_params > 0:
+    n_bins_fd = int(np.ceil((x_data_params.max() - x_data_params.min()) / bin_width_params))
+    # Limit the number of bins to a reasonable range
+else:
+    n_bins_fd = 30  # Default if calculation fails
+
+# Create bins for parameter count and calculate average complexity for each bin
+param_bins = np.linspace(x_data_params.min(), x_data_params.max(), n_bins_fd + 1)
+bin_centers = []
+avg_complexity_per_bin = []
+bin_counts = []
+
+for i in range(n_bins_fd):
+    mask_bin = (x_data_params >= param_bins[i]) & (x_data_params < param_bins[i + 1])
+    if i == n_bins_fd - 1:  # Include the last edge
+        mask_bin = (x_data_params >= param_bins[i]) & (x_data_params <= param_bins[i + 1])
+    
+    if mask_bin.any():
+        bin_centers.append((param_bins[i] + param_bins[i + 1]) / 2)
+        avg_complexity_per_bin.append(y_data_params[mask_bin].mean())
+        bin_counts.append(mask_bin.sum())
+
+# Plot histogram: average complexity per parameter count interval
+fig = plt.figure(figsize=(14, 9))
+bars = plt.bar(bin_centers, avg_complexity_per_bin, width=(param_bins[1] - param_bins[0]) * 0.9, 
+               color='steelblue', alpha=0.7, edgecolor='black')
+plt.xlabel('Number of Parameters')
+plt.ylabel('Average Complexity')
+plt.title(f'Average Complexity by Parameter Count Range (Freedman-Diaconis: {n_bins_fd} bins)')
+plt.grid(axis='y', alpha=0.3)
+
+# Add overall statistics text
+overall_avg = np.average(avg_complexity_per_bin, weights=bin_counts)
+stats_text = f'Overall Avg: {overall_avg:.4f}\nTotal samples: {sum(bin_counts)}'
+plt.text(0.98, 0.97, stats_text, transform=plt.gca().transAxes, 
+         verticalalignment='top', horizontalalignment='right',
+         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
+
+plt.tight_layout()
+plt.savefig(os.path.join(params_complexity_folder, 'average_complexity_histogram.png'))
+plt.close()
+
+# Save regression information to text file
+with open(os.path.join(params_complexity_folder, 'regression_info.txt'), 'w', encoding='utf-8') as f:
+    f.write("NUMBER OF PARAMETERS VS COMPLEXITY - REGRESSION ANALYSIS\n")
+    f.write("=" * 70 + "\n\n")
+    
+    f.write("REGRESSION:\n")
+    f.write("-" * 70 + "\n")
+    f.write(f"Best fit function: {best_name_params}\n")
+    f.write(f"Equation: {best_equation_params}\n")
+    f.write(f"R² score: {best_r2_params:.8f}\n")
+    f.write(f"Parameters: {best_params_params}\n\n")
+    
+    f.write("HISTOGRAM INFORMATION:\n")
+    f.write("-" * 70 + "\n")
+    f.write(f"Method: Freedman-Diaconis rule\n")
+    f.write(f"Number of bins: {n_bins_fd}\n")
+    f.write(f"Bin width: {bin_width_params:.2f} parameters\n")
+    f.write(f"IQR: {iqr_params:.2f}\n")
+
+# Save average complexity per bin to text file
+with open(os.path.join(params_complexity_folder, 'average_complexity_per_bin.txt'), 'w', encoding='utf-8') as f:
+    f.write("AVERAGE COMPLEXITY PER PARAMETER COUNT RANGE\n")
+    f.write("=" * 70 + "\n\n")
+    f.write(f"{'Param Range Start':<20} {'Param Range End':<20} {'Avg Complexity':<20} {'Count':<10}\n")
+    f.write("-" * 70 + "\n")
+    for i, (center, avg_comp, count) in enumerate(zip(bin_centers, avg_complexity_per_bin, bin_counts)):
+        range_start = param_bins[i]
+        range_end = param_bins[i + 1]
+        f.write(f"{range_start:<20.2f} {range_end:<20.2f} {avg_comp:<20.8f} {count:<10}\n")
+    f.write("\n")
+    overall_avg = np.average(avg_complexity_per_bin, weights=bin_counts)
+    f.write(f"Overall weighted average: {overall_avg:.8f}\n")
+    f.write(f"Total data points: {sum(bin_counts)}\n")
+
+# Save overall statistics to text file
+with open(os.path.join(params_complexity_folder, 'statistics.txt'), 'w', encoding='utf-8') as f:
+    f.write("PARAMETER COUNT VS COMPLEXITY - STATISTICS\n")
+    f.write("=" * 70 + "\n\n")
+    
+    f.write("COMPLEXITY STATISTICS:\n")
+    f.write("-" * 70 + "\n")
+    f.write(f"Number of data points: {len(y_data_params)}\n")
+    f.write(f"Mean complexity: {y_data_params.mean():.8f}\n")
+    f.write(f"Median complexity: {np.median(y_data_params):.8f}\n")
+    f.write(f"Std complexity: {y_data_params.std():.8f}\n")
+    f.write(f"Min complexity: {y_data_params.min():.8f}\n")
+    f.write(f"Max complexity: {y_data_params.max():.8f}\n\n")
+    
+    f.write("PARAMETER COUNT STATISTICS:\n")
+    f.write("-" * 70 + "\n")
+    f.write(f"Min parameter count: {x_data_params.min():.0f}\n")
+    f.write(f"Max parameter count: {x_data_params.max():.0f}\n")
+    f.write(f"Mean parameter count: {x_data_params.mean():.2f}\n")
+    f.write(f"Median parameter count: {np.median(x_data_params):.2f}\n")
+    f.write(f"Q1 (25%): {q25_params:.2f}\n")
+    f.write(f"Q3 (75%): {q75_params:.2f}\n")
+    f.write(f"IQR: {iqr_params:.2f}\n")
+
+# --------------------------------------------------------------
+# Plot graphs: COMPLEXITY vs NUMBER OF BINS
