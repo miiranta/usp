@@ -686,7 +686,7 @@ TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other']
 # - 3: '' 3 standard deviations
 # - 4: '' 4 standard deviations
 
-FILTERS_TO_TEST = [0, 1, 2, 3, 4]
+FILTERS_TO_TEST = [0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 10, 20, 0]
 
 def main():
     global MODEL_DATA_ARRAYS
