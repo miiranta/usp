@@ -1,10 +1,9 @@
 import os
-import warnings
 import numpy as np
 import pandas as pd
+
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-from scipy.optimize import OptimizeWarning
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.abspath(os.path.join(SCRIPT_FOLDER, 'appended_csvs'))
@@ -96,9 +95,7 @@ FUNCTIONS_TO_TEST = {
 
 for name, func_info in FUNCTIONS_TO_TEST.items():
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            params, _ = curve_fit(func_info['func'], x_data, y_data, p0=func_info['initial_guess'], maxfev=10000)
+        params, _ = curve_fit(func_info['func'], x_data, y_data, p0=func_info['initial_guess'], maxfev=10000)
         y_pred = func_info['func'](x_data, *params)
         r2 = 1 - (np.sum((y_data - y_pred)**2) / np.sum((y_data - np.mean(y_data))**2))
         
@@ -165,9 +162,7 @@ FUNCTIONS_TO_TEST = {
 
 for name, func_info in FUNCTIONS_TO_TEST.items():
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            params, _ = curve_fit(func_info['func'], x_max, y_max, p0=func_info['initial_guess'], maxfev=10000)
+        params, _ = curve_fit(func_info['func'], x_max, y_max, p0=func_info['initial_guess'], maxfev=10000)
         y_pred = func_info['func'](x_max, *params)
         r2 = 1 - (np.sum((y_max - y_pred)**2) / np.sum((y_max - np.mean(y_max))**2))
         
@@ -417,9 +412,7 @@ FUNCTIONS_TO_TEST_PARAMS = {
 
 for name, func_info in FUNCTIONS_TO_TEST_PARAMS.items():
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            params, _ = curve_fit(func_info['func'], x_data_params, y_data_params, p0=func_info['initial_guess'], maxfev=10000)
+        params, _ = curve_fit(func_info['func'], x_data_params, y_data_params, p0=func_info['initial_guess'], maxfev=10000)
         y_pred = func_info['func'](x_data_params, *params)
         r2 = 1 - (np.sum((y_data_params - y_pred)**2) / np.sum((y_data_params - np.mean(y_data_params))**2))
         
@@ -614,9 +607,7 @@ FUNCTIONS_TO_TEST_BINS = {
 
 for name, func_info in FUNCTIONS_TO_TEST_BINS.items():
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            params, _ = curve_fit(func_info['func'], x_data_bins, y_data_bins, p0=func_info['initial_guess'], maxfev=10000)
+        params, _ = curve_fit(func_info['func'], x_data_bins, y_data_bins, p0=func_info['initial_guess'], maxfev=10000)
         y_pred = func_info['func'](x_data_bins, *params)
         r2 = 1 - (np.sum((y_data_bins - y_pred)**2) / np.sum((y_data_bins - np.mean(y_data_bins))**2))
         
@@ -832,9 +823,7 @@ if False:
         
         for name, func_info in FUNCTIONS_TO_TEST_BENCH.items():
             try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    params, _ = curve_fit(func_info['func'], x_data_bench, y_data_bench, 
+                params, _ = curve_fit(func_info['func'], x_data_bench, y_data_bench, 
                                         p0=func_info['initial_guess'], maxfev=10000)
                 y_pred = func_info['func'](x_data_bench, *params)
                 r2 = 1 - (np.sum((y_data_bench - y_pred)**2) / np.sum((y_data_bench - np.mean(y_data_bench))**2))
@@ -1108,9 +1097,7 @@ if False:
                 
                 for name, func_info in FUNCTIONS_TO_TEST_COMBO.items():
                     try:
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("ignore")
-                            params, _ = curve_fit(func_info['func'], x_data_combo, y_data_combo, 
+                        params, _ = curve_fit(func_info['func'], x_data_combo, y_data_combo, 
                                                 p0=func_info['initial_guess'], maxfev=10000)
                         y_pred = func_info['func'](x_data_combo, *params)
                         r2 = 1 - (np.sum((y_data_combo - y_pred)**2) / np.sum((y_data_combo - np.mean(y_data_combo))**2))
@@ -1706,9 +1693,7 @@ if False:
                 
                 for name, func_info in FUNCTIONS_TO_TEST_COMBO.items():
                     try:
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("ignore")
-                            params, _ = curve_fit(func_info['func'], x_data_combo, y_data_combo, 
+                        params, _ = curve_fit(func_info['func'], x_data_combo, y_data_combo, 
                                                 p0=func_info['initial_guess'], maxfev=10000)
                         y_pred = func_info['func'](x_data_combo, *params)
                         r2 = 1 - (np.sum((y_data_combo - y_pred)**2) / np.sum((y_data_combo - np.mean(y_data_combo))**2))
@@ -2593,9 +2578,7 @@ if False:
                 
                 for name, func_info in FUNCTIONS_TO_TEST_COMBO.items():
                     try:
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("ignore")
-                            params, _ = curve_fit(func_info['func'], x_data_combo, y_data_combo, 
+                        params, _ = curve_fit(func_info['func'], x_data_combo, y_data_combo, 
                                                 p0=func_info['initial_guess'], maxfev=10000)
                         y_pred = func_info['func'](x_data_combo, *params)
                         r2 = 1 - (np.sum((y_data_combo - y_pred)**2) / np.sum((y_data_combo - np.mean(y_data_combo))**2))
