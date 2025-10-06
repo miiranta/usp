@@ -1,0 +1,19 @@
+BENCH-MMLU_5 VS MAGICAL VARIABLE - STATISTICS
+======================================================================
+
+MAGICAL VARIABLE STATISTICS:
+----------------------------------------------------------------------
+Number of data points: 1925
+Mean magical variable: 317852806.9951347112655640
+Median magical variable: 6144590.6579917278140783
+Std magical variable: 1545985639.8273131847381592
+Min magical variable: -0.0000000000000000
+Max magical variable: 11151868798.1539268493652344
+
+BENCH-MMLU_5 STATISTICS:
+----------------------------------------------------------------------
+Min score: 26.5000000000000000
+Max score: 90.0000000000000000
+Mean score: 62.7207792207792210
+Median score: 64.9000000000000057
+Std score: 17.0285363065491993
