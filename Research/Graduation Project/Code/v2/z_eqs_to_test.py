@@ -1,3 +1,5 @@
+import numpy as np
+
 EQUATIONS_TO_TEST = {
     # ========== SINGLE VARIABLE - COUNT ONLY (EXTENDED) ==========
     'count_only_1': {
@@ -305,7 +307,7 @@ EQUATIONS_TO_TEST = {
         'initial_guess': [1, 0.3, 1.4, 1, 0]
     },
     'frac_root_3': {
-        'func': lambda complexity, count, a, b, c, d, e: a * (complexity ** 0.3) * (count ** c) + d * np.sqrt(count) + e,
+        'func': lambda complexity, count, a, c, d, e: a * (complexity ** 0.3) * (count ** c) + d * np.sqrt(count) + e,
         'name': 'a·complexity^0.3·count^c + d·√count + e',
         'initial_guess': [1, 1.4, 1, 0]
     },
@@ -386,7 +388,7 @@ EQUATIONS_TO_TEST = {
         'initial_guess': [1, 0.5, 1, 0]
     },
     'cross_term_3': {
-        'func': lambda complexity, count, a, b, c: a * (count / complexity) ** b + c,
+        'func': lambda complexity, count, a, b, c: a * (count / (complexity + 1e-10)) ** b + c,
         'name': 'a·(count/complexity)^b + c',
         'initial_guess': [1, 0.5, 0]
     },
@@ -655,7 +657,7 @@ EQUATIONS_TO_TEST = {
     
     # Ultra-simple 2-parameter models
     'ultra_simple_1': {
-        'func': lambda complexity, count, a, b: a * (count ** 1.55),
+        'func': lambda complexity, count, a: a * (count ** 1.55),
         'name': 'a·count^1.55',
         'initial_guess': [1]
     },
@@ -746,27 +748,27 @@ EQUATIONS_TO_TEST = {
     
     # Add complexity as small correction to count-power
     'count_complexity_1': {
-        'func': lambda complexity, count, a, b, c: a * (count ** 1.42) + b * complexity,
+        'func': lambda complexity, count, a, b: a * (count ** 1.42) + b * complexity,
         'name': 'a·count^1.42 + b·complexity',
         'initial_guess': [1, 1]
     },
     'count_complexity_2': {
-        'func': lambda complexity, count, a, b, c: a * (count ** 1.5) + b * np.sqrt(complexity),
+        'func': lambda complexity, count, a, b: a * (count ** 1.5) + b * np.sqrt(complexity),
         'name': 'a·count^1.5 + b·√complexity',
         'initial_guess': [1, 1]
     },
     'count_complexity_3': {
-        'func': lambda complexity, count, a, b, c: a * (count ** 1.6) + b * np.log(complexity + 1),
+        'func': lambda complexity, count, a, b: a * (count ** 1.6) + b * np.log(complexity + 1),
         'name': 'a·count^1.6 + b·ln(complexity+1)',
         'initial_guess': [1, 1]
     },
     'count_complexity_4': {
-        'func': lambda complexity, count, a, b, c, d: a * (count ** 1.45) + b * complexity + c,
+        'func': lambda complexity, count, a, b, c: a * (count ** 1.45) + b * complexity + c,
         'name': 'a·count^1.45 + b·complexity + c',
         'initial_guess': [1, 1, 0]
     },
     'count_complexity_5': {
-        'func': lambda complexity, count, a, b, c, d: a * (count ** 1.55) + b * np.sqrt(complexity) + c,
+        'func': lambda complexity, count, a, b, c: a * (count ** 1.55) + b * np.sqrt(complexity) + c,
         'name': 'a·count^1.55 + b·√complexity + c',
         'initial_guess': [1, 1, 0]
     },
@@ -790,44 +792,44 @@ EQUATIONS_TO_TEST = {
     
     # Explore interaction between complexity^small and count^large
     'interaction_1': {
-        'func': lambda complexity, count, a, b, c: a * (complexity ** 0.1) * (count ** 1.5) + b,
+        'func': lambda complexity, count, a, b: a * (complexity ** 0.1) * (count ** 1.5) + b,
         'name': 'a·complexity^0.1·count^1.5 + b',
         'initial_guess': [1, 0]
     },
     'interaction_2': {
-        'func': lambda complexity, count, a, b, c: a * (complexity ** 0.2) * (count ** 1.4) + b,
+        'func': lambda complexity, count, a, b: a * (complexity ** 0.2) * (count ** 1.4) + b,
         'name': 'a·complexity^0.2·count^1.4 + b',
         'initial_guess': [1, 0]
     },
     'interaction_3': {
-        'func': lambda complexity, count, a, b, c: a * (complexity ** 0.3) * (count ** 1.3) + b,
+        'func': lambda complexity, count, a, b: a * (complexity ** 0.3) * (count ** 1.3) + b,
         'name': 'a·complexity^0.3·count^1.3 + b',
         'initial_guess': [1, 0]
     },
     'interaction_4': {
-        'func': lambda complexity, count, a, b, c, d: a * (complexity ** 0.15) * (count ** b) + c,
+        'func': lambda complexity, count, a, b, c: a * (complexity ** 0.15) * (count ** b) + c,
         'name': 'a·complexity^0.15·count^b + c',
         'initial_guess': [1, 1.5, 0]
     },
     'interaction_5': {
-        'func': lambda complexity, count, a, b, c, d: a * (complexity ** b) * (count ** 1.5) + c,
+        'func': lambda complexity, count, a, b, c: a * (complexity ** b) * (count ** 1.5) + c,
         'name': 'a·complexity^b·count^1.5 + c',
         'initial_guess': [1, 0.2, 0]
     },
     
     # Multiplicative corrections to count-power
     'multiplicative_1': {
-        'func': lambda complexity, count, a, b, c: a * (count ** 1.45) * (1 + b * complexity),
+        'func': lambda complexity, count, a, b: a * (count ** 1.45) * (1 + b * complexity),
         'name': 'a·count^1.45·(1 + b·complexity)',
         'initial_guess': [1, 0.001]
     },
     'multiplicative_2': {
-        'func': lambda complexity, count, a, b, c: a * (count ** 1.5) * (1 + b * np.sqrt(complexity)),
+        'func': lambda complexity, count, a, b: a * (count ** 1.5) * (1 + b * np.sqrt(complexity)),
         'name': 'a·count^1.5·(1 + b·√complexity)',
         'initial_guess': [1, 0.01]
     },
     'multiplicative_3': {
-        'func': lambda complexity, count, a, b, c: a * (count ** 1.5) * (1 + b * np.log(complexity + 1)),
+        'func': lambda complexity, count, a, b: a * (count ** 1.5) * (1 + b * np.log(complexity + 1)),
         'name': 'a·count^1.5·(1 + b·ln(complexity+1))',
         'initial_guess': [1, 0.01]
     },
