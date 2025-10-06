@@ -12,6 +12,7 @@ examples
 
 model_weights
 detailed_benchmarks_analysis
+detailed_param_count_analysis
 
 venv
 models

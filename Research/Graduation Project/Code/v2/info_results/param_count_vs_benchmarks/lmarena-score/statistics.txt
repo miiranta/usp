@@ -1,0 +1,19 @@
+BENCH-LMARENA_SCORE VS PARAMETER COUNT - STATISTICS
+======================================================================
+
+PARAMETER COUNT STATISTICS:
+----------------------------------------------------------------------
+Number of data points: 1535
+Mean parameter count: 14912499591.7478828430175781
+Median parameter count: 2285275388.0000000000000000
+Std parameter count: 27835413836.8758583068847656
+Min parameter count: 64.0000000000000000
+Max parameter count: 116250023232.0000000000000000
+
+BENCH-LMARENA_SCORE STATISTICS:
+----------------------------------------------------------------------
+Min score: 1087.0000000000000000
+Max score: 1363.0000000000000000
+Mean score: 1236.9804560260586186
+Median score: 1253.0000000000000000
+Std score: 85.6162919961302151

@@ -1,0 +1,19 @@
+BENCH-MMLU_PRO_5 VS PARAMETER COUNT - STATISTICS
+======================================================================
+
+PARAMETER COUNT STATISTICS:
+----------------------------------------------------------------------
+Number of data points: 1125
+Mean parameter count: 13245195386.3831119537353516
+Median parameter count: 2803274665.0000000000000000
+Std parameter count: 24138752506.3905982971191406
+Min parameter count: 43.0000000000000000
+Max parameter count: 108641793536.0000000000000000
+
+BENCH-MMLU_PRO_5 STATISTICS:
+----------------------------------------------------------------------
+Min score: 11.9000000000000004
+Max score: 76.0000000000000000
+Mean score: 48.6315555555555576
+Median score: 52.2000000000000028
+Std score: 17.5613573197967874
