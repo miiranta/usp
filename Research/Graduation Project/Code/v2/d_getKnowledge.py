@@ -996,3 +996,356 @@ if len(all_benchmark_results) > 0:
     plt.close()
 
 print(f"\nCompleted benchmark analysis. Processed {len(all_benchmark_results)} benchmarks.")
+
+# --------------------------------------------------------------
+# Plot graphs: FOR EACH BENCHMARK: FOR EACH TYPE: FOR EACH FILTER: - COMPLEXITY vs BENCHMARK
+
+print("\n" + "="*70)
+print("Starting detailed benchmark analysis by type and filter...")
+print("="*70)
+
+# Create main output folder
+detailed_benchmarks_folder = os.path.join(OUTPUT_FOLDER, 'detailed_benchmarks_analysis')
+if not os.path.exists(detailed_benchmarks_folder):
+    os.makedirs(detailed_benchmarks_folder)
+
+# Dictionary to store all detailed results
+all_detailed_results = []
+
+# Get unique types and filters
+unique_types = appended_benchmarks_df['types_str'].unique()
+unique_filters = sorted([f for f in appended_benchmarks_df['filter'].unique() if pd.notna(f)])
+
+# Process each benchmark
+for bench_name in BENCH_ROWS_NAMES:
+    print(f"\nProcessing benchmark: {bench_name}")
+    
+    # Create folder for this benchmark
+    bench_clean_name = bench_name.replace('BENCH-', '').replace('_', '-').lower()
+    bench_main_folder = os.path.join(detailed_benchmarks_folder, bench_clean_name)
+    if not os.path.exists(bench_main_folder):
+        os.makedirs(bench_main_folder)
+    
+    # Counter for combinations processed
+    combinations_processed = 0
+    
+    # Process each type
+    for type_str in unique_types:
+        # Create folder for this type
+        type_clean_name = type_str.replace('-', '_').replace(' ', '_').lower()
+        if type_clean_name == 'unknown':
+            continue  # Skip unknown types
+        
+        type_folder = os.path.join(bench_main_folder, type_clean_name)
+        if not os.path.exists(type_folder):
+            os.makedirs(type_folder)
+        
+        # Process each filter
+        for filter_val in unique_filters:
+            # Filter data for this specific combination
+            mask_combo = (
+                (appended_benchmarks_df['types_str'] == type_str) &
+                (appended_benchmarks_df['filter'] == filter_val) &
+                ~(appended_benchmarks_df[bench_name].isna()) &
+                ~(appended_benchmarks_df['complexity'].isna())
+            )
+            
+            x_data_combo = appended_benchmarks_df.loc[mask_combo, bench_name].values
+            y_data_combo = appended_benchmarks_df.loc[mask_combo, 'complexity'].values
+            
+            # Skip if not enough data points
+            if len(x_data_combo) < 3:
+                continue
+            
+            # Try different functions and find the best fit
+            best_r2_combo = -np.inf
+            best_name_combo = None
+            best_params_combo = None
+            best_func_combo = None
+            best_equation_combo = None
+            
+            FUNCTIONS_TO_TEST_COMBO = {
+                'linear': {
+                    'func': lambda x, a, b: a * x + b,
+                    'equation': lambda params: f'y = {params[0]:.16f}x + {params[1]:.16f}',
+                    'initial_guess': [1, 1]
+                },
+                'quadratic': {
+                    'func': lambda x, a, b, c: a * x**2 + b * x + c,
+                    'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
+                    'initial_guess': [1, 1, 1]
+                },
+                'cubic': {
+                    'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
+                    'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
+                    'initial_guess': [1, 1, 1, 1]
+                },
+                'exponential': {
+                    'func': lambda x, a, b, c: a * np.exp(b * x) + c,
+                    'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
+                    'initial_guess': [1, 0.1, 1]
+                },
+                'logarithmic': {
+                    'func': lambda x, a, b, c: a * np.log(x + 1) + b * x + c,
+                    'equation': lambda params: f'y = {params[0]:.16f}·ln(x+1) + {params[1]:.16f}x + {params[2]:.16f}',
+                    'initial_guess': [1, 1, 1]
+                },
+                'power': {
+                    'func': lambda x, a, b, c: a * (x + 1)**b + c,
+                    'equation': lambda params: f'y = {params[0]:.16f}·(x+1)^{params[1]:.16f} + {params[2]:.16f}',
+                    'initial_guess': [1, 0.5, 1]
+                }
+            }
+            
+            for name, func_info in FUNCTIONS_TO_TEST_COMBO.items():
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        params, _ = curve_fit(func_info['func'], x_data_combo, y_data_combo, 
+                                            p0=func_info['initial_guess'], maxfev=10000)
+                    y_pred = func_info['func'](x_data_combo, *params)
+                    r2 = 1 - (np.sum((y_data_combo - y_pred)**2) / np.sum((y_data_combo - np.mean(y_data_combo))**2))
+                    
+                    if r2 > best_r2_combo:
+                        best_r2_combo = r2
+                        best_name_combo = name
+                        best_params_combo = params
+                        best_func_combo = func_info['func']
+                        best_equation_combo = func_info['equation'](params)
+                except:
+                    pass
+            
+            # Skip if no fit was successful
+            if best_func_combo is None:
+                continue
+            
+            # Calculate Pearson correlation coefficient
+            correlation_combo = np.corrcoef(x_data_combo, y_data_combo)[0, 1]
+            
+            # Create regression line with best fit
+            x_line_combo = np.linspace(x_data_combo.min(), x_data_combo.max(), 100)
+            y_line_combo = best_func_combo(x_line_combo, *best_params_combo)
+            
+            # Create filename for this filter
+            filter_clean_name = f"filter_{int(filter_val)}"
+            
+            # Plot scatter with regression line
+            fig = plt.figure(figsize=(12, 9))
+            plt.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
+            plt.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Best fit ({best_name_combo})')
+            plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
+            plt.ylabel('Complexity')
+            plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity\nType: {type_str}, Filter: {int(filter_val)} sigma')
+            plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
+            plt.subplots_adjust(bottom=0.28)
+            
+            # Add equation and statistics
+            stats_text = f'{best_equation_combo}\nR² = {best_r2_combo:.16f}\nCorrelation = {correlation_combo:.16f}\nN = {len(x_data_combo)}'
+            plt.figtext(0.5, 0.07, stats_text, ha='center', fontsize=8, 
+                       bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+            
+            plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'))
+            plt.close()
+            
+            # Save statistics to text file
+            with open(os.path.join(type_folder, f'{filter_clean_name}_stats.txt'), 'w', encoding='utf-8') as f:
+                f.write(f"{bench_name} VS COMPLEXITY\n")
+                f.write(f"Type: {type_str}\n")
+                f.write(f"Filter: {int(filter_val)} sigma\n")
+                f.write("=" * 70 + "\n\n")
+                
+                f.write("REGRESSION:\n")
+                f.write("-" * 70 + "\n")
+                f.write(f"Best fit function: {best_name_combo}\n")
+                f.write(f"Equation: {best_equation_combo}\n")
+                f.write(f"R² score: {best_r2_combo:.16f}\n")
+                f.write(f"Pearson correlation: {correlation_combo:.16f}\n")
+                f.write(f"Parameters: {best_params_combo}\n\n")
+                
+                f.write("DATA STATISTICS:\n")
+                f.write("-" * 70 + "\n")
+                f.write(f"Number of data points: {len(x_data_combo)}\n")
+                f.write(f"Complexity mean: {y_data_combo.mean():.16f}\n")
+                f.write(f"Complexity std: {y_data_combo.std():.16f}\n")
+                f.write(f"Benchmark score mean: {x_data_combo.mean():.16f}\n")
+                f.write(f"Benchmark score std: {x_data_combo.std():.16f}\n")
+            
+            # Store results for summary
+            all_detailed_results.append({
+                'benchmark': bench_name,
+                'type': type_str,
+                'filter': int(filter_val),
+                'best_function': best_name_combo,
+                'r2_score': best_r2_combo,
+                'pearson_correlation': correlation_combo,
+                'abs_correlation': abs(correlation_combo),
+                'data_points': len(x_data_combo),
+                'equation': best_equation_combo,
+                'complexity_mean': y_data_combo.mean(),
+                'complexity_std': y_data_combo.std(),
+                'benchmark_mean': x_data_combo.mean(),
+                'benchmark_std': x_data_combo.std()
+            })
+            
+            combinations_processed += 1
+    
+    print(f"  Processed {combinations_processed} combinations for {bench_name}")
+
+# Convert results to DataFrame
+results_df = pd.DataFrame(all_detailed_results)
+
+# Save complete results sorted by absolute correlation (descending)
+results_df_sorted = results_df.sort_values('abs_correlation', ascending=False)
+results_df_sorted.to_csv(os.path.join(detailed_benchmarks_folder, 'all_combinations_by_correlation.csv'), 
+                         index=False, encoding='utf-8')
+
+# For each benchmark, create individual CSV files
+print("\n" + "="*70)
+print("Creating CSV files for each benchmark...")
+print("="*70)
+
+for bench_name in BENCH_ROWS_NAMES:
+    bench_results = results_df[results_df['benchmark'] == bench_name]
+    
+    if len(bench_results) == 0:
+        continue
+    
+    # Sort by absolute correlation (descending)
+    bench_results_sorted = bench_results.sort_values('abs_correlation', ascending=False)
+    
+    # Get benchmark folder
+    bench_clean_name = bench_name.replace('BENCH-', '').replace('_', '-').lower()
+    bench_main_folder = os.path.join(detailed_benchmarks_folder, bench_clean_name)
+    
+    # Save all combinations for this benchmark (sorted by correlation)
+    bench_results_sorted.to_csv(os.path.join(bench_main_folder, 'all_combinations.csv'), 
+                                index=False, encoding='utf-8')
+    
+    # Save top 20 combinations (or all if less than 20)
+    top_n = min(20, len(bench_results_sorted))
+    top_results = bench_results_sorted.head(top_n)
+    top_results.to_csv(os.path.join(bench_main_folder, 'top_20_combinations.csv'), 
+                      index=False, encoding='utf-8')
+    
+    # Create top 20 visualization for this benchmark
+    if len(top_results) > 0:
+        fig = plt.figure(figsize=(14, max(8, top_n * 0.4)))
+        
+        # Create labels
+        labels = [f"{row['type'][:25]}, Filter={int(row['filter'])}" 
+                  for _, row in top_results.iterrows()]
+        correlations = top_results['pearson_correlation'].values
+        
+        colors = ['green' if c > 0 else 'red' for c in correlations]
+        
+        plt.barh(range(len(labels)), correlations, color=colors, alpha=0.7, edgecolor='black')
+        plt.yticks(range(len(labels)), labels, fontsize=9)
+        plt.xlabel('Pearson Correlation Coefficient')
+        plt.ylabel('Type - Filter Combination')
+        plt.title(f'Top {top_n} Combinations by Absolute Pearson Correlation\n{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity')
+        plt.grid(axis='x', alpha=0.3)
+        plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
+        
+        # Add value labels on bars
+        for i, corr in enumerate(correlations):
+            plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=8, 
+                    ha='left' if corr > 0 else 'right')
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(bench_main_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
+        plt.close()
+    
+    print(f"  Created CSV files and plot for {bench_name} ({len(bench_results_sorted)} combinations, top {top_n} saved)")
+
+# Create a pivot summary showing best correlation for each benchmark-type-filter combination
+pivot_summary = results_df.pivot_table(
+    values='abs_correlation',
+    index=['benchmark', 'type'],
+    columns='filter',
+    aggfunc='max'
+)
+pivot_summary.to_csv(os.path.join(detailed_benchmarks_folder, 'correlation_matrix.csv'), encoding='utf-8')
+
+# Create summary text file with overall statistics
+with open(os.path.join(detailed_benchmarks_folder, 'summary.txt'), 'w', encoding='utf-8') as f:
+    f.write("DETAILED BENCHMARK ANALYSIS - SUMMARY\n")
+    f.write("=" * 100 + "\n\n")
+    
+    f.write(f"Total combinations analyzed: {len(results_df)}\n")
+    f.write(f"Benchmarks analyzed: {results_df['benchmark'].nunique()}\n")
+    f.write(f"Types analyzed: {results_df['type'].nunique()}\n")
+    f.write(f"Filters analyzed: {sorted(results_df['filter'].unique())}\n\n")
+    
+    f.write("TOP 20 COMBINATIONS BY ABSOLUTE PEARSON CORRELATION:\n")
+    f.write("-" * 100 + "\n")
+    f.write(f"{'Rank':<6} {'Benchmark':<30} {'Type':<20} {'Filter':<8} {'Correlation':<15} {'R²':<15} {'N':<8}\n")
+    f.write("-" * 100 + "\n")
+    
+    top_20 = results_df_sorted.head(20)
+    for idx, (_, row) in enumerate(top_20.iterrows(), 1):
+        bench_short = row['benchmark'].replace('BENCH-', '')
+        f.write(f"{idx:<6} {bench_short:<30} {row['type']:<20} {row['filter']:<8} "
+                f"{row['pearson_correlation']:<15.8f} {row['r2_score']:<15.8f} {row['data_points']:<8}\n")
+    
+    f.write("\n\n")
+    f.write("BEST COMBINATION FOR EACH BENCHMARK:\n")
+    f.write("-" * 100 + "\n")
+    f.write(f"{'Benchmark':<30} {'Type':<20} {'Filter':<8} {'Correlation':<15} {'R²':<15} {'Function':<15}\n")
+    f.write("-" * 100 + "\n")
+    
+    for bench_name in BENCH_ROWS_NAMES:
+        bench_best = results_df[results_df['benchmark'] == bench_name].sort_values('abs_correlation', ascending=False)
+        if len(bench_best) > 0:
+            best = bench_best.iloc[0]
+            bench_short = best['benchmark'].replace('BENCH-', '')
+            f.write(f"{bench_short:<30} {best['type']:<20} {best['filter']:<8} "
+                    f"{best['pearson_correlation']:<15.8f} {best['r2_score']:<15.8f} {best['best_function']:<15}\n")
+    
+    f.write("\n\n")
+    f.write("STATISTICS BY BENCHMARK:\n")
+    f.write("-" * 100 + "\n")
+    
+    for bench_name in BENCH_ROWS_NAMES:
+        bench_data = results_df[results_df['benchmark'] == bench_name]
+        if len(bench_data) > 0:
+            f.write(f"\n{bench_name.replace('BENCH-', '')}:\n")
+            f.write(f"  Combinations analyzed: {len(bench_data)}\n")
+            f.write(f"  Mean correlation: {bench_data['abs_correlation'].mean():.8f}\n")
+            f.write(f"  Max correlation: {bench_data['abs_correlation'].max():.8f}\n")
+            f.write(f"  Min correlation: {bench_data['abs_correlation'].min():.8f}\n")
+            f.write(f"  Mean R²: {bench_data['r2_score'].mean():.8f}\n")
+
+# Create visualization: Top 20 correlations
+if len(results_df) > 0:
+    fig = plt.figure(figsize=(16, 10))
+    top_20_plot = results_df_sorted.head(20).copy()
+    
+    # Create labels
+    labels = [f"{row['benchmark'].replace('BENCH-', '')[:20]}\n{row['type'][:15]}, F={int(row['filter'])}" 
+              for _, row in top_20_plot.iterrows()]
+    correlations = top_20_plot['pearson_correlation'].values
+    
+    colors = ['green' if c > 0 else 'red' for c in correlations]
+    
+    plt.barh(range(len(labels)), correlations, color=colors, alpha=0.7, edgecolor='black')
+    plt.yticks(range(len(labels)), labels, fontsize=8)
+    plt.xlabel('Pearson Correlation Coefficient')
+    plt.ylabel('Benchmark - Type - Filter Combination')
+    plt.title('Top 20 Combinations by Absolute Pearson Correlation\n(Benchmark vs Complexity)')
+    plt.grid(axis='x', alpha=0.3)
+    plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
+    
+    # Add value labels on bars
+    for i, corr in enumerate(correlations):
+        plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=7, 
+                ha='left' if corr > 0 else 'right')
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(detailed_benchmarks_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
+    plt.close()
+
+print("\n" + "="*70)
+print(f"Detailed analysis complete!")
+print(f"Total combinations analyzed: {len(results_df)}")
+print(f"Results saved to: {detailed_benchmarks_folder}")
+print("="*70) 
