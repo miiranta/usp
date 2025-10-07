@@ -23,42 +23,154 @@ import ga_engine as gae
 # EQUATION FILE I/O
 # ============================================================================
 
-def equations_to_dict(equations: List[gae.Equation]) -> Dict[str, Dict]:
-    """Convert list of Equation objects to dictionary format for z_eqs_to_test.py"""
+def equations_to_dict(equations: List[gae.Equation], debug: bool = False) -> Tuple[Dict[str, Dict], Dict[str, int]]:
+    """
+    Convert list of Equation objects to dictionary format for z_eqs_to_test.py
+    
+    Returns:
+        - Dictionary of equation_id -> equation_info
+        - Dictionary of conversion failure reasons and counts
+    """
     
     result = {}
+    conversion_failures = {
+        'lambda_creation_error': 0,
+        'to_string_error': 0,
+        'metadata_error': 0,
+        'other_error': 0,
+        'no_tree': 0,
+        'tree_is_none': 0,
+        'missing_attributes': 0,
+        'missing_param_guess': 0,
+        'duplicate_id': 0  # Track duplicate unique_ids
+    }
+    
+    seen_ids = set()  # Track which eq_ids we've seen
+    
+    # Track first few failures for debugging
+    failure_samples = []
+    max_samples = 5
     
     for idx, eq in enumerate(equations):
-        # Use unique_id instead of index to prevent mapping issues after sorting
-        eq_id = f"ga_gen{eq.generation}_uid{eq.unique_id}"
+        # Check if equation itself is None
+        if eq is None:
+            conversion_failures['other_error'] += 1
+            if debug and len(failure_samples) < max_samples:
+                failure_samples.append(f"Equation {idx}: equation object is None")
+            continue
         
-        # Create the lambda function
-        func = eq.to_lambda()
-        
-        # Create human-readable name
-        name = eq.to_string()
-        
-        # Get initial guess
-        initial_guess = eq.param_initial_guess
-        
-        result[eq_id] = {
-            'func': func,
-            'name': name,
-            'initial_guess': initial_guess,
-            'equation_object': eq,  # Store reference to original equation
-            'metadata': {
-                'generation': eq.generation,
-                'fitness': float(eq.fitness),
-                'avg_correlation': float(eq.avg_correlation),
-                'avg_r2': float(eq.avg_r2),
-                'complexity': float(eq.get_complexity()),
-                'depth': eq.get_depth(),
-                'size': eq.get_size(),
-                'parent_ids': eq.parent_ids
+        try:
+            # Validate equation has required attributes
+            if not hasattr(eq, 'generation') or not hasattr(eq, 'unique_id'):
+                conversion_failures['missing_attributes'] += 1
+                if debug and len(failure_samples) < max_samples:
+                    failure_samples.append(f"Equation {idx}: missing generation or unique_id")
+                continue
+            
+            # Use unique_id instead of index to prevent mapping issues after sorting
+            eq_id = f"ga_gen{eq.generation}_uid{eq.unique_id}"
+            
+            # Check for duplicate IDs
+            if eq_id in seen_ids:
+                conversion_failures['duplicate_id'] += 1
+                if debug and len(failure_samples) < max_samples:
+                    failure_samples.append(f"Equation {idx}: duplicate unique_id {eq.unique_id} (eq_id: {eq_id})")
+                continue
+            seen_ids.add(eq_id)
+            
+            # Validate equation has tree for lambda creation
+            if not hasattr(eq, 'tree'):
+                conversion_failures['no_tree'] += 1
+                if debug and len(failure_samples) < max_samples:
+                    failure_samples.append(f"{eq_id}: has no 'tree' attribute")
+                continue
+            
+            if eq.tree is None:
+                conversion_failures['tree_is_none'] += 1
+                if debug and len(failure_samples) < max_samples:
+                    failure_samples.append(f"{eq_id}: tree is None")
+                continue
+            
+            # Create the lambda function - this can fail if tree has unknown operations
+            try:
+                func = eq.to_lambda()
+                if func is None:
+                    conversion_failures['lambda_creation_error'] += 1
+                    if debug and len(failure_samples) < max_samples:
+                        failure_samples.append(f"{eq_id}: to_lambda() returned None")
+                    continue
+            except Exception as e:
+                conversion_failures['lambda_creation_error'] += 1
+                if debug and len(failure_samples) < max_samples:
+                    failure_samples.append(f"{eq_id}: to_lambda() raised {type(e).__name__}: {e}")
+                continue
+            
+            # Create human-readable name
+            try:
+                name = eq.to_string()
+            except Exception as e:
+                conversion_failures['to_string_error'] += 1
+                if debug:
+                    print(f"    DEBUG: Failed to_string for {eq_id}: {type(e).__name__}: {e}")
+                name = f"[Error: {type(e).__name__}]"
+            
+            # Get initial guess - validate it exists
+            if not hasattr(eq, 'param_initial_guess'):
+                conversion_failures['missing_param_guess'] += 1
+                if debug and len(failure_samples) < max_samples:
+                    failure_samples.append(f"{eq_id}: missing param_initial_guess attribute")
+                continue
+            initial_guess = eq.param_initial_guess
+            
+            # Build metadata
+            try:
+                metadata = {
+                    'generation': eq.generation,
+                    'fitness': float(eq.fitness),
+                    'avg_correlation': float(eq.avg_correlation),
+                    'avg_r2': float(eq.avg_r2),
+                    'complexity': float(eq.get_complexity()),
+                    'depth': eq.get_depth(),
+                    'size': eq.get_size(),
+                    'parent_ids': eq.parent_ids
+                }
+            except Exception as e:
+                conversion_failures['metadata_error'] += 1
+                if debug and len(failure_samples) < max_samples:
+                    failure_samples.append(f"{eq_id}: metadata error {type(e).__name__}: {e}")
+                # Use minimal metadata
+                metadata = {
+                    'generation': eq.generation,
+                    'fitness': float(eq.fitness) if hasattr(eq, 'fitness') else -1.0,
+                    'avg_correlation': 0.0,
+                    'avg_r2': 0.0,
+                    'complexity': 0.0,
+                    'depth': 0,
+                    'size': 0,
+                    'parent_ids': []
+                }
+            
+            result[eq_id] = {
+                'func': func,
+                'name': name,
+                'initial_guess': initial_guess,
+                'equation_object': eq,  # Store reference to original equation
+                'metadata': metadata
             }
-        }
+            
+        except Exception as e:
+            conversion_failures['other_error'] += 1
+            if debug and len(failure_samples) < max_samples:
+                failure_samples.append(f"Equation {idx}: unexpected {type(e).__name__}: {e}")
+            continue
     
-    return result
+    # Print failure samples if debug mode
+    if debug and failure_samples:
+        print(f"  Conversion failure samples ({len(failure_samples)}):")
+        for sample in failure_samples:
+            print(f"    • {sample}")
+    
+    return result, conversion_failures
 
 def save_equations_to_file(equations: List[gae.Equation], filepath: str):
     """Save equations to a Python file in the format expected by d_getKnowledge.py"""
@@ -289,14 +401,30 @@ def load_equations_from_file(filepath: str) -> List[gae.Equation]:
 
 def evaluate_equations(equations_dict: Dict[str, Dict], 
                       all_benchmarks_data: Dict[str, Dict],
-                      verbose: bool = True) -> List[Tuple[str, Dict]]:
+                      verbose: bool = True) -> Tuple[List[Tuple[str, Dict]], Dict[str, int]]:
     """
     Evaluate all equations and return results sorted by performance.
     
-    Returns: List of (equation_id, results_dict) tuples sorted by avg correlation
+    Returns: 
+        - List of (equation_id, results_dict) tuples sorted by avg correlation
+        - Dictionary with failure reasons and counts
     """
     
     results = []
+    
+    # Track failure reasons
+    failure_stats = {
+        'params_nan_inf': 0,
+        'params_too_large': 0,
+        'predictions_nan_inf': 0,
+        'predictions_overflow': 0,
+        'predictions_constant': 0,
+        'benchmark_constant': 0,
+        'correlation_nan_inf': 0,
+        'corrcoef_shape_error': 0,
+        'curve_fit_exception': 0,
+        'other_exception': 0
+    }
     
     # Get all benchmark data
     all_benchmark_values = np.concatenate([data['benchmark_values'] for data in all_benchmarks_data.values()])
@@ -334,14 +462,15 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
             
             # Validate fitted parameters aren't extreme
             if np.any(np.isnan(shared_params)) or np.any(np.isinf(shared_params)):
+                failure_stats['params_nan_inf'] += 1
                 continue
-            if np.any(np.abs(shared_params) > 1e10):
+            if np.any(np.abs(shared_params) > 1e50):
+                failure_stats['params_too_large'] += 1
                 continue
             
             # Calculate correlation and R² for EACH benchmark separately
             # using the same shared parameters
             benchmark_correlations = []
-            benchmark_r2_scores = []
             all_valid = True
             
             for bench_name, data in all_benchmarks_data.items():
@@ -350,23 +479,27 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
                 
                 # Validate predictions - check for extreme values first
                 if np.any(np.isnan(predictions)) or np.any(np.isinf(predictions)):
+                    failure_stats['predictions_nan_inf'] += 1
                     all_valid = False
                     break
                 
                 # Check for overflow (very large values)
                 if np.any(np.abs(predictions) > 1e100):
+                    failure_stats['predictions_overflow'] += 1
                     all_valid = False
                     break
                 
                 # Check for constant predictions
                 pred_std = np.std(predictions)
                 if pred_std < 1e-10 or np.isnan(pred_std):
+                    failure_stats['predictions_constant'] += 1
                     all_valid = False
                     break
                 
                 # Check benchmark values std too (for corrcoef)
                 bench_std = np.std(data['benchmark_values'])
                 if bench_std < 1e-10 or np.isnan(bench_std):
+                    failure_stats['benchmark_constant'] += 1
                     all_valid = False
                     break
                 
@@ -375,11 +508,13 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
                     warnings.simplefilter("ignore")
                     corr_matrix = np.corrcoef(data['benchmark_values'], predictions)
                     if corr_matrix.shape != (2, 2):
+                        failure_stats['corrcoef_shape_error'] += 1
                         all_valid = False
                         break
                     correlation = corr_matrix[0, 1]
                 
                 if np.isnan(correlation) or np.isinf(correlation):
+                    failure_stats['correlation_nan_inf'] += 1
                     all_valid = False
                     break
                 
@@ -402,9 +537,16 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
             }))
             
         except Exception as e:
+            # Track different exception types
+            exception_type = type(e).__name__
+            if 'RuntimeError' in exception_type or 'OptimizeWarning' in exception_type:
+                failure_stats['curve_fit_exception'] += 1
+            else:
+                failure_stats['other_exception'] += 1
+            
             # Skip failed equations
             if verbose:
-                print(f"    Skipped {eq_id}: {type(e).__name__}")
+                print(f"    Skipped {eq_id}: {exception_type}")
             continue
     
     # Sort by average correlation (descending)
@@ -413,7 +555,7 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
     if verbose:
         print(f"  Successfully evaluated {len(results)}/{total_eqs} equations")
     
-    return results
+    return results, failure_stats
 
 # ============================================================================
 # EVOLUTION LOOP
@@ -614,8 +756,6 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         population.initialize(None)
         print(f"Generated {len(population.equations)} initial equations")
     
-    print(f"Population size: {len(population.equations)}")
-    
     # Evolution loop
     best_correlation_ever = 0.0
     generations_without_improvement = 0
@@ -638,29 +778,50 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         print(f"\n{'='*80}")
         print(f"GENERATION {generation}")
         print(f"{'='*80}")
-        print(f"Population size: {len(population.equations)}/{population_size}")
-        
+
         # Convert equations to dict format
-        equations_dict = equations_to_dict(population.equations)
+        equations_dict, conversion_failures = equations_to_dict(population.equations, debug=False)
+        
+        # Total failures = equations that didn't make it to dict
+        total_conversion_failures = len(population.equations) - len(equations_dict)
+        tracked_conversion_failures = sum(conversion_failures.values())
         
         # Filter out invalid equations before evaluation
         # Use the equation_object directly from the dict (already stored there)
         valid_equations_dict = {}
-        invalid_count = 0
+        filtered_stats = {
+            'degenerate': 0,
+            'no_variables': 0,
+            'duplicate': 0,
+            'other_invalid': 0
+        }
+        seen_forms = set()
+        
         for eq_id, eq_info in equations_dict.items():
             # Get equation object directly from dict (stored in equations_to_dict)
             eq_obj = eq_info.get('equation_object')
-            if eq_obj and eq_obj.is_valid():
-                valid_equations_dict[eq_id] = eq_info
-            elif eq_obj:
-                invalid_count += 1
+            if eq_obj:
+                # Check for duplicates
+                canonical = eq_obj.get_canonical_form()
+                if canonical in seen_forms:
+                    filtered_stats['duplicate'] += 1
+                    continue
+                
+                # Check specific invalidity reasons
+                if eq_obj.is_degenerate():
+                    filtered_stats['degenerate'] += 1
+                elif len(eq_obj.get_all_variables()) == 0:
+                    filtered_stats['no_variables'] += 1
+                elif not eq_obj.is_valid():
+                    filtered_stats['other_invalid'] += 1
+                else:
+                    valid_equations_dict[eq_id] = eq_info
+                    seen_forms.add(canonical)
             else:
                 # No equation object, include anyway (shouldn't happen)
                 valid_equations_dict[eq_id] = eq_info
         
-        if invalid_count > 0:
-            print(f"  Filtered out {invalid_count} invalid/degenerate equations")
-            print(f"  Valid equations to evaluate: {len(valid_equations_dict)}/{len(population.equations)}")
+        total_filtered = sum(filtered_stats.values())
         
         if len(valid_equations_dict) == 0:
             print("⚠️  All equations are invalid! Reinitializing population...")
@@ -669,7 +830,7 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         
         # Evaluate all valid equations
         print("Evaluating equations...")
-        eval_results = evaluate_equations(valid_equations_dict, all_benchmarks_data, verbose=True)
+        eval_results, failure_stats = evaluate_equations(valid_equations_dict, all_benchmarks_data, verbose=True)
         
         if not eval_results:
             print("⚠️  No valid equations in this generation! Reinitializing...")
@@ -692,6 +853,8 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         # Update fitness scores for successfully evaluated equations
         # Fitness = correlation - simplicity_penalty (multi-objective optimization)
         valid_eqs_updated = 0
+        eval_result_ids = {eq_id for eq_id, _ in eval_results}
+        
         for eq_id, res in eval_results:
             # Find the equation object from the dict
             if eq_id in valid_equations_dict:
@@ -704,10 +867,78 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
                     eq_obj.fitness = res['avg_correlation'] - simplicity_weight * eq_obj.simplicity_score
                     valid_eqs_updated += 1
         
+        # Track equations that made it to evaluation but didn't return results
+        # These failed during evaluation but their failure reason wasn't captured in failure_stats
+        sent_to_eval = len(valid_equations_dict)
+        returned_from_eval = len(eval_results)
+        eval_silent_failures = sent_to_eval - returned_from_eval
+        
         print(f"  Updated fitness for {valid_eqs_updated}/{len(population.equations)} equations")
         if valid_eqs_updated < len(population.equations):
             not_updated = len(population.equations) - valid_eqs_updated
             print(f"  ({not_updated} equations marked invalid or failed evaluation, fitness set to -1.0)")
+            
+            # Print detailed breakdown of failures during evaluation
+            total_eval_failures = sum(failure_stats.values())
+            total_pre_filtered = sum(filtered_stats.values())
+            # Use the ACTUAL conversion failures (already calculated earlier), not just tracked ones
+            actual_conversion_failed = total_conversion_failures
+            
+            # Note: eval_silent_failures represents equations that reached evaluate_equations()
+            # but didn't return in eval_results AND weren't counted in failure_stats
+            # This can happen if evaluate_equations has early returns or uncaught exceptions
+            
+            if total_eval_failures > 0 or total_pre_filtered > 0 or actual_conversion_failed > 0 or eval_silent_failures > 0:
+                print(f"  Failure breakdown:")
+                
+                # Show conversion failures (equations that failed to convert to dict)
+                if actual_conversion_failed > 0:
+                    print(f"    Conversion failures ({actual_conversion_failed}):")
+                    if tracked_conversion_failures > 0:
+                        print(f"      • Tracked: {tracked_conversion_failures}")
+                        for reason, count in sorted(conversion_failures.items(), key=lambda x: x[1], reverse=True):
+                            if count > 0:
+                                readable_reason = reason.replace('_', ' ').title()
+                                print(f"        - {readable_reason}: {count}")
+                    untracked_conv = actual_conversion_failed - tracked_conversion_failures
+                    if untracked_conv > 0:
+                        print(f"      • Untracked: {untracked_conv}")
+                
+                # Show pre-filtering reasons
+                if total_pre_filtered > 0:
+                    print(f"    Pre-filtered ({total_pre_filtered}):")
+                    for reason, count in sorted(filtered_stats.items(), key=lambda x: x[1], reverse=True):
+                        if count > 0:
+                            readable_reason = reason.replace('_', ' ').title()
+                            print(f"      • {readable_reason}: {count}")
+                
+                # Show equations that failed during evaluation
+                # Note: eval_silent_failures includes ALL equations that didn't return from eval
+                # Some of these were tracked in failure_stats, some might be truly silent
+                if eval_silent_failures > 0:
+                    print(f"    Failed during evaluation ({eval_silent_failures}):")
+                    if total_eval_failures > 0:
+                        print(f"      • Tracked failures: {total_eval_failures}")
+                        for reason, count in sorted(failure_stats.items(), key=lambda x: x[1], reverse=True):
+                            if count > 0:
+                                readable_reason = reason.replace('_', ' ').title()
+                                print(f"        - {readable_reason}: {count}")
+                    
+                    untracked = eval_silent_failures - total_eval_failures
+                    if untracked > 0:
+                        print(f"      • Untracked failures: {untracked}")
+                        print(f"        (These failed but weren't counted in failure_stats)")
+                
+                # Sanity check: all categories should sum to not_updated
+                # Note: eval_silent_failures already includes total_eval_failures, so don't double-count
+                expected_total = actual_conversion_failed + total_pre_filtered + eval_silent_failures
+                if expected_total != not_updated:
+                    # Account for rounding/edge cases with tolerance of 1
+                    diff = abs(expected_total - not_updated)
+                    if diff > 1:
+                        print(f"    ⚠️  Accounting mismatch: {diff} equations unaccounted")
+                        print(f"        (Expected {not_updated}, got {expected_total})")
+                        print(f"        Breakdown: conv={actual_conversion_failed}, pre={total_pre_filtered}, silent={eval_silent_failures}, tracked={total_eval_failures}")
         
         # Get statistics
         stats = population.get_statistics()

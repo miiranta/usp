@@ -13,6 +13,18 @@ from dataclasses import dataclass, field
 import ga_building_blocks as gbb
 
 # ============================================================================
+# GLOBAL UNIQUE ID COUNTER
+# ============================================================================
+
+_equation_id_counter = 0
+
+def get_next_equation_id() -> int:
+    """Get next unique equation ID using a global counter"""
+    global _equation_id_counter
+    _equation_id_counter += 1
+    return _equation_id_counter
+
+# ============================================================================
 # EXPRESSION TREE REPRESENTATION
 # ============================================================================
 
@@ -175,7 +187,7 @@ class Equation:
     simplicity_score: float = 0.0  # Lower is simpler
     generation: int = 0
     parent_ids: List[str] = field(default_factory=list)
-    unique_id: int = field(default_factory=lambda: id(object()))  # Unique identifier
+    unique_id: int = field(default_factory=get_next_equation_id)  # Unique identifier using global counter
     
     def __post_init__(self):
         """Initialize parameter initial guesses if not provided"""
