@@ -175,6 +175,7 @@ class Equation:
     simplicity_score: float = 0.0  # Lower is simpler
     generation: int = 0
     parent_ids: List[str] = field(default_factory=list)
+    unique_id: int = field(default_factory=lambda: id(object()))  # Unique identifier
     
     def __post_init__(self):
         """Initialize parameter initial guesses if not provided"""
@@ -199,6 +200,9 @@ class Equation:
             elif node.op == 'count':
                 return count
             elif node.op == 'param':
+                # Bounds check to prevent IndexError
+                if node.param_idx >= len(params):
+                    return 1.0  # Return default value if param index out of bounds
                 return params[node.param_idx]
             else:
                 op_obj = gbb.ALL_OPS.get(node.op)
@@ -702,7 +706,6 @@ class Population:
             'avg_depth': np.mean(depths),
             'avg_size': np.mean(sizes),
             'best_correlation': self.equations[0].avg_correlation if self.equations else 0.0,
-            'best_r2': self.equations[0].avg_r2 if self.equations else 0.0,
         }
 
 # ============================================================================

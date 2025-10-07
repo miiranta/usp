@@ -199,7 +199,13 @@ def safe_div(x, y):
 
 def safe_pow(x, y):
     """Safe power function"""
-    return np.abs(x) ** np.clip(y, -10, 10)
+    x_clipped = np.clip(np.abs(x), 1e-10, 1e10)
+    y_clipped = np.clip(y, -10, 10)
+    
+    with np.errstate(over='ignore', invalid='ignore'):
+        result = x_clipped ** y_clipped
+    
+    return np.nan_to_num(result, nan=1.0, posinf=1e10, neginf=-1e10)
 
 def safe_mod(x, y):
     """Safe modulo"""
@@ -231,7 +237,10 @@ def safe_harmonic_mean(x, y):
 
 def safe_hypot(x, y):
     """Euclidean distance: sqrt(x^2 + y^2)"""
-    return np.sqrt(x**2 + y**2)
+    x_clipped = np.clip(x, -1e10, 1e10)
+    y_clipped = np.clip(y, -1e10, 1e10)
+    result = np.sqrt(x_clipped**2 + y_clipped**2)
+    return np.nan_to_num(result, nan=0.0, posinf=1e10, neginf=-1e10)
 
 def safe_atan2(y, x):
     """Two-argument arctangent"""

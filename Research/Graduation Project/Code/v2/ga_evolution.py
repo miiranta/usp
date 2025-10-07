@@ -29,7 +29,8 @@ def equations_to_dict(equations: List[gae.Equation]) -> Dict[str, Dict]:
     result = {}
     
     for idx, eq in enumerate(equations):
-        eq_id = f"ga_gen{eq.generation}_eq{idx}"
+        # Use unique_id instead of index to prevent mapping issues after sorting
+        eq_id = f"ga_gen{eq.generation}_uid{eq.unique_id}"
         
         # Create the lambda function
         func = eq.to_lambda()
@@ -44,6 +45,7 @@ def equations_to_dict(equations: List[gae.Equation]) -> Dict[str, Dict]:
             'func': func,
             'name': name,
             'initial_guess': initial_guess,
+            'equation_object': eq,  # Store reference to original equation
             'metadata': {
                 'generation': eq.generation,
                 'fitness': float(eq.fitness),
@@ -307,16 +309,16 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
             print(f"  Evaluating equations... {eq_idx}/{total_eqs} ({100*eq_idx/total_eqs:.1f}%)")
         
         try:
-            # Create wrapper function for curve_fit
+            # Fit equation parameters once across ALL benchmarks (shared parameters)
             def fit_func(x, *params):
                 complexity = x[0]
                 count = x[1]
                 return eq_info['func'](complexity, count, *params)
             
-            # Prepare data for curve_fit
+            # Prepare combined data from all benchmarks
             x_data = np.vstack([all_complexity_values, all_count_values])
             
-            # Fit the equation with all data
+            # Fit the equation parameters to all benchmark data
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 shared_params, _ = curve_fit(
@@ -324,15 +326,17 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
                     x_data,
                     all_benchmark_values,
                     p0=eq_info['initial_guess'],
-                    maxfev=5000000
+                    maxfev=50000,
                 )
             
-            # Calculate correlation for each benchmark
+            # Calculate correlation and R² for EACH benchmark separately
+            # using the same shared parameters
             benchmark_correlations = []
             benchmark_r2_scores = []
             all_valid = True
             
             for bench_name, data in all_benchmarks_data.items():
+                # Use shared parameters for this benchmark
                 predictions = eq_info['func'](data['complexity_values'], data['count_values'], *shared_params)
                 
                 # Validate predictions
@@ -344,11 +348,7 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
                     all_valid = False
                     break
                 
-                # Calculate metrics
-                ss_res = np.sum((data['benchmark_values'] - predictions)**2)
-                ss_tot = np.sum((data['benchmark_values'] - np.mean(data['benchmark_values']))**2)
-                r2 = 1 - (ss_res / ss_tot)
-                
+                # Calculate correlation
                 correlation = np.corrcoef(data['benchmark_values'], predictions)[0, 1]
                 
                 if np.isnan(correlation) or np.isinf(correlation):
@@ -356,24 +356,20 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
                     break
                 
                 benchmark_correlations.append(abs(correlation))
-                benchmark_r2_scores.append(r2)
             
             if not all_valid:
                 continue
             
-            # Calculate averages
+            # Calculate average correlation
             avg_correlation = np.mean(benchmark_correlations)
-            avg_r2 = np.mean(benchmark_r2_scores)
             
             results.append((eq_id, {
                 'avg_correlation': avg_correlation,
-                'avg_r2': avg_r2,
                 'params': shared_params.tolist(),
                 'name': eq_info['name'],
                 'initial_guess': eq_info['initial_guess'],
                 'func': eq_info['func'],
-                'benchmark_correlations': benchmark_correlations,
-                'benchmark_r2_scores': benchmark_r2_scores
+                'benchmark_correlations': benchmark_correlations
             }))
             
         except Exception as e:
@@ -625,55 +621,73 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
             continue
         
         # Update fitness scores
-        fitness_map = {eq_id: res['avg_correlation'] for eq_id, res in eval_results}
-        
+        # Fitness = correlation (simple and direct)
         valid_eqs_updated = 0
+        for eq_id, res in eval_results:
+            # Find the equation object from the dict
+            if eq_id in valid_equations_dict:
+                eq_obj = valid_equations_dict[eq_id].get('equation_object')
+                if eq_obj:
+                    # Use correlation as fitness
+                    eq_obj.fitness = res['avg_correlation']
+                    eq_obj.avg_correlation = res['avg_correlation']
+                    valid_eqs_updated += 1
+        
+        # Set poor fitness for equations that weren't evaluated
         for eq in population.equations:
-            eq_id = f"ga_gen{eq.generation}_eq{population.equations.index(eq)}"
-            if eq_id in fitness_map:
-                eq.fitness = fitness_map[eq_id]
-                eq.avg_correlation = fitness_map[eq_id]
-                # Find r2 score
-                for eval_id, eval_res in eval_results:
-                    if eval_id == eq_id:
-                        eq.avg_r2 = eval_res['avg_r2']
-                        break
-                valid_eqs_updated += 1
-            else:
-                # Equation wasn't evaluated (likely invalid), set poor fitness
+            if eq.fitness == -np.inf or np.isnan(eq.fitness):
                 eq.fitness = -1.0
                 eq.avg_correlation = 0.0
-                eq.avg_r2 = -1.0
         
         print(f"  Updated fitness for {valid_eqs_updated}/{len(population.equations)} equations")
         
         # Get statistics
         stats = population.get_statistics()
         
-        # Print top 5 equations
-        print(f"\nTop 5 equations:")
-        for i, (eq_id, res) in enumerate(eval_results[:5], 1):
-            # Find the equation object to get simplicity
-            eq_obj = next((eq for eq in population.equations if f"ga_gen{eq.generation}_eq{population.equations.index(eq)}" == eq_id), None)
-            simplicity = eq_obj.simplicity_score if eq_obj else 0.0
-            multi_obj = res['avg_correlation'] - simplicity_weight * simplicity
-            
-            print(f"  {i}. Corr: {res['avg_correlation']:.6f}, R²: {res['avg_r2']:.6f}, Simplicity: {simplicity:.2f}, Multi-obj: {multi_obj:.6f}")
-            print(f"     {res['name'][:90]}")
+        # Print top 5 equations FROM CURRENT EVALUATION
+        # print(f"\nTop 5 equations (from current evaluation):")
+        # for i, (eq_id, res) in enumerate(eval_results[:5], 1):
+        #     # Get the equation object from the valid_equations_dict
+        #     eq_obj = valid_equations_dict.get(eq_id, {}).get('equation_object')
+        #     if eq_obj:
+        #         simplicity = eq_obj.simplicity_score
+        #         combined_fitness = eq_obj.fitness
+        #         multi_obj = combined_fitness - simplicity_weight * simplicity
+                
+        #         print(f"  {i}. Fitness: {combined_fitness:.6f}, Corr: {res['avg_correlation']:.6f}, Simplicity: {simplicity:.2f}")
+        #         print(f"     Multi-obj: {multi_obj:.6f} | {res['name'][:80]}")
+        #     else:
+        #         print(f"  {i}. Corr: {res['avg_correlation']:.6f}")
+        #         print(f"     {res['name'][:80]}")
+        
+        # Print top 5 equations FROM ENTIRE POPULATION (including previous generations)
+        print(f"\nTop 5 equations (from entire population):")
+        population_sorted = sorted(population.equations, 
+                                   key=lambda eq: eq.fitness if eq.fitness > -np.inf else -1.0, 
+                                   reverse=True)
+        for i, eq in enumerate(population_sorted[:5], 1):
+            if eq.fitness > -np.inf:
+                simplicity = eq.simplicity_score
+                multi_obj = eq.fitness - simplicity_weight * simplicity
+                print(f"  {i}. Fitness: {eq.fitness:.6f}, Corr: {eq.avg_correlation:.6f}, Simplicity: {simplicity:.2f}")
+                print(f"     Multi-obj: {multi_obj:.6f} | {eq.to_string()[:80]}")
+            else:
+                print(f"  {i}. [Invalid fitness]")
         
         print(f"\nGeneration statistics:")
+        print(f"  Best fitness: {stats['best_fitness']:.6f}")
         print(f"  Best correlation: {stats['best_correlation']:.6f}")
-        print(f"  Avg correlation: {stats['avg_fitness']:.6f}")
+        print(f"  Avg fitness: {stats['avg_fitness']:.6f}")
         print(f"  Avg complexity: {stats['avg_complexity']:.2f}")
         print(f"  Avg tree depth: {stats['avg_depth']:.1f}")
         print(f"  Diversity: {stats['unique_equations']}/{stats['size']} unique ({stats['diversity']*100:.1f}%)")
         
-        # Track best ever
-        if stats['best_correlation'] > best_correlation_ever:
-            best_correlation_ever = stats['best_correlation']
+        # Track best ever using combined fitness (not just correlation)
+        if stats['best_fitness'] > best_correlation_ever:
+            best_correlation_ever = stats['best_fitness']
             generations_without_improvement = 0
             current_mutation_rate = base_mutation_rate  # Reset mutation rate on improvement
-            print(f"  🎉 NEW BEST CORRELATION: {best_correlation_ever:.6f}")
+            print(f"  🎉 NEW BEST FITNESS: {best_correlation_ever:.6f}")
         else:
             generations_without_improvement += 1
             
@@ -702,7 +716,6 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
             'generation': generation,
             'best_correlation': stats['best_correlation'],
             'avg_correlation': stats['avg_fitness'],
-            'best_r2': stats['best_r2'],
             'avg_complexity': stats['avg_complexity'],
             'time': time.time() - gen_start_time
         })
@@ -765,7 +778,7 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         variables_used = eq.get_all_variables()
         mandatory_check = "✓" if all(var in variables_used for var in (mandatory_vars or [])) else "✗"
         
-        print(f"\n{i}. Correlation: {eq.avg_correlation:.6f}, R²: {eq.avg_r2:.6f}, Simplicity: {eq.simplicity_score:.2f}")
+        print(f"\n{i}. Correlation: {eq.avg_correlation:.6f}, Simplicity: {eq.simplicity_score:.2f}")
         print(f"   Multi-objective score: {eq.avg_correlation - simplicity_weight * eq.simplicity_score:.6f}")
         print(f"   Complexity: {eq.get_complexity():.2f}, Depth: {eq.get_depth()}, Size: {eq.get_size()}")
         print(f"   Variables: {variables_used}, Mandatory: {mandatory_check}")
