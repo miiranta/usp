@@ -76,12 +76,18 @@ def safe_reciprocal(x):
     return 1.0 / (np.abs(x) + 1e-6)
 
 def safe_square(x):
-    """Square function"""
-    return x ** 2
+    """Square function with overflow protection"""
+    x_clip = np.clip(x, -1e50, 1e50)
+    with np.errstate(over='ignore', invalid='ignore'):
+        result = x_clip ** 2
+    return np.clip(result, -1e100, 1e100)
 
 def safe_cube(x):
-    """Cube function"""
-    return x ** 3
+    """Cube function with overflow protection"""
+    x_clip = np.clip(x, -1e33, 1e33)
+    with np.errstate(over='ignore', invalid='ignore'):
+        result = x_clip ** 3
+    return np.clip(result, -1e100, 1e100)
 
 def safe_abs(x):
     """Absolute value"""
@@ -190,8 +196,13 @@ def safe_sub(x, y):
     return x - y
 
 def safe_mul(x, y):
-    """Multiplication"""
-    return x * y
+    """Multiplication with overflow protection"""
+    # Clip inputs to prevent overflow
+    x_clip = np.clip(x, -1e50, 1e50)
+    y_clip = np.clip(y, -1e50, 1e50)
+    with np.errstate(over='ignore', invalid='ignore'):
+        result = x_clip * y_clip
+    return np.clip(result, -1e100, 1e100)
 
 def safe_div(x, y):
     """Safe division"""
@@ -228,19 +239,24 @@ def safe_weighted_avg(x, y):
     return 0.7 * x + 0.3 * y
 
 def safe_geometric_mean(x, y):
-    """Geometric mean"""
-    return np.sqrt(np.abs(x * y))
+    """Geometric mean with overflow protection"""
+    x_clip = np.clip(x, -1e50, 1e50)
+    y_clip = np.clip(y, -1e50, 1e50)
+    with np.errstate(over='ignore', invalid='ignore'):
+        product = x_clip * y_clip
+    return np.sqrt(np.abs(np.clip(product, -1e100, 1e100)))
 
 def safe_harmonic_mean(x, y):
     """Harmonic mean"""
     return 2.0 / (1.0/(np.abs(x) + 1e-6) + 1.0/(np.abs(y) + 1e-6))
 
 def safe_hypot(x, y):
-    """Euclidean distance: sqrt(x^2 + y^2)"""
-    x_clipped = np.clip(x, -1e10, 1e10)
-    y_clipped = np.clip(y, -1e10, 1e10)
-    result = np.sqrt(x_clipped**2 + y_clipped**2)
-    return np.nan_to_num(result, nan=0.0, posinf=1e10, neginf=-1e10)
+    """Euclidean distance: sqrt(x^2 + y^2) with overflow protection"""
+    x_clipped = np.clip(x, -1e50, 1e50)
+    y_clipped = np.clip(y, -1e50, 1e50)
+    with np.errstate(over='ignore', invalid='ignore'):
+        result = np.sqrt(x_clipped**2 + y_clipped**2)
+    return np.clip(result, 0, 1e100)
 
 def safe_atan2(y, x):
     """Two-argument arctangent"""

@@ -432,35 +432,52 @@ def mutate_subtree(node: ExprNode, num_params: int, mutation_rate: float = 0.3) 
     return new_node
 
 def crossover(parent1: Equation, parent2: Equation) -> Tuple[Equation, Equation]:
-    """Perform crossover between two equations"""
+    """Perform crossover between two equations by swapping random subtrees"""
     
     child1 = parent1.copy()
     child2 = parent2.copy()
     
-    # Select random subtrees from each parent
-    def get_random_node(node: ExprNode, depth: int = 0) -> Tuple[ExprNode, int]:
-        """Get a random node from the tree, returning (node, depth)"""
-        all_nodes = []
+    # Helper function to get all nodes with their parent references
+    def get_all_nodes_with_parents(root: ExprNode) -> List[Tuple[ExprNode, ExprNode, int]]:
+        """Returns list of (node, parent, child_index) tuples"""
+        nodes = [(root, None, -1)]  # Root has no parent
         
-        def collect_nodes(n: ExprNode, d: int):
-            all_nodes.append((n, d))
-            for child in n.children:
-                collect_nodes(child, d + 1)
+        def traverse(node: ExprNode, parent: ExprNode, child_idx: int):
+            nodes.append((node, parent, child_idx))
+            for i, child in enumerate(node.children):
+                traverse(child, node, i)
         
-        collect_nodes(node, depth)
-        return random.choice(all_nodes) if all_nodes else (node, depth)
+        for i, child in enumerate(root.children):
+            traverse(child, root, i)
+        
+        return nodes
     
-    # Get random nodes from both trees
-    node1, depth1 = get_random_node(child1.tree)
-    node2, depth2 = get_random_node(child2.tree)
+    # Get all nodes from both trees
+    nodes1 = get_all_nodes_with_parents(child1.tree)
+    nodes2 = get_all_nodes_with_parents(child2.tree)
     
-    # Swap the subtrees (simplified - just copy attributes)
-    # In a full implementation, we'd need to track parent pointers
-    if node1.children and node2.children and len(node1.children) == len(node2.children):
-        node1.children, node2.children = node2.children, node1.children
+    if len(nodes1) > 1 and len(nodes2) > 1:
+        # Select random non-root nodes from each tree
+        node1, parent1_node, idx1 = random.choice(nodes1[1:])  # Skip root
+        node2, parent2_node, idx2 = random.choice(nodes2[1:])  # Skip root
+        
+        # Swap the subtrees by replacing them in their parents
+        if parent1_node and parent2_node:
+            parent1_node.children[idx1] = node2.copy()
+            parent2_node.children[idx2] = node1.copy()
+        elif parent1_node:  # Only parent1 has a parent, node2 is root
+            parent1_node.children[idx1] = child2.tree.copy()
+            child2.tree = node1.copy()
+        elif parent2_node:  # Only parent2 has a parent, node1 is root
+            parent2_node.children[idx2] = child1.tree.copy()
+            child1.tree = node2.copy()
     
     child1.parent_ids = [parent1.get_id(), parent2.get_id()]
     child2.parent_ids = [parent1.get_id(), parent2.get_id()]
+    
+    # Recalculate simplicity scores
+    child1.simplicity_score = child1.get_complexity() + 0.1 * child1.get_depth() + 0.05 * child1.get_size()
+    child2.simplicity_score = child2.get_complexity() + 0.1 * child2.get_depth() + 0.05 * child2.get_size()
     
     return child1, child2
 
@@ -579,12 +596,12 @@ class Population:
                 self.equations.append(eq)
     
     def select_parents(self, tournament_size: int = 3) -> Tuple[Equation, Equation]:
-        """Select two parents using tournament selection with multi-objective fitness"""
+        """Select two parents using tournament selection based on fitness"""
         
         def tournament():
             candidates = random.sample(self.equations, min(tournament_size, len(self.equations)))
-            # Multi-objective: maximize correlation, minimize simplicity
-            return max(candidates, key=lambda eq: eq.fitness - self.simplicity_weight * eq.simplicity_score)
+            # Use fitness directly (already includes simplicity penalty)
+            return max(candidates, key=lambda eq: eq.fitness if eq.fitness > -np.inf else -1.0)
         
         return tournament(), tournament()
     
@@ -592,8 +609,8 @@ class Population:
                stagnation_counter: int = 0):
         """Evolve the population to the next generation with adaptive parameters"""
         
-        # Sort by multi-objective fitness (correlation - simplicity_penalty)
-        self.equations.sort(key=lambda eq: eq.fitness - self.simplicity_weight * eq.simplicity_score, reverse=True)
+        # Sort by fitness (already includes simplicity penalty)
+        self.equations.sort(key=lambda eq: eq.fitness if eq.fitness > -np.inf else -1.0, reverse=True)
         
         # Update best ever
         if not self.best_ever or self.equations[0].fitness > self.best_ever.fitness:

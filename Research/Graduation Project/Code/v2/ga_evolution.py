@@ -313,7 +313,9 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
             def fit_func(x, *params):
                 complexity = x[0]
                 count = x[1]
-                return eq_info['func'](complexity, count, *params)
+                result = eq_info['func'](complexity, count, *params)
+                # Clip extreme values to prevent overflow in curve_fit
+                return np.clip(result, -1e100, 1e100)
             
             # Prepare combined data from all benchmarks
             x_data = np.vstack([all_complexity_values, all_count_values])
@@ -329,6 +331,12 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
                     maxfev=50000,
                 )
             
+            # Validate fitted parameters aren't extreme
+            if np.any(np.isnan(shared_params)) or np.any(np.isinf(shared_params)):
+                continue
+            if np.any(np.abs(shared_params) > 1e10):
+                continue
+            
             # Calculate correlation and R² for EACH benchmark separately
             # using the same shared parameters
             benchmark_correlations = []
@@ -339,23 +347,43 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
                 # Use shared parameters for this benchmark
                 predictions = eq_info['func'](data['complexity_values'], data['count_values'], *shared_params)
                 
-                # Validate predictions
+                # Validate predictions - check for extreme values first
                 if np.any(np.isnan(predictions)) or np.any(np.isinf(predictions)):
                     all_valid = False
                     break
                 
-                if np.std(predictions) < 1e-10:
+                # Check for overflow (very large values)
+                if np.any(np.abs(predictions) > 1e100):
                     all_valid = False
                     break
                 
-                # Calculate correlation
-                correlation = np.corrcoef(data['benchmark_values'], predictions)[0, 1]
+                # Check for constant predictions
+                pred_std = np.std(predictions)
+                if pred_std < 1e-10 or np.isnan(pred_std):
+                    all_valid = False
+                    break
+                
+                # Check benchmark values std too (for corrcoef)
+                bench_std = np.std(data['benchmark_values'])
+                if bench_std < 1e-10 or np.isnan(bench_std):
+                    all_valid = False
+                    break
+                
+                # Calculate correlation with error handling
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    corr_matrix = np.corrcoef(data['benchmark_values'], predictions)
+                    if corr_matrix.shape != (2, 2):
+                        all_valid = False
+                        break
+                    correlation = corr_matrix[0, 1]
                 
                 if np.isnan(correlation) or np.isinf(correlation):
                     all_valid = False
                     break
                 
-                benchmark_correlations.append(abs(correlation))
+                # Use raw correlation (not absolute value) - negative = bad
+                benchmark_correlations.append(correlation)
             
             if not all_valid:
                 continue
@@ -586,20 +614,18 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         equations_dict = equations_to_dict(population.equations)
         
         # Filter out invalid equations before evaluation
+        # Use the equation_object directly from the dict (already stored there)
         valid_equations_dict = {}
         invalid_count = 0
         for eq_id, eq_info in equations_dict.items():
-            # Try to find the corresponding equation object to check validity
-            try:
-                idx = int(eq_id.split('_eq')[1])
-                if idx < len(population.equations):
-                    eq_obj = population.equations[idx]
-                    if eq_obj.is_valid():
-                        valid_equations_dict[eq_id] = eq_info
-                    else:
-                        invalid_count += 1
-            except:
-                # If we can't parse, include it anyway
+            # Get equation object directly from dict (stored in equations_to_dict)
+            eq_obj = eq_info.get('equation_object')
+            if eq_obj and eq_obj.is_valid():
+                valid_equations_dict[eq_id] = eq_info
+            elif eq_obj:
+                invalid_count += 1
+            else:
+                # No equation object, include anyway (shouldn't happen)
                 valid_equations_dict[eq_id] = eq_info
         
         if invalid_count > 0:
@@ -620,24 +646,32 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
             generations_without_improvement += 1
             continue
         
-        # Update fitness scores
-        # Fitness = correlation (simple and direct)
+        # First, reset ALL fitness values to ensure no stale data
+        # This prevents equations that fail current evaluation from keeping old fitness scores
+        successfully_evaluated_ids = {valid_equations_dict[eq_id]['equation_object'].unique_id 
+                                       for eq_id, _ in eval_results 
+                                       if eq_id in valid_equations_dict and valid_equations_dict[eq_id].get('equation_object')}
+        
+        for eq in population.equations:
+            if eq.unique_id not in successfully_evaluated_ids:
+                # Reset fitness for equations not successfully evaluated this generation
+                eq.fitness = -1.0
+                eq.avg_correlation = 0.0
+        
+        # Update fitness scores for successfully evaluated equations
+        # Fitness = correlation - simplicity_penalty (multi-objective optimization)
         valid_eqs_updated = 0
         for eq_id, res in eval_results:
             # Find the equation object from the dict
             if eq_id in valid_equations_dict:
                 eq_obj = valid_equations_dict[eq_id].get('equation_object')
                 if eq_obj:
-                    # Use correlation as fitness
-                    eq_obj.fitness = res['avg_correlation']
+                    # Store correlation separately
                     eq_obj.avg_correlation = res['avg_correlation']
+                    # Calculate fitness as: correlation - simplicity_weight * simplicity
+                    # This balances accuracy with simplicity
+                    eq_obj.fitness = res['avg_correlation'] - simplicity_weight * eq_obj.simplicity_score
                     valid_eqs_updated += 1
-        
-        # Set poor fitness for equations that weren't evaluated
-        for eq in population.equations:
-            if eq.fitness == -np.inf or np.isnan(eq.fitness):
-                eq.fitness = -1.0
-                eq.avg_correlation = 0.0
         
         print(f"  Updated fitness for {valid_eqs_updated}/{len(population.equations)} equations")
         
@@ -668,9 +702,9 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         for i, eq in enumerate(population_sorted[:5], 1):
             if eq.fitness > -np.inf:
                 simplicity = eq.simplicity_score
-                multi_obj = eq.fitness - simplicity_weight * simplicity
+                # Fitness already includes simplicity penalty
                 print(f"  {i}. Fitness: {eq.fitness:.6f}, Corr: {eq.avg_correlation:.6f}, Simplicity: {simplicity:.2f}")
-                print(f"     Multi-obj: {multi_obj:.6f} | {eq.to_string()[:80]}")
+                print(f"     | {eq.to_string()[:80]}")
             else:
                 print(f"  {i}. [Invalid fitness]")
         
@@ -704,7 +738,8 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
             print(f"  💉 DIVERSITY INJECTION: Adding {n_inject} fresh random equations")
             
             # Replace worst equations with new random ones
-            population.equations.sort(key=lambda eq: eq.fitness - simplicity_weight * eq.simplicity_score, reverse=True)
+            # Sort by fitness (which already includes simplicity penalty)
+            population.equations.sort(key=lambda eq: eq.fitness if eq.fitness > -np.inf else -1.0, reverse=True)
             for i in range(n_inject):
                 idx = -(i+1)  # Replace from worst
                 new_eq = gae.generate_random_equation(4, 5, mandatory_vars)
