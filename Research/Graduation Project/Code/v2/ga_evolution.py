@@ -499,7 +499,7 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
                     x_data,
                     all_benchmark_values,
                     p0=eq_info['initial_guess'],
-                    maxfev=50000,
+                    maxfev=500000,
                 )
             
             # Validate fitted parameters aren't extreme

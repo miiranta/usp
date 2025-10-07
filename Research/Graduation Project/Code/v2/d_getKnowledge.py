@@ -1965,7 +1965,7 @@ if True:
     # Theory: performance_roof = f(count), complexity = how close to roof
     # We'll test various formulations
 
-    MIN_STOPPING_CORRELATION = 0.6
+    MIN_STOPPING_CORRELATION = 0.99
     VARIABLES_TO_USE = ["complexity", "count"] # ["complexity", "count"]
     VARIABLES_MANDATORY_TO_USE = []
 
@@ -1977,6 +1977,9 @@ if True:
     
     # Filter to only default filter for equation discovery
     appended_benchmarks_df = appended_benchmarks_df[appended_benchmarks_df['filter'] == FILTER_DEFAULT_REPLACE]
+    appended_benchmarks_df = appended_benchmarks_df[appended_benchmarks_df['types'].str.len() == 3]
+    appended_benchmarks_df = appended_benchmarks_df[~appended_benchmarks_df['types'].apply(lambda x: 'bias' in x if isinstance(x, list) else False)]
+    print(appended_benchmarks_df)
     
     # Run the evolutionary algorithm
     top_equations, evolution_history = ga_evolution.run_evolution(
