@@ -85,14 +85,15 @@ def save_equations_to_file(equations: List[gae.Equation], filepath: str):
         f.write('# Equation metadata for checkpoint resume\n')
         f.write('EQUATION_METADATA = [\n')
         for eq in equations:
+            # Convert numpy types and handle infinity values
             metadata = {
-                'num_params': eq.num_params,
-                'param_initial_guess': eq.param_initial_guess,
-                'fitness': eq.fitness,
-                'avg_correlation': eq.avg_correlation,
-                'avg_r2': eq.avg_r2,
-                'simplicity_score': eq.simplicity_score,
-                'generation': eq.generation
+                'num_params': int(eq.num_params),
+                'param_initial_guess': [float(x) for x in eq.param_initial_guess],
+                'fitness': float(eq.fitness) if not np.isinf(eq.fitness) else (1e308 if eq.fitness > 0 else -1e308),
+                'avg_correlation': float(eq.avg_correlation) if not np.isinf(eq.avg_correlation) else 0.0,
+                'avg_r2': float(eq.avg_r2) if not np.isinf(eq.avg_r2) else 0.0,
+                'simplicity_score': float(eq.simplicity_score),
+                'generation': int(eq.generation)
             }
             metadata_json = json.dumps(metadata)
             f.write(f'    {metadata_json},\n')
@@ -495,27 +496,49 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
     # Try to find the latest checkpoint if resume requested
     checkpoint_equations = None
     if resume_from_checkpoint:
-        checkpoint_path = os.path.join(evolution_folder, resume_from_checkpoint)
-        if not os.path.exists(checkpoint_path):
-            # Try to find the latest checkpoint automatically
-            print(f"\nCheckpoint '{resume_from_checkpoint}' not found. Searching for latest checkpoint...")
-            checkpoint_files = [f for f in os.listdir(evolution_folder) if f.startswith('top_equations_gen') and f.endswith('.py')]
-            if checkpoint_files:
-                # Extract generation numbers and find the latest
-                gen_numbers = []
-                for f in checkpoint_files:
-                    try:
-                        gen_num = int(f.replace('top_equations_gen', '').replace('.py', ''))
-                        gen_numbers.append((gen_num, f))
-                    except:
-                        continue
-                if gen_numbers:
-                    latest_gen, latest_file = max(gen_numbers, key=lambda x: x[0])
-                    checkpoint_path = os.path.join(evolution_folder, latest_file)
-                    print(f"  Found checkpoint: {latest_file} (generation {latest_gen})")
+        # Handle 'auto' keyword to automatically find latest checkpoint
+        if resume_from_checkpoint.lower() == 'auto':
+            print(f"\nSearching for latest checkpoint in {evolution_folder}...")
+            checkpoint_path = None
+        else:
+            checkpoint_path = os.path.join(evolution_folder, resume_from_checkpoint)
         
-        # Load checkpoint
-        if os.path.exists(checkpoint_path):
+        # Search for latest checkpoint if path not specified or doesn't exist
+        if not checkpoint_path or not os.path.exists(checkpoint_path):
+            if checkpoint_path and checkpoint_path != os.path.join(evolution_folder, 'auto'):
+                print(f"\nCheckpoint '{resume_from_checkpoint}' not found at: {checkpoint_path}")
+                print(f"Searching for latest checkpoint in {evolution_folder}...")
+            
+            # Look for checkpoint files
+            if not os.path.exists(evolution_folder):
+                print(f"  Evolution folder doesn't exist yet: {evolution_folder}")
+                print(f"  Starting fresh without checkpoint.")
+                checkpoint_path = None
+            else:
+                checkpoint_files = [f for f in os.listdir(evolution_folder) 
+                                   if f.startswith('top_equations_gen') and f.endswith('.py')]
+                if checkpoint_files:
+                    # Extract generation numbers and find the latest
+                    gen_numbers = []
+                    for f in checkpoint_files:
+                        try:
+                            gen_num = int(f.replace('top_equations_gen', '').replace('.py', ''))
+                            gen_numbers.append((gen_num, f))
+                        except:
+                            continue
+                    if gen_numbers:
+                        latest_gen, latest_file = max(gen_numbers, key=lambda x: x[0])
+                        checkpoint_path = os.path.join(evolution_folder, latest_file)
+                        print(f"  ✅ Found checkpoint: {latest_file} (generation {latest_gen})")
+                    else:
+                        print(f"  No valid checkpoint files found.")
+                        checkpoint_path = None
+                else:
+                    print(f"  No checkpoint files found in {evolution_folder}")
+                    checkpoint_path = None
+        
+        # Load checkpoint if path was found
+        if checkpoint_path and os.path.exists(checkpoint_path):
             print(f"\nLoading checkpoint from: {checkpoint_path}")
             try:
                 import importlib.util
@@ -553,7 +576,13 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
                         print(f"  (To enable resume, re-run and save new checkpoints)")
                         checkpoint_equations = None
             except Exception as e:
-                print(f"  Warning: Could not load checkpoint: {e}")
+                import traceback
+                print(f"  ⚠️  ERROR: Could not load checkpoint: {type(e).__name__}: {e}")
+                print(f"  Details: {traceback.format_exc().splitlines()[-3]}")
+                print(f"  This may be due to:")
+                print(f"    - Old checkpoint format with 'Infinity' values")
+                print(f"    - Corrupted checkpoint file")
+                print(f"    - Incompatible Python/numpy versions")
                 print(f"  Starting fresh...")
                 checkpoint_equations = None
     
@@ -609,6 +638,7 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         print(f"\n{'='*80}")
         print(f"GENERATION {generation}")
         print(f"{'='*80}")
+        print(f"Population size: {len(population.equations)}/{population_size}")
         
         # Convert equations to dict format
         equations_dict = equations_to_dict(population.equations)
@@ -630,6 +660,7 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         
         if invalid_count > 0:
             print(f"  Filtered out {invalid_count} invalid/degenerate equations")
+            print(f"  Valid equations to evaluate: {len(valid_equations_dict)}/{len(population.equations)}")
         
         if len(valid_equations_dict) == 0:
             print("⚠️  All equations are invalid! Reinitializing population...")
@@ -674,6 +705,9 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
                     valid_eqs_updated += 1
         
         print(f"  Updated fitness for {valid_eqs_updated}/{len(population.equations)} equations")
+        if valid_eqs_updated < len(population.equations):
+            not_updated = len(population.equations) - valid_eqs_updated
+            print(f"  ({not_updated} equations marked invalid or failed evaluation, fitness set to -1.0)")
         
         # Get statistics
         stats = population.get_statistics()

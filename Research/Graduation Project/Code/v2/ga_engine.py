@@ -674,9 +674,13 @@ class Population:
                 new_population.append(child2)
                 seen_forms.add(child2_form)
         
+        if attempts >= max_attempts and len(new_population) < self.size:
+            print(f"    WARNING: Hit max attempts ({max_attempts}), only generated {len(new_population)}/{self.size} offspring")
+        
         # If we still don't have enough, fill with random equations
         random_attempts = 0
-        while len(new_population) < self.size and random_attempts < max_attempts:
+        max_random_attempts = self.size * 10
+        while len(new_population) < self.size and random_attempts < max_random_attempts:
             random_attempts += 1
             random_eq = generate_random_equation(max_depth=4, num_params=5, mandatory_vars=self.mandatory_vars)
             random_eq.generation = self.generation + 1
@@ -685,15 +689,36 @@ class Population:
                 new_population.append(random_eq)
                 seen_forms.add(random_form)
         
-        # Last resort: if still not enough, allow duplicates but force mutation
-        while len(new_population) < self.size:
+        if random_attempts >= max_random_attempts and len(new_population) < self.size:
+            print(f"    WARNING: Hit max random attempts, only have {len(new_population)}/{self.size} equations")
+        
+        # Last resort: if still not enough, allow duplicates but force validity
+        final_attempts = 0
+        max_final_attempts = self.size * 5
+        while len(new_population) < self.size and final_attempts < max_final_attempts:
+            final_attempts += 1
             random_eq = generate_random_equation(max_depth=4, num_params=5, mandatory_vars=self.mandatory_vars)
             random_eq.generation = self.generation + 1
             if random_eq.is_valid():
                 new_population.append(random_eq)
         
+        # Absolute last resort: lower validation standards
+        while len(new_population) < self.size:
+            random_eq = generate_random_equation(max_depth=3, num_params=4, mandatory_vars=self.mandatory_vars)
+            random_eq.generation = self.generation + 1
+            # Accept any equation that's not completely broken
+            if random_eq.get_all_variables():  # Has at least one variable
+                new_population.append(random_eq)
+                if len(new_population) >= self.size * 2:  # Safety: prevent infinite loop
+                    break
+        
         self.equations = new_population[:self.size]
         self.generation += 1
+        
+        # Final check and warning
+        if len(self.equations) < self.size:
+            print(f"    ⚠️  WARNING: Population size is {len(self.equations)}/{self.size} after evolution!")
+            print(f"    This indicates too many invalid/duplicate equations are being generated.")
         
         # Check diversity
         unique_forms = len({eq.get_canonical_form() for eq in self.equations})
