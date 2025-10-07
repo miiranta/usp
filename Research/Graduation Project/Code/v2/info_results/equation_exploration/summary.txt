@@ -5,10 +5,10 @@ Testing various equations combining Complexity and Parameter Count to predict Be
 METHOD: Each equation uses SHARED parameters fitted across ALL benchmarks simultaneously
 RANKING: Based on average correlation across all benchmarks using the same parameter set
 
-Total equations tested: 181
+Total equations tested: 20
 Benchmarks analyzed: 4
-Successful fits: 724
-Equations with ALL benchmarks fitted: 175
+Successful fits: 80
+Equations with ALL benchmarks fitted: 20
 Equations with PARTIAL fits (excluded): 0
 
 EQUATION RANKING BY AVERAGE ABSOLUTE CORRELATION:
@@ -16,181 +16,26 @@ EQUATION RANKING BY AVERAGE ABSOLUTE CORRELATION:
 ------------------------------------------------------------------------------------------------------------------------
 Rank   Equation                                                                         Avg|Corr|    Std          Avg R²       N     
 ------------------------------------------------------------------------------------------------------------------------
-1      a·count^1.42 + b·√complexity + c·√count + d                                      0.384325     0.105762     -584.792078  4     
-2      a·count^1.45 + b·√complexity + c·√count + d                                      0.384121     0.105838     -584.803113  4     
-3      a·ln(count+1) + b·√count + c                                                     0.384029     0.121473     -587.022651  4     
-4      a·complexity^0.5·count^1.5 + b/(count+c) + d                                     0.383098     0.112716     -579.021536  4     
-5      a·count^b/(1 + c·exp(-complexity)) + d                                           0.381757     0.121743     -585.974969  4     
-6      a·ln(count+1)·count^b + c                                                        0.379077     0.122517     -587.062923  4     
-7      a/(1+exp(-b·complexity))·count^c + d                                             0.379069     0.114614     -578.948862  4     
-8      a·count^b/(1+exp(-c·complexity)) + d                                             0.378910     0.114580     -578.948444  4     
-9      a·exp(b·ln(count)) + c                                                           0.378889     0.122528     -587.059649  4     
-10     a·count^b + c (pure)                                                             0.378889     0.122528     -587.059648  4     
-11     a·(count+complexity)^b + c                                                       0.378889     0.122528     -587.059650  4     
-12     a·ln(count+1)^b + c·complexity + d                                               0.377419     0.097734     -585.939938  4     
-13     a·complexity^b·count^c + d·count                                                 0.376250     0.135958     -287.223013  4     
-14     a·count^b + c·complexity + d                                                     0.375110     0.098338     -585.882571  4     
-15     a·count^b + c·ln(complexity+1) + d                                               0.374028     0.098545     -585.596014  4     
-16     a·(complexity/(complexity+b))·count^c + d·count + e·√count + f                   0.371495     0.109621     -578.987764  4     
-17     a·(complexity·count)^b + c                                                       0.371291     0.110138     -571.850792  4     
-18     a·count^b·exp(c·complexity) + d                                                  0.369585     0.106063     -571.638248  4     
-19     a·complexity + b·count^1.5 + c·count + d                                         0.368834     0.101105     -588.769499  4     
-20     a·complexity^b·count^c + d·count + e·√count + f·complexity + g                   0.368089     0.091533     -572.925853  4     
-21     a·complexity^b·count^c + d·count + e·√count + f·ln(complexity+1) + g             0.368001     0.091360     -572.901876  4     
-22     a·count^b + c·count + d                                                          0.367250     0.119247     -588.295847  4     
-23     a·complexity^0.1·count^2.0 + b·√count + c·complexity + d                         0.367196     0.103022     -584.736256  4     
-24     a·count^b + c·√count + d (pure)                                                  0.366968     0.122549     -580.770134  4     
-25     a·complexity^0.4·count^1.2 + b·√count + c                                        0.362559     0.115529     -580.817262  4     
-26     a·complexity^0.15·count^1.5 + b·√count + c                                       0.361333     0.120181     -584.396382  4     
-27     a·complexity^0.25·count^1.3 + b·count + c·√count + d                             0.361005     0.105854     -578.248166  4     
-28     a·√(complexity·count) + b·count + c                                              0.360445     0.105359     -573.001061  4     
-29     a·complexity^0.3·count^1.4 + b·√count + c                                        0.360355     0.117571     -582.273474  4     
-30     a·count^b + c·complexity^0.2 + d                                                 0.360063     0.126524     -582.100292  4     
-31     a·count^1.8 + b·complexity^0.4 + c·count + d                                     0.359691     0.109406     -588.287567  4     
-32     a·count^b + c·complexity^0.5 + d                                                 0.358126     0.112412     -582.136007  4     
-33     a·count^b + c·√complexity + d                                                    0.358126     0.112412     -582.136087  4     
-34     a·ln(count+complexity+1) + b·count + c                                           0.355915     0.122668     -587.289085  4     
-35     a·count + b                                                                      0.355662     0.118595     -588.024496  4     
-36     a·(complexity/count)^b + c·count + d                                             0.355662     0.118595     -588.024498  4     
-37     a·count^b + c·complexity^0.4 + d                                                 0.355456     0.117813     -581.379194  4     
-38     a·count^b + c·complexity^0.3 + d                                                 0.355348     0.122655     -581.162939  4     
-39     a·count² + b·complexity + c·complexity·count + d·count + e                       0.354819     0.112565     -661.701160  4     
-40     a·complexity^b·count^c + d·count + e·complexity (no offset)                      0.353746     0.079571     -360.922696  4     
-41     a·count^b·(complexity/(1+complexity)) + c·count + d                              0.353287     0.109166     -572.381798  4     
-42     a·count^0.5·complexity^2.0 + b·count + c                                         0.353233     0.112003     -575.790667  4     
-43     a·count^b + c·complexity + d·√complexity + e                                     0.353049     0.140245     -576.438889  4     
-44     a·ln(count+1)·ln(complexity+1) + b·count + c·complexity + d                      0.347964     0.104350     -567.263727  4     
-45     a·complexity^b·count^c + d·√count + e·complexity + f                             0.347787     0.112720     -565.684904  4     
-46     a·count·exp(b·complexity) + c                                                    0.346177     0.111816     -580.036899  4     
-47     a·complexity·count + b·count + c                                                 0.345692     0.111500     -580.271155  4     
-48     a·complexity^b·count^c + d·count + e·√count + f·√complexity + g                  0.344886     0.123667     -566.242432  4     
-49     a·complexity^b·count^c + d·√count + e·complexity (no offset)                     0.344405     0.077919     -438.497674  4     
-50     a·count + b·complexity + c·complexity·count + d                                  0.344100     0.107852     -580.410590  4     
-51     a·complexity^b·count^c + d·ln(count+1) + e                                       0.344096     0.114120     -567.499991  4     
-52     a·complexity^b·count^c + d·count^0.6 + e                                         0.343903     0.117833     -567.606617  4     
-53     a·(complexity/(complexity+1))·count^b + c·count + d                              0.343372     0.112867     -582.330960  4     
-54     a·(complexity/(complexity+b))·count^c + d·count + e                              0.343372     0.112867     -582.330960  4     
-55     a·complexity^b·count^c + d·√count + e                                            0.343363     0.117721     -567.582792  4     
-56     a·complexity^b·count^c + d·count + e·√count + f                                  0.342363     0.118184     -567.589574  4     
-57     a·complexity^0.5·count^1.0 + b·count + c                                         0.341399     0.108988     -580.416086  4     
-58     a·complexity^b·count^c + d·count + e                                             0.341273     0.118511     -567.584240  4     
-59     a·√(complexity·count)·count^0.5 + b·count + c·complexity + d                     0.339790     0.105323     -580.566177  4     
-60     a·complexity^b·count^c + d·√count + e·ln(count+1) + f                            0.339727     0.114068     -567.380233  4     
-61     a·complexity^0.3·count^c + d·√count + e                                          0.337191     0.121481     -568.357299  4     
-62     a·count^b·(1 + c·complexity^d) + e                                               0.336067     0.118252     -567.424165  4     
-63     a·complexity^b·count^c + d                                                       0.336051     0.118243     -567.450186  4     
-64     a·complexity^b·count^c + d·count² + e                                            0.334880     0.118518     -565.192447  4     
-65     a·count^1.3 + b                                                                  0.334679     0.116443     -588.361039  4     
-66     a·complexity^0.1·count^1.6 + b·count + c                                         0.332561     0.115533     -586.506436  4     
-67     a·complexity^b·count^c + d·count + e·complexity + f·√complexity + g              0.332309     0.115575     -565.090727  4     
-68     a·complexity^0.35·count^1.35 + b·count + c                                       0.331779     0.111084     -583.025374  4     
-69     a·ln(count+1) + b·count^c + d                                                    0.331543     0.121644     -586.827956  4     
-70     a·count^1.37 + b                                                                 0.330348     0.116046     -588.375647  4     
-71     a·count^1.4 + b                                                                  0.328570     0.115884     -588.375557  4     
-72     a·count^1.4                                                                      0.328570     0.115884     -127.016857  4     
-73     a·complexity^b·count^c + d·count + e·complexity + f                              0.328570     0.117561     -565.978635  4     
-74     a·count^1.5 + b·ln(complexity+1) + c·ln(count+1) + d                             0.327567     0.109246     -584.805035  4     
-75     a·count^1.42 + b                                                                 0.327411     0.115779     -588.373509  4     
-76     a·count^b·tanh(c·complexity) + d                                                 0.327261     0.119076     -567.111626  4     
-77     a·count^1.44 + b                                                                 0.326272     0.115676     -588.369934  4     
-78     a·count^b·(1-exp(-c·complexity)) + d                                             0.326104     0.119729     -567.079533  4     
-79     a·count^b·(1 - exp(-c·complexity)) + d                                           0.326104     0.119729     -567.079533  4     
-80     a·(1-exp(-b·complexity))·count^c + d                                             0.326103     0.119729     -567.079512  4     
-81     a·count^1.45·(1 + b·complexity)                                                  0.325711     0.115625     -124.037595  4     
-82     a·complexity^0.2·count^1.4 + b·count + c                                         0.325405     0.111688     -584.462993  4     
-83     a·count^1.46 + b                                                                 0.325154     0.115575     -588.364885  4     
-84     a·count^1.48 + b                                                                 0.324057     0.115476     -588.358415  4     
-85     a·complexity^0.2·count^1.4 + b                                                   0.323317     0.111263     -584.415070  4     
-86     a·complexity^0.3·count^1.3 + b                                                   0.323097     0.108960     -582.964634  4     
-87     a·count^1.5·(1 + b·√complexity)                                                  0.322995     0.115369     -121.217425  4     
-88     a·count^1.5·(1 + b·ln(complexity+1))                                             0.322987     0.115376     -121.261101  4     
-89     a·count^b + c                                                                    0.322981     0.115378     -588.350579  4     
-90     a·count^1.5                                                                      0.322980     0.115378     -121.285240  4     
-91     a·count^b·cos(c·complexity) + d                                                  0.322980     0.115378     -588.350573  4     
-92     a·count^b + c·√complexity                                                        0.322816     0.120401     -581.159663  4     
-93     a·count^b·(1 + c/(1+complexity)) + d                                             0.322735     0.115462     -588.567080  4     
-94     a·count^b/(1+complexity) + c                                                     0.322109     0.115620     -589.019839  4     
-95     a·count·count^b/(1+complexity) + c                                               0.322109     0.115620     -589.019834  4     
-96     a·count^1.52 + b                                                                 0.321924     0.115282     -588.341421  4     
-97     a·complexity^0.1·count^1.5 + b                                                   0.321810     0.113381     -586.271098  4     
-98     a·count^1.54 + b                                                                 0.320888     0.115188     -588.331005  4     
-99     a·count^1.55                                                                     0.320377     0.115141     -118.729487  4     
-100    a·complexity^0.15·count^b + c                                                    0.320049     0.112226     -585.367657  4     
-101    a·count^1.56 + b                                                                 0.319871     0.115095     -588.319377  4     
-102    a·count^1.58 + b                                                                 0.318875     0.115003     -588.306590  4     
-103    a·(complexity·count)^b + c·count                                                 0.318624     0.133768     -577.694693  4     
-104    a·complexity^b·count^c + d·count^0.4                                             0.318568     0.130268     -416.693760  4     
-105    a·count^1.6                                                                      0.317897     0.114912     -116.351818  4     
-106    a·count^1.6 + b                                                                  0.317897     0.114912     -588.292694  4     
-107    a·complexity^b·count^c + d·complexity² + e                                       0.317311     0.124114     -565.530022  4     
-108    a·count^1.63 + b                                                                 0.316467     0.114779     -588.269883  4     
-109    a·count^1.4 + b·complexity + c [fixed]                                           0.315759     0.102924     -588.760516  4     
-110    a·count^1.4 + b·ln(complexity+1) + c [fixed]                                     0.314694     0.103241     -588.724924  4     
-111    a·count^1.414 + b·arctan(complexity) + c [sqrt2]                                 0.314587     0.102966     -588.756140  4     
-112    a·count^1.67·(1 + b/(complexity+1)) + c                                          0.314574     0.114626     -588.291610  4     
-113    a·count^1.42 + b·complexity + c [minimal]                                        0.314450     0.102902     -588.763842  4     
-114    a·count^1.7 + b                                                                  0.313291     0.114479     -588.208319  4     
-115    a·count^1.45 + b·complexity + c                                                  0.312527     0.102864     -588.765653  4     
-116    a·complexity^b·count^1.5 + c                                                     0.309714     0.108242     -583.666064  4     
-117    a·count^1.48 + b·ln(complexity+1) + c [minimal]                                  0.309536     0.103176     -588.731887  4     
-118    a·count^b + c·sinh(0.1·complexity) + d                                           0.309427     0.102786     -588.760754  4     
-119    a·count^1.8 + b                                                                  0.309122     0.114072     -588.103401  4     
-120    a·ln(complexity+1) + b·count^1.5 + c                                             0.308298     0.103152     -588.729628  4     
-121    a·count^1.62·(1 + b·ln(complexity+1)) + c                                        0.307848     0.110416     -583.974993  4     
-122    a·count^1.395 + b·complexity^0.5 + c                                             0.307512     0.109952     -588.376039  4     
-123    a·count^b + c·(complexity/(1+complexity)) + d                                    0.307265     0.103653     -588.691475  4     
-124    a·count^1.4 + b·√complexity + c [fixed]                                          0.307159     0.109971     -588.379083  4     
-125    a·count^1.53 + b·ln(complexity+2) + c                                            0.307013     0.102910     -588.738687  4     
-126    a·count^1.405 + b·complexity^0.5 + c                                             0.306807     0.109991     -588.382004  4     
-127    a·complexity^b·count^c + d·complexity + e                                        0.306415     0.121473     -566.072576  4     
-128    a·count^1.415 + b·complexity^0.5 + c                                             0.306107     0.110029     -588.387482  4     
-129    a·count^1.425 + b·complexity^0.5 + c                                             0.305413     0.110066     -588.392483  4     
-130    a·count^1.9 + b                                                                  0.305348     0.113688     -587.983306  4     
-131    a·count^1.435 + b·complexity^0.5 + c                                             0.304724     0.110103     -588.397016  4     
-132    a·complexity^b·count^c + d·complexity + e·√complexity + f                        0.304722     0.121536     -566.073890  4     
-133    a·count^1.4 + b·complexity^0.33 + c [fixed]                                      0.304664     0.113979     -588.282369  4     
-134    a·count^1.4 + b·complexity^0.25 + c [fixed]                                      0.304235     0.115646     -588.325077  4     
-135    a·count^1.45 + b·complexity^0.5 + c                                              0.303701     0.110157     -588.402957  4     
-136    a·count^1.45 + b·√complexity + c [minimal]                                       0.303701     0.110157     -588.402957  4     
-137    a·count^2.0 + b                                                                  0.301927     0.113327     -587.852769  4     
-138    a·complexity^0.5 + b·count^1.5 + c                                               0.300376     0.110328     -588.415693  4     
-139    a·count^1.47 + b·complexity^0.35 + c                                             0.300052     0.113840     -588.319939  4     
-140    a·count^1.5 + b·complexity^0.3 + c [minimal]                                     0.297562     0.115105     -588.331904  4     
-141    a·count^1.5 + b·complexity^0.3 + c                                               0.297562     0.115105     -588.331904  4     
-142    a·count^1.55 + b·√complexity + c                                                 0.297177     0.110483     -588.418389  4     
-143    a·sin(b·complexity)·count^c + d                                                  0.296842     0.111532     -569.495618  4     
-144    a·count^1.55 + b·complexity^0.2 + c [minimal]                                    0.294805     0.116780     -588.464339  4     
-145    a·count^1.55 + b·complexity^0.33 + c                                             0.294605     0.114653     -588.332880  4     
-146    a·count^1.55 + b·complexity^0.25 + c                                             0.294210     0.116244     -588.375438  4     
-147    a·count^1.732 + b/(complexity+1) + c [sqrt2]                                     0.294183     0.103281     -588.581170  4     
-148    a·complexity^0.3 + b·count^1.6 + c                                               0.291238     0.115517     -588.335572  4     
-149    a·count^1.618 + b·complexity^0.382 + c [golden]                                  0.291070     0.113664     -588.336475  4     
-150    a·exp(b·complexity)·count^c                                                      0.290848     0.095121     -581.474467  4     
-151    a·count² + b·complexity + c                                                      0.284542     0.101138     -588.347847  4     
-152    a·(complexity/(complexity+10))·count^1.4 + b                                     0.279197     0.104797     -587.317559  4     
-153    a·(complexity/(complexity+1))·count^b + c                                        0.279190     0.112141     -575.749894  4     
-154    a·(complexity/(complexity+b))·count^c + d                                        0.275687     0.104821     -587.650261  4     
-155    a·count^b·tanh(complexity) + c                                                   0.275458     0.111791     -576.171703  4     
-156    a·(complexity/(complexity+b))·count^1.5 + c                                      0.275112     0.104935     -587.778193  4     
-157    a·count^b + c·√count                                                             0.252955     0.117602     -458.820185  4     
-158    a·count^b·(1-exp(-c·complexity))                                                 0.245614     0.135196     -550.789858  4     
-159    a·count^b + c·√count + d·ln(count+1)                                             0.237008     0.090674     -574.540191  4     
-160    a·count^1.42 + b·complexity                                                      0.230890     0.162351     -218.065591  4     
-161    a·count^b                                                                        0.223415     0.098641     -594.328176  4     
-162    a·count^1.6 + b·ln(complexity+1)                                                 0.212687     0.174692     -216.611437  4     
-163    a·complexity^b·count^c + d·count + e·√count (no offset)                          0.205218     0.073243     -452.959093  4     
-164    a·complexity^0.6 + b                                                             0.180423     0.078660     -605.049163  4     
-165    a·count^1.5 + b·√complexity                                                      0.179956     0.191422     -405.401807  4     
-166    a·ln(complexity+1) + b                                                           0.179823     0.077268     -605.317197  4     
-167    a·(count/complexity)^b + c                                                       0.179748     0.107342     -598.769244  4     
-168    a·√complexity + b                                                                0.178708     0.079942     -604.926210  4     
-169    a·complexity + b                                                                 0.178263     0.077384     -605.344463  4     
-170    a·complexity^0.4 + b                                                             0.175641     0.081829     -604.805392  4     
-171    a·complexity^b + c·√complexity + d                                               0.163392     0.070845     -56.095563   4     
-172    a·√complexity + b·ln(complexity+1) + c                                           0.116804     0.108420     -602.760831  4     
-173    a·complexity³ + b                                                                0.090203     0.070258     -603.414268  4     
-174    a·complexity^b                                                                   0.065125     0.038028     -57.138900   4     
-175    a·complexity^b + c                                                               0.065125     0.038028     -56.398013   4     
+1      gmean(((count / complexity) - (count / p1)), (complexity + (count / p3)))        0.377804     0.122953     -53714493.536491 4     
+2      gmean((count + complexity), complexity)                                          0.361163     0.105821     -512948.196332 4     
+3      atan2(lerp(p4, count, p1), lcm(complexity, count))                               0.355662     0.118595     -57.641126   4     
+4      wavg(hypot(complexity, complexity), lcm(avg(avg(count, count), count), count))   0.355662     0.118595     -250796274776936320.000000 4     
+5      wsum(wsum(count, complexity, p4), asin(complexity), lcm(complexity, complexity)) 0.355662     0.118595     -147553392217782592.000000 4     
+6      (count + (mod(complexity, gcd(p1, count)) - atan2(complexity, complexity)))      0.355662     0.118595     -2786625288047192576.000000 4     
+7      lcm((complexity + count), hypot(complexity, p1))                                 0.355662     0.118595     -2786625288142389248.000000 4     
+8      (complexity + count)                                                             0.355662     0.118595     -2786625288131637760.000000 4     
+9      (count + complexity)                                                             0.355662     0.118595     -2786625288131637760.000000 4     
+10     (count + wsum(wavg(complexity, complexity), lcm(complexity, complexity), max(count, complexity))) 0.355662     0.118595     -4012740416234182656.000000 4     
+11     wsum(count, count, complexity)                                                   0.355662     0.118595     -1783440183522920448.000000 4     
+12     -(count)                                                                         0.355662     0.118595     -2786625299141008384.000000 4     
+13     ((p3 ^ count) + lcm(count, complexity))                                          0.355662     0.118595     -2786625288141358080.000000 4     
+14     min(avg(complexity, gcd((count / count), lerp(p0, complexity, complexity))), -(count)) 0.355662     0.118595     -2786625299141008384.000000 4     
+15     (count + (complexity ^ count))                                                   0.355662     0.118595     -2786625288130606080.000000 4     
+16     (count + count)                                                                  0.355662     0.118595     -11146501163532826624.000000 4     
+17     (complexity - count)                                                             0.355662     0.118595     -2786625299139977216.000000 4     
+18     (count + atan2(complexity, complexity))                                          0.355662     0.118595     -2786625288215051264.000000 4     
+19     (count × if((complexity + count), σ((complexity ^ complexity)), (complexity - p2))) 0.354890     0.118902     -1453624809617633536.000000 4     
+20     avg(complexity, (if((p0 ^ complexity), complexity, (complexity × count)) × count)) 0.300232     0.104441     -581200967999119.375000 4     
 
 
 TOP 20 INDIVIDUAL BENCHMARK-EQUATION COMBINATIONS:
@@ -198,26 +43,26 @@ TOP 20 INDIVIDUAL BENCHMARK-EQUATION COMBINATIONS:
 ------------------------------------------------------------------------------------------------------------------------
 Rank   Benchmark                           Equation                                                     |Corr|     R²        
 ------------------------------------------------------------------------------------------------------------------------
-1      OPEN_LLM_AVERAGE                    a·complexity^b·count^c + d·count                             0.542274   -690.367737
-2      OPEN_LLM_AVERAGE                    a·complexity^0.5·count^1.5 + b/(count+c) + d                 0.525901   -1664.718703
-3      OPEN_LLM_AVERAGE                    a·ln(count+1) + b·√count + c                                 0.522787   -1696.968184
-4      OPEN_LLM_AVERAGE                    a·count^b/(1 + c·exp(-complexity)) + d                       0.520643   -1692.257001
-5      OPEN_LLM_AVERAGE                    a·count^b + c·√count + d (pure)                              0.520582   -1670.702718
-6      OPEN_LLM_AVERAGE                    a·ln(count+1)·count^b + c                                    0.520070   -1697.514975
-7      OPEN_LLM_AVERAGE                    a·exp(b·ln(count)) + c                                       0.519904   -1697.509991
-8      OPEN_LLM_AVERAGE                    a·count^b + c (pure)                                         0.519904   -1697.509989
-9      OPEN_LLM_AVERAGE                    a·(count+complexity)^b + c                                   0.519904   -1697.509996
-10     OPEN_LLM_AVERAGE                    a·(complexity/(complexity+b))·count^c + d·count + e·√count   0.513372   -1666.153460
-11     OPEN_LLM_AVERAGE                    a/(1+exp(-b·complexity))·count^c + d                         0.504145   -1660.049395
-12     OPEN_LLM_AVERAGE                    a·count^b/(1+exp(-c·complexity)) + d                         0.503898   -1660.035553
-13     OPEN_LLM_AVERAGE                    a·complexity^0.4·count^1.2 + b·√count + c                    0.501837   -1674.626742
-14     OPEN_LLM_AVERAGE                    a·count^b + c·count + d                                      0.500014   -1704.923463
-15     OPEN_LLM_AVERAGE                    a·complexity^0.3·count^1.4 + b·√count + c                    0.499122   -1680.053031
-16     OPEN_LLM_AVERAGE                    a·complexity^0.15·count^1.5 + b·√count + c                   0.499100   -1687.766514
-17     MMLU_5                              a·count^1.42 + b·√complexity + c·√count + d                  0.497692   -264.826016
-18     MMLU_5                              a·count^1.45 + b·√complexity + c·√count + d                  0.497454   -264.832890
-19     OPEN_LLM_AVERAGE                    a·ln(count+complexity+1) + b·count + c                       0.496985   -1700.155463
-20     MMLU_5                              a·count^b + c·complexity + d·√complexity + e                 0.496808   -271.778453
+1      OPEN_LLM_AVERAGE                    gmean(((count / complexity) - (count / p1)), (complexity +   0.520623   -127812689.434852
+2      OPEN_LLM_AVERAGE                    gmean((count + complexity), complexity)                      0.491541   -672220.776621
+3      OPEN_LLM_AVERAGE                    (count × if((complexity + count), σ((complexity ^ complexi   0.486850   -3053794696254302208.000000
+4      OPEN_LLM_AVERAGE                    atan2(lerp(p4, count, p1), lcm(complexity, count))           0.486622   -2.274088 
+5      OPEN_LLM_AVERAGE                    (complexity - count)                                         0.486622   -5804620436905709568.000000
+6      OPEN_LLM_AVERAGE                    -(count)                                                     0.486622   -5804620436907057152.000000
+7      OPEN_LLM_AVERAGE                    (count + count)                                              0.486622   -23218481714817056768.000000
+8      OPEN_LLM_AVERAGE                    (count + (complexity ^ count))                               0.486622   -5804620425969999872.000000
+9      OPEN_LLM_AVERAGE                    min(avg(complexity, gcd((count / count), lerp(p0, complexi   0.486622   -5804620436907057152.000000
+10     OPEN_LLM_AVERAGE                    ((p3 ^ count) + lcm(count, complexity))                      0.486622   -5804620425995575296.000000
+11     OPEN_LLM_AVERAGE                    (count + atan2(complexity, complexity))                      0.486622   -5804620426170875904.000000
+12     OPEN_LLM_AVERAGE                    wsum(count, count, complexity)                               0.486622   -3714957071746050560.000000
+13     OPEN_LLM_AVERAGE                    (count + wsum(wavg(complexity, complexity), lcm(complexity   0.486622   -8358653414719750144.000000
+14     OPEN_LLM_AVERAGE                    lcm((complexity + count), hypot(complexity, p1))             0.486622   -5804620425996924928.000000
+15     OPEN_LLM_AVERAGE                    (count + (mod(complexity, gcd(p1, count)) - atan2(complexi   0.486622   -5804620425770473472.000000
+16     OPEN_LLM_AVERAGE                    (count + complexity)                                         0.486622   -5804620425971349504.000000
+17     OPEN_LLM_AVERAGE                    (complexity + count)                                         0.486622   -5804620425971349504.000000
+18     OPEN_LLM_AVERAGE                    wsum(wsum(count, complexity, p4), asin(complexity), lcm(co   0.486622   -325430476589891968.000000
+19     OPEN_LLM_AVERAGE                    wavg(hypot(complexity, complexity), lcm(avg(avg(count, cou   0.486622   -522415837191611264.000000
+20     OPEN_LLM_AVERAGE                    avg(complexity, (if((p0 ^ complexity), complexity, (comple   0.447482   -48907515635588.039062
 
 
 BEST EQUATION FOR EACH BENCHMARK:
@@ -225,64 +70,64 @@ BEST EQUATION FOR EACH BENCHMARK:
 ------------------------------------------------------------------------------------------------------------------------
 Benchmark                           Equation                                                     Correlation  R²        
 ------------------------------------------------------------------------------------------------------------------------
-OPEN_LLM_AVERAGE                    a·complexity^b·count^c + d·count                             0.542274     -690.367737
-LMARENA_SCORE                       a·count^1.42 + b·complexity                                  0.363331     -170.569890
-MMLU_5                              a·count^1.42 + b·√complexity + c·√count + d                  0.497692     -264.826016
-MMLU_PRO_5                          a·complexity^b·count^c + d·count                             0.306643     -169.033809
+OPEN_LLM_AVERAGE                    gmean(((count / complexity) - (count / p1)), (complexity +   0.520623     -127812689.434852
+LMARENA_SCORE                       gmean((count + complexity), complexity)                      0.310604     -51128.927576
+MMLU_5                              gmean(((count / complexity) - (count / p1)), (complexity +   0.439635     -42129902.958356
+MMLU_PRO_5                          gmean(((count / complexity) - (count / p1)), (complexity +   0.265693     -42909515.986827
 
 
 SHARED PARAMETERS FOR TOP 5 EQUATIONS:
 (These parameters are SHARED across all benchmarks - same values used for all)
 ------------------------------------------------------------------------------------------------------------------------
-1. a·count^1.42 + b·√complexity + c·√count + d
-   Average Correlation: 0.384325 ± 0.105762
-   Average R²: -584.792078
-   Shared parameters: a=-1.15e-14, b=383.2161, c=7.96e-04, d=242.5938
+1. gmean(((count / complexity) - (count / p1)), (complexity + (count / p3)))
+   Average Correlation: 0.377804 ± 0.122953
+   Average R²: -53714493.536491
+   Shared parameters: a=3.7296, b=-2.05e+10, c=9.57e-04, d=-2.94e+20, e=1.5584
    Per-benchmark correlations:
-     • OPEN_LLM_AVERAGE: 0.428038
-     • LMARENA_SCORE: 0.362607
-     • MMLU_5: 0.497692
-     • MMLU_PRO_5: 0.248965
+     • OPEN_LLM_AVERAGE: 0.520623
+     • LMARENA_SCORE: 0.285265
+     • MMLU_5: 0.439635
+     • MMLU_PRO_5: 0.265693
 
-2. a·count^1.45 + b·√complexity + c·√count + d
-   Average Correlation: 0.384121 ± 0.105838
-   Average R²: -584.803113
-   Shared parameters: a=-5.03e-15, b=381.8283, c=7.88e-04, d=243.0094
+2. gmean((count + complexity), complexity)
+   Average Correlation: 0.361163 ± 0.105821
+   Average R²: -512948.196332
+   Shared parameters: a=-1.6673, b=1.6213, c=1.2416, d=0.3776, e=2.0895
    Per-benchmark correlations:
-     • OPEN_LLM_AVERAGE: 0.427890
-     • LMARENA_SCORE: 0.362599
-     • MMLU_5: 0.497454
-     • MMLU_PRO_5: 0.248541
+     • OPEN_LLM_AVERAGE: 0.491541
+     • LMARENA_SCORE: 0.310604
+     • MMLU_5: 0.394924
+     • MMLU_PRO_5: 0.247584
 
-3. a·ln(count+1) + b·√count + c
-   Average Correlation: 0.384029 ± 0.121473
-   Average R²: -587.022651
-   Shared parameters: a=-1.7911, b=7.01e-04, c=319.7261
+3. atan2(lerp(p4, count, p1), lcm(complexity, count))
+   Average Correlation: 0.355662 ± 0.118595
+   Average R²: -57.641126
+   Shared parameters: a=4.1522, b=-1.3219, c=9.57e-04, d=-5.1913, e=1.18e+15, f=2.1432
    Per-benchmark correlations:
-     • OPEN_LLM_AVERAGE: 0.522787
-     • LMARENA_SCORE: 0.294997
-     • MMLU_5: 0.448189
-     • MMLU_PRO_5: 0.270145
+     • OPEN_LLM_AVERAGE: -0.486622
+     • LMARENA_SCORE: -0.295976
+     • MMLU_5: -0.417342
+     • MMLU_PRO_5: -0.222707
 
-4. a·complexity^0.5·count^1.5 + b/(count+c) + d
-   Average Correlation: 0.383098 ± 0.112716
-   Average R²: -579.021536
-   Shared parameters: a=2.89e-14, b=-8.33e+11, c=8.00e+09, d=397.1449
+4. wavg(hypot(complexity, complexity), lcm(avg(avg(count, count), count), count))
+   Average Correlation: 0.355662 ± 0.118595
+   Average R²: -250796274776936320.000000
+   Shared parameters: a=0.3578, b=-0.8912, c=1.6052, d=0.0679, e=0.0832
    Per-benchmark correlations:
-     • OPEN_LLM_AVERAGE: 0.525901
-     • LMARENA_SCORE: 0.303478
-     • MMLU_5: 0.420016
-     • MMLU_PRO_5: 0.282998
+     • OPEN_LLM_AVERAGE: 0.486622
+     • LMARENA_SCORE: 0.295976
+     • MMLU_5: 0.417342
+     • MMLU_PRO_5: 0.222707
 
-5. a·count^b/(1 + c·exp(-complexity)) + d
-   Average Correlation: 0.381757 ± 0.121743
-   Average R²: -585.974969
-   Shared parameters: a=3.5696, b=0.5629, c=2.69e+04, d=291.1284
+5. wsum(wsum(count, complexity, p4), asin(complexity), lcm(complexity, complexity))
+   Average Correlation: 0.355662 ± 0.118595
+   Average R²: -147553392217782592.000000
+   Shared parameters: a=0.4606, b=4.2375, c=8.8853, d=1.0887, e=-2.93e+10
    Per-benchmark correlations:
-     • OPEN_LLM_AVERAGE: 0.520643
-     • LMARENA_SCORE: 0.297600
-     • MMLU_5: 0.445482
-     • MMLU_PRO_5: 0.263302
+     • OPEN_LLM_AVERAGE: 0.486622
+     • LMARENA_SCORE: 0.295976
+     • MMLU_5: 0.417342
+     • MMLU_PRO_5: 0.222707
 
 Note: ALL parameters shown above are SHARED - the same values are used across all benchmarks.
 Detailed results for all equations can be found in:

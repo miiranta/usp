@@ -1963,8 +1963,49 @@ if True:
     # Theory: performance_roof = f(count), complexity = how close to roof
     # We'll test various formulations
 
-    import z_eqs_to_test
-    EQUATIONS_TO_TEST = z_eqs_to_test.EQUATIONS_TO_TEST
+    MIN_STOPPING_CORRELATION = 0.6
+    VARIABLES_TO_USE = ["complexity", "count"]
+    VARIABLES_MANDATORY_TO_USE = ["complexity"]
+
+    # Use evolutionary equation discovery instead of static equations
+    USE_EVOLUTIONARY_MODE = True
+    
+    if USE_EVOLUTIONARY_MODE:
+        print("\n" + "="*80)
+        print("EVOLUTIONARY EQUATION DISCOVERY MODE ENABLED")
+        print("="*80)
+        
+        import ga_evolution
+        
+        # Run the evolutionary algorithm
+        top_equations, evolution_history = ga_evolution.run_evolution(
+            appended_benchmarks_df=appended_benchmarks_df,
+            bench_rows_names=BENCH_ROWS_NAMES,
+            output_folder=OUTPUT_FOLDER,
+            min_stopping_correlation=MIN_STOPPING_CORRELATION,
+            population_size=50,          # Number of equations per generation
+            max_generations=10000,         # Maximum generations
+            top_n_to_keep=20,           # How many top equations to save
+            elite_size=5,               # How many best equations to keep unchanged
+            mandatory_vars=VARIABLES_MANDATORY_TO_USE,  # Variables that MUST be in every equation
+            simplicity_weight=0.1,      # Weight for simplicity (higher = prefer simpler equations)
+            resume_from_checkpoint='auto',  # 'auto' to find latest, or specific file like 'top_equations_gen10.py'
+            max_stagnation=100,          # Stop after N generations without improvement (default: 15)
+            adaptive_mutation=True,     # Increase mutation when stuck (default: True)
+            diversity_injection_rate=0.2  # Add 20% random equations when stagnating (default: 0.2)
+        )
+        
+        # Convert top equations to the format expected by the rest of the code
+        EQUATIONS_TO_TEST = ga_evolution.equations_to_dict(top_equations)
+        
+        print("\n" + "="*80)
+        print(f"Evolution complete! Using top {len(EQUATIONS_TO_TEST)} equations for analysis.")
+        print("="*80)
+        
+    else:
+        # Original static mode
+        import z_eqs_to_test
+        EQUATIONS_TO_TEST = z_eqs_to_test.EQUATIONS_TO_TEST
 
 
     # Store results for all equations and benchmarks
