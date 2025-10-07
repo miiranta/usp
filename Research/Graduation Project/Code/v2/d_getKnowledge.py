@@ -1986,7 +1986,7 @@ if True:
         mandatory_vars=VARIABLES_MANDATORY_TO_USE,  # Variables that MUST be in every equation
         simplicity_weight=0.001,      # Weight for simplicity (higher = prefer simpler equations)
         resume_from_checkpoint='auto',  # 'auto' to find latest, or specific file like 'top_equations_gen10.py'
-        max_stagnation=100000,          # Stop after N generations without improvement (default: 15)
+        max_stagnation=100000000000,          # Stop after N generations without improvement (default: 15)
         adaptive_mutation=True,     # Increase mutation when stuck (default: True)
         diversity_injection_rate=0.4  # Add 20% random equations when stagnating (default: 0.2)
     )

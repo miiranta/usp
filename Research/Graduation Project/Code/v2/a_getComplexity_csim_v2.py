@@ -847,6 +847,6 @@ def main():
         print(f"Total execution time for {model_name}: {total_time:.2f} seconds.")
         print("-" * 50)
         
-if __name__ == "__main__":
-    main()
+print("Starting complexity analysis...")
+main()
 
