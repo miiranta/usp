@@ -689,6 +689,7 @@ TYPES_TO_TEST = ['bias', 'norm', 'embedding', 'other']
 FILTERS_TO_TEST = [0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 10, 20, 0]
 
 def main():
+    print("Starting complexity analysis...")
     global MODEL_DATA_ARRAYS
     
     
