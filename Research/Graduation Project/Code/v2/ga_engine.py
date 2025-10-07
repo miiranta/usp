@@ -74,8 +74,24 @@ class ExprNode:
     
     def get_all_variables(self) -> set:
         """Get all variables used in this subtree"""
-        if self.op in ['complexity', 'count']:
-            return {self.op}
+        # A variable is a node that:
+        # 1. Is not 'param' (parameters are not variables)
+        # 2. Is not in ALL_OPS (not an operation), OR is in NULLARY_OPS (legacy variable definitions)
+        # 3. Has no children (terminal node)
+        
+        if self.op == 'param':
+            # Not a variable
+            return set()
+        
+        # Check if this is a terminal node (no children)
+        if not self.children:
+            # Check if it's an operation or a variable
+            op_obj = gbb.ALL_OPS.get(self.op)
+            if op_obj is None or op_obj.arity == 0:
+                # Either not an operation, or is a NULLARY_OP (variable)
+                return {self.op}
+        
+        # For non-terminal nodes, collect variables from children
         variables = set()
         for child in self.children:
             variables.update(child.get_all_variables())
@@ -204,27 +220,84 @@ class Equation:
         """Convert to human-readable string"""
         return self.tree.to_string(param_values)
     
-    def to_lambda(self) -> Callable:
-        """Convert tree to executable lambda function"""
-        def evaluate(node: ExprNode, complexity, count, params):
-            if node.op == 'complexity':
-                return complexity
-            elif node.op == 'count':
-                return count
-            elif node.op == 'param':
+    def to_lambda(self, allowed_vars: List[str] = None) -> Callable:
+        """Convert tree to executable lambda function
+        
+        Args:
+            allowed_vars: List of variable names that are allowed (default: ['complexity', 'count'])
+        """
+        if allowed_vars is None:
+            allowed_vars = ['complexity', 'count']
+        
+        def evaluate(node: ExprNode, var_values: dict, params):
+            # Check if node is a parameter first
+            if node.op == 'param':
                 # Bounds check to prevent IndexError
                 if node.param_idx >= len(params):
                     return 1.0  # Return default value if param index out of bounds
-                return params[node.param_idx]
-            else:
-                op_obj = gbb.ALL_OPS.get(node.op)
-                if not op_obj:
-                    raise ValueError(f"Unknown operation: {node.op}")
+                # Parameters should be scalars, but ensure they're numpy-compatible
+                return np.asarray(params[node.param_idx], dtype=np.float64)
+            
+            # Check if node is a variable (either in allowed_vars or any variable name)
+            # We need to handle both allowed and potentially legacy variable names
+            if node.op in var_values:
+                value = var_values[node.op]
+                # Ensure it's a numpy array for consistent operations
+                return np.asarray(value, dtype=np.float64)
+            
+            # Check if it's a known operation
+            op_obj = gbb.ALL_OPS.get(node.op)
+            if op_obj:
+                # Skip NULLARY_OPS (variables) as we handle them above
+                if op_obj.arity == 0:
+                    # This shouldn't happen if variable is in var_values
+                    # Return 0.0 as fallback for missing variables
+                    return np.asarray(0.0, dtype=np.float64)
                 
-                child_values = [evaluate(child, complexity, count, params) for child in node.children]
-                return op_obj.func(*child_values)
+                # Evaluate children and ensure they're numpy arrays
+                child_values = []
+                for child in node.children:
+                    child_val = evaluate(child, var_values, params)
+                    child_values.append(np.asarray(child_val, dtype=np.float64))
+                
+                # Call operation and ensure result is numpy array
+                try:
+                    result = op_obj.func(*child_values)
+                    return np.asarray(result, dtype=np.float64)
+                except Exception as e:
+                    # If operation fails, provide more context
+                    raise TypeError(f"Operation '{node.op}' failed: {type(e).__name__}: {str(e)}")
+            
+            # Unknown operation - this shouldn't happen
+            raise ValueError(f"Unknown operation or variable: {node.op}")
         
-        return lambda complexity, count, *params: evaluate(self.tree, complexity, count, params)
+        # Return a lambda that takes variable values as individual arguments
+        # The signature will be: lambda var1, var2, ..., *params
+        def wrapper(*args):
+            # First N arguments are variable values (in order of allowed_vars)
+            # Remaining arguments are parameters
+            num_vars = len(allowed_vars)
+            if len(args) < num_vars:
+                raise ValueError(f"Expected at least {num_vars} arguments for variables {allowed_vars}, got {len(args)}")
+            
+            # Extract variable values and parameters
+            var_values = {}
+            for i, var in enumerate(allowed_vars):
+                # Ensure variable values are numpy arrays with float64 dtype
+                var_values[var] = np.asarray(args[i], dtype=np.float64)
+            
+            # Parameters should be scalars - convert to float
+            params = [float(p) for p in args[num_vars:]] if len(args) > num_vars else []
+            
+            try:
+                result = evaluate(self.tree, var_values, params)
+                # Ensure final result is a numpy array with float64 dtype
+                return np.asarray(result, dtype=np.float64)
+            except Exception as e:
+                # Re-raise with more context for debugging
+                raise type(e)(f"Error evaluating equation: {str(e)}")
+        
+        return wrapper
     
     def get_complexity(self) -> float:
         """Get the complexity score of this equation"""
@@ -291,11 +364,15 @@ class Equation:
 # ============================================================================
 
 def generate_random_tree(max_depth: int, current_depth: int, num_params: int, 
-                        mandatory_vars: List[str] = None, current_vars: set = None) -> ExprNode:
+                        mandatory_vars: List[str] = None, allowed_vars: List[str] = None,
+                        current_vars: set = None) -> ExprNode:
     """Generate a random expression tree, ensuring mandatory variables are included"""
     
     if current_vars is None:
         current_vars = set()
+    
+    if allowed_vars is None:
+        allowed_vars = ['complexity', 'count']
     
     # Terminal probability increases with depth
     terminal_prob = current_depth / max_depth
@@ -309,16 +386,21 @@ def generate_random_tree(max_depth: int, current_depth: int, num_params: int,
             return ExprNode(op=var)
     
     if current_depth >= max_depth or (current_depth > 1 and random.random() < terminal_prob):
-        # Generate terminal
+        # Generate terminal - select from allowed variables or parameters
         choice = random.random()
-        if choice < 0.4:
-            current_vars.add('complexity')
-            return ExprNode(op='complexity')
-        elif choice < 0.8:
-            current_vars.add('count')
-            return ExprNode(op='count')
-        else:
-            return ExprNode(op='param', param_idx=random.randint(0, num_params - 1))
+        
+        # Distribute probability evenly among allowed variables
+        var_prob_each = 0.8 / len(allowed_vars)  # 80% total for variables, 20% for params
+        cumulative_prob = 0
+        
+        for var in allowed_vars:
+            cumulative_prob += var_prob_each
+            if choice < cumulative_prob:
+                current_vars.add(var)
+                return ExprNode(op=var)
+        
+        # Otherwise, return a parameter
+        return ExprNode(op='param', param_idx=random.randint(0, num_params - 1))
     
     # Generate non-terminal
     # Favor binary operations for more interesting equations
@@ -332,36 +414,46 @@ def generate_random_tree(max_depth: int, current_depth: int, num_params: int,
     
     ops = gbb.get_operations_by_arity(arity)
     if not ops:
-        # Fallback to terminal
-        current_vars.add('complexity')
-        return ExprNode(op='complexity')
+        # Fallback to terminal - use first allowed variable
+        var = allowed_vars[0] if allowed_vars else 'complexity'
+        current_vars.add(var)
+        return ExprNode(op=var)
     
     op_name = random.choice(list(ops.keys()))
-    children = [generate_random_tree(max_depth, current_depth + 1, num_params, mandatory_vars, current_vars) 
+    children = [generate_random_tree(max_depth, current_depth + 1, num_params, 
+                                     mandatory_vars, allowed_vars, current_vars) 
                 for _ in range(arity)]
     
     return ExprNode(op=op_name, children=children)
 
-def generate_simple_equation(num_params: int = 3) -> Equation:
-    """Generate a simple starting equation"""
+def generate_simple_equation(num_params: int = 3, allowed_vars: List[str] = None) -> Equation:
+    """Generate a simple starting equation using allowed variables"""
+    
+    if allowed_vars is None:
+        allowed_vars = ['complexity', 'count']
+    
+    # Get first two variables (or fewer if less available)
+    var1 = allowed_vars[0] if len(allowed_vars) > 0 else 'complexity'
+    var2 = allowed_vars[1] if len(allowed_vars) > 1 else var1
+    
     # Common patterns:
-    # a * complexity^b * count^c
-    # a * complexity + b * count + c
-    # a * sqrt(complexity) * count^b + c
+    # a * var1^b * var2^c
+    # a * var1 + b * var2 + c
+    # a * sqrt(var1) * var2^b + c
     
     pattern = random.choice(['power', 'linear', 'mixed'])
     
     if pattern == 'power':
-        # a * complexity^b * count^c
+        # a * var1^b * var2^c
         tree = ExprNode(op='mul', children=[
             ExprNode(op='param', param_idx=0),
             ExprNode(op='mul', children=[
                 ExprNode(op='pow', children=[
-                    ExprNode(op='complexity'),
+                    ExprNode(op=var1),
                     ExprNode(op='param', param_idx=1)
                 ]),
                 ExprNode(op='pow', children=[
-                    ExprNode(op='count'),
+                    ExprNode(op=var2),
                     ExprNode(op='param', param_idx=2)
                 ])
             ])
@@ -369,16 +461,16 @@ def generate_simple_equation(num_params: int = 3) -> Equation:
         return Equation(tree=tree, num_params=3, param_initial_guess=[1.0, 0.3, 1.4])
     
     elif pattern == 'linear':
-        # a * complexity + b * count + c
+        # a * var1 + b * var2 + c
         tree = ExprNode(op='add', children=[
             ExprNode(op='add', children=[
                 ExprNode(op='mul', children=[
                     ExprNode(op='param', param_idx=0),
-                    ExprNode(op='complexity')
+                    ExprNode(op=var1)
                 ]),
                 ExprNode(op='mul', children=[
                     ExprNode(op='param', param_idx=1),
-                    ExprNode(op='count')
+                    ExprNode(op=var2)
                 ])
             ]),
             ExprNode(op='param', param_idx=2)
@@ -386,14 +478,14 @@ def generate_simple_equation(num_params: int = 3) -> Equation:
         return Equation(tree=tree, num_params=3, param_initial_guess=[1.0, 1.0, 0.0])
     
     else:  # mixed
-        # a * sqrt(complexity) * count^b + c
+        # a * sqrt(var1) * var2^b + c
         tree = ExprNode(op='add', children=[
             ExprNode(op='mul', children=[
                 ExprNode(op='param', param_idx=0),
                 ExprNode(op='mul', children=[
-                    ExprNode(op='sqrt', children=[ExprNode(op='complexity')]),
+                    ExprNode(op='sqrt', children=[ExprNode(op=var1)]),
                     ExprNode(op='pow', children=[
-                        ExprNode(op='count'),
+                        ExprNode(op=var2),
                         ExprNode(op='param', param_idx=1)
                     ])
                 ])
@@ -403,12 +495,13 @@ def generate_simple_equation(num_params: int = 3) -> Equation:
         return Equation(tree=tree, num_params=3, param_initial_guess=[1.0, 1.4, 0.0])
 
 def generate_random_equation(max_depth: int = 4, num_params: int = 4, 
-                           mandatory_vars: List[str] = None) -> Equation:
+                           mandatory_vars: List[str] = None,
+                           allowed_vars: List[str] = None) -> Equation:
     """Generate a completely random equation, ensuring mandatory variables are included"""
     
     # Generate tree with mandatory variables
     current_vars = set()
-    tree = generate_random_tree(max_depth, 0, num_params, mandatory_vars, current_vars)
+    tree = generate_random_tree(max_depth, 0, num_params, mandatory_vars, allowed_vars, current_vars)
     
     # Verify mandatory variables are present
     if mandatory_vars:
@@ -560,11 +653,13 @@ class Population:
     """Manages a population of equations"""
     
     def __init__(self, size: int, max_depth: int = 4, num_params: int = 4, 
-                 mandatory_vars: List[str] = None, simplicity_weight: float = 0.1):
+                 mandatory_vars: List[str] = None, allowed_vars: List[str] = None,
+                 simplicity_weight: float = 0.1):
         self.size = size
         self.max_depth = max_depth
         self.num_params = num_params
         self.mandatory_vars = mandatory_vars or []
+        self.allowed_vars = allowed_vars or ['complexity', 'count']
         self.simplicity_weight = simplicity_weight  # Weight for multi-objective optimization
         self.equations: List[Equation] = []
         self.generation = 0
@@ -590,7 +685,7 @@ class Population:
             
             # Start with some simple equations
             for _ in range(min(remaining // 3, remaining)):
-                eq = generate_simple_equation(self.num_params)
+                eq = generate_simple_equation(self.num_params, self.allowed_vars)
                 # Verify mandatory variables
                 if self.mandatory_vars:
                     for var in self.mandatory_vars:
@@ -603,7 +698,8 @@ class Population:
             
             # Add random equations for the rest
             for _ in range(self.size - len(self.equations)):
-                eq = generate_random_equation(self.max_depth, self.num_params, self.mandatory_vars)
+                eq = generate_random_equation(self.max_depth, self.num_params, 
+                                             self.mandatory_vars, self.allowed_vars)
                 eq.generation = self.generation
                 self.equations.append(eq)
     

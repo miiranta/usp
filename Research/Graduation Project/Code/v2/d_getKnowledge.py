@@ -17,6 +17,8 @@ if not os.path.exists(INPUT_FOLDER):
 if not os.path.exists(OUTPUT_FOLDER):
     os.makedirs(OUTPUT_FOLDER)
 
+FILTER_DEFAULT_REPLACE = 0  # Replace filter "0 sigma" with this value
+
 # Load appended_benchmarks.csv
 appended_benchmarks_path = os.path.join(INPUT_FOLDER, 'appended_benchmarks.csv')
 appended_benchmarks_df = pd.read_csv(appended_benchmarks_path)
@@ -35,7 +37,7 @@ def parse_filter(value):
 appended_benchmarks_df['filter'] = appended_benchmarks_df['filter'].apply(parse_filter)
 
 # Change filter 0
-appended_benchmarks_df['filter'] = appended_benchmarks_df['filter'].replace(0, 0)
+appended_benchmarks_df['filter'] = appended_benchmarks_df['filter'].replace(0, FILTER_DEFAULT_REPLACE)
 
 # Get rows in header that start with "BENCH"
 BENCH_ROWS_NAMES = appended_benchmarks_df.columns[appended_benchmarks_df.columns.str.startswith('BENCH')].tolist()
@@ -49,7 +51,7 @@ BENCH_ROWS_NAMES = appended_benchmarks_df.columns[appended_benchmarks_df.columns
 # Plot graphs: COMPLEXITY vs FILTER
 
 # Remove NaN values and filter = 0 for regression
-mask = ~(appended_benchmarks_df['filter'].isna() | appended_benchmarks_df['complexity'].isna()) & (appended_benchmarks_df['filter'] != 0)
+mask = ~(appended_benchmarks_df['filter'].isna() | appended_benchmarks_df['complexity'].isna()) & (appended_benchmarks_df['filter'] != FILTER_DEFAULT_REPLACE)
 x_data = appended_benchmarks_df.loc[mask, 'filter'].values
 y_data = appended_benchmarks_df.loc[mask, 'complexity'].values
 
@@ -116,7 +118,7 @@ x_line = np.linspace(x_data.min(), x_data.max(), 100)
 y_line = best_func(x_line, *best_params)
 
 # Get maximum complexity for each filter (excluding filter = 0)
-max_complexity_by_filter = appended_benchmarks_df[appended_benchmarks_df['filter'] != 0].groupby('filter')['complexity'].max().reset_index()
+max_complexity_by_filter = appended_benchmarks_df[appended_benchmarks_df['filter'] != FILTER_DEFAULT_REPLACE].groupby('filter')['complexity'].max().reset_index()
 x_max = max_complexity_by_filter['filter'].values
 y_max = max_complexity_by_filter['complexity'].values
 
@@ -189,7 +191,7 @@ if not os.path.exists(filter_complexity_folder):
 # Plot scatter with regression lines
 fig = plt.figure(figsize=(12, 9))
 # Filter out filter = 0 from the scatter plot
-filtered_df = appended_benchmarks_df[appended_benchmarks_df['filter'] != 0]
+filtered_df = appended_benchmarks_df[appended_benchmarks_df['filter'] != FILTER_DEFAULT_REPLACE]
 plt.scatter(filtered_df['filter'], filtered_df['complexity'], alpha=0.6, label='Data')
 plt.plot(x_line, y_line, 'r-', linewidth=2, label=f'Best fit all data ({best_name})')
 plt.scatter(x_max, y_max, color='green', s=100, alpha=0.8, marker='D', label='Maximum values', zorder=5)
@@ -207,7 +209,7 @@ plt.savefig(os.path.join(filter_complexity_folder, 'regression.png'))
 plt.close()
 
 # Get average complexity for each filter (excluding filter = 0)
-avg_complexity_by_filter = appended_benchmarks_df[appended_benchmarks_df['filter'] != 0].groupby('filter')['complexity'].mean().reset_index()
+avg_complexity_by_filter = appended_benchmarks_df[appended_benchmarks_df['filter'] != FILTER_DEFAULT_REPLACE].groupby('filter')['complexity'].mean().reset_index()
 x_avg = avg_complexity_by_filter['filter'].values
 y_avg = avg_complexity_by_filter['complexity'].values
 
@@ -1964,7 +1966,7 @@ if True:
     # We'll test various formulations
 
     MIN_STOPPING_CORRELATION = 0.6
-    VARIABLES_TO_USE = ["complexity", "count"]
+    VARIABLES_TO_USE = ["complexity", "count"] # ["complexity", "count"]
     VARIABLES_MANDATORY_TO_USE = []
 
     print("\n" + "="*80)
@@ -1973,6 +1975,9 @@ if True:
     
     import ga_evolution
     
+    # Filter to only default filter for equation discovery
+    appended_benchmarks_df = appended_benchmarks_df[appended_benchmarks_df['filter'] == FILTER_DEFAULT_REPLACE]
+    
     # Run the evolutionary algorithm
     top_equations, evolution_history = ga_evolution.run_evolution(
         appended_benchmarks_df=appended_benchmarks_df,
@@ -1980,11 +1985,12 @@ if True:
         output_folder=OUTPUT_FOLDER,
         min_stopping_correlation=MIN_STOPPING_CORRELATION,
         population_size=500,          # Number of equations per generation
-        max_generations=100000000000,         # Maximum generations
+        max_generations=10000,         # Maximum generations
         top_n_to_keep=4,           # How many top equations to save
         elite_size=10,               # How many best equations to keep unchanged
         mandatory_vars=VARIABLES_MANDATORY_TO_USE,  # Variables that MUST be in every equation
-        simplicity_weight=0.0001,      # Weight for simplicity (higher = prefer simpler equations)
+        allowed_vars=VARIABLES_TO_USE,  # Variables that CAN be used (restricted set)
+        simplicity_weight=0.01,      # Weight for simplicity (higher = prefer simpler equations)
         resume_from_checkpoint='auto',  # 'auto' to find latest, or specific file like 'top_equations_gen10.py'
         max_stagnation=100000000000,          # Stop after N generations without improvement (default: 15)
         adaptive_mutation=True,     # Increase mutation when stuck (default: True)

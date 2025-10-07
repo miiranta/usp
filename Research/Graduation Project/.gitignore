@@ -12,6 +12,7 @@ examples
 
 model_weights
 equation_evolution
+equation_exploration
 detailed_benchmarks_analysis
 detailed_param_count_analysis
 detailed_magical_var_analysis

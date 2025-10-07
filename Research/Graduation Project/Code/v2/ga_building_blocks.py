@@ -236,18 +236,29 @@ def safe_avg(x, y):
 
 def safe_weighted_avg(x, y):
     """Weighted average (0.7*x + 0.3*y)"""
+    # Ensure inputs are numpy arrays
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
     return 0.7 * x + 0.3 * y
 
 def safe_geometric_mean(x, y):
     """Geometric mean with overflow protection"""
+    # Ensure inputs are numpy arrays
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    
     x_clip = np.clip(x, -1e50, 1e50)
     y_clip = np.clip(y, -1e50, 1e50)
-    with np.errstate(over='ignore', invalid='ignore'):
+    with np.errstate(over='ignore', invalid='ignore', divide='ignore'):
         product = x_clip * y_clip
     return np.sqrt(np.abs(np.clip(product, -1e100, 1e100)))
 
 def safe_harmonic_mean(x, y):
     """Harmonic mean"""
+    # Ensure inputs are numpy arrays
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    
     return 2.0 / (1.0/(np.abs(x) + 1e-6) + 1.0/(np.abs(y) + 1e-6))
 
 def safe_hypot(x, y):
@@ -264,12 +275,20 @@ def safe_atan2(y, x):
 
 def safe_gcd_like(x, y):
     """GCD-like operation for floats (using remainder)"""
+    # Ensure inputs are numpy arrays
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    
     x_abs = np.abs(x) + 0.1
     y_abs = np.abs(y) + 0.1
     return np.minimum(x_abs, y_abs)
 
 def safe_lcm_like(x, y):
     """LCM-like operation for floats"""
+    # Ensure inputs are numpy arrays
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    
     x_abs = np.abs(x) + 0.1
     y_abs = np.abs(y) + 0.1
     return np.maximum(x_abs, y_abs)

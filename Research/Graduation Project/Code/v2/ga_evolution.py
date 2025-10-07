@@ -23,14 +23,23 @@ import ga_engine as gae
 # EQUATION FILE I/O
 # ============================================================================
 
-def equations_to_dict(equations: List[gae.Equation], debug: bool = False) -> Tuple[Dict[str, Dict], Dict[str, int]]:
+def equations_to_dict(equations: List[gae.Equation], allowed_vars: List[str] = None, 
+                     debug: bool = False) -> Tuple[Dict[str, Dict], Dict[str, int]]:
     """
     Convert list of Equation objects to dictionary format for z_eqs_to_test.py
+    
+    Args:
+        equations: List of Equation objects to convert
+        allowed_vars: List of allowed variable names (default: ['complexity', 'count'])
+        debug: Whether to print debug information
     
     Returns:
         - Dictionary of equation_id -> equation_info
         - Dictionary of conversion failure reasons and counts
     """
+    
+    if allowed_vars is None:
+        allowed_vars = ['complexity', 'count']
     
     result = {}
     conversion_failures = {
@@ -93,7 +102,7 @@ def equations_to_dict(equations: List[gae.Equation], debug: bool = False) -> Tup
             
             # Create the lambda function - this can fail if tree has unknown operations
             try:
-                func = eq.to_lambda()
+                func = eq.to_lambda(allowed_vars=allowed_vars)
                 if func is None:
                     conversion_failures['lambda_creation_error'] += 1
                     if debug and len(failure_samples) < max_samples:
@@ -401,14 +410,24 @@ def load_equations_from_file(filepath: str) -> List[gae.Equation]:
 
 def evaluate_equations(equations_dict: Dict[str, Dict], 
                       all_benchmarks_data: Dict[str, Dict],
+                      allowed_vars: List[str] = None,
                       verbose: bool = True) -> Tuple[List[Tuple[str, Dict]], Dict[str, int]]:
     """
     Evaluate all equations and return results sorted by performance.
+    
+    Args:
+        equations_dict: Dictionary of equation_id -> equation_info
+        all_benchmarks_data: Dictionary of benchmark_name -> data_dict
+        allowed_vars: List of allowed variable names (default: ['complexity', 'count'])
+        verbose: Whether to print progress messages
     
     Returns: 
         - List of (equation_id, results_dict) tuples sorted by avg correlation
         - Dictionary with failure reasons and counts
     """
+    
+    if allowed_vars is None:
+        allowed_vars = ['complexity', 'count']
     
     results = []
     
@@ -426,10 +445,20 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
         'other_exception': 0
     }
     
-    # Get all benchmark data
+    # Get all benchmark data for all allowed variables
     all_benchmark_values = np.concatenate([data['benchmark_values'] for data in all_benchmarks_data.values()])
-    all_complexity_values = np.concatenate([data['complexity_values'] for data in all_benchmarks_data.values()])
-    all_count_values = np.concatenate([data['count_values'] for data in all_benchmarks_data.values()])
+    
+    # Dynamically extract variable data
+    all_var_values = {}
+    for var in allowed_vars:
+        var_data = []
+        for data in all_benchmarks_data.values():
+            if var in data:
+                var_data.append(data[var])
+            else:
+                # If variable not in data, use zeros as placeholder
+                var_data.append(np.zeros_like(data['benchmark_values']))
+        all_var_values[var] = np.concatenate(var_data)
     
     total_eqs = len(equations_dict)
     
@@ -440,14 +469,27 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
         try:
             # Fit equation parameters once across ALL benchmarks (shared parameters)
             def fit_func(x, *params):
-                complexity = x[0]
-                count = x[1]
-                result = eq_info['func'](complexity, count, *params)
+                # x is a matrix where each row is a variable's values
+                # Convert to individual variable arguments
+                if len(allowed_vars) == 1:
+                    # Single variable case - x is 1D
+                    var_args = [x]
+                else:
+                    # Multiple variables - x is 2D, extract each row
+                    var_args = [x[i] for i in range(len(allowed_vars))]
+                
+                result = eq_info['func'](*var_args, *params)
                 # Clip extreme values to prevent overflow in curve_fit
                 return np.clip(result, -1e100, 1e100)
             
             # Prepare combined data from all benchmarks
-            x_data = np.vstack([all_complexity_values, all_count_values])
+            # Stack variable data as rows
+            if len(allowed_vars) == 1:
+                # For single variable, pass as 1D array
+                x_data = all_var_values[allowed_vars[0]]
+            else:
+                # For multiple variables, stack as 2D array
+                x_data = np.vstack([all_var_values[var] for var in allowed_vars])
             
             # Fit the equation parameters to all benchmark data
             with warnings.catch_warnings():
@@ -474,8 +516,11 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
             all_valid = True
             
             for bench_name, data in all_benchmarks_data.items():
+                # Extract variable values for this benchmark
+                var_args = [data[var] for var in allowed_vars if var in data]
+                
                 # Use shared parameters for this benchmark
-                predictions = eq_info['func'](data['complexity_values'], data['count_values'], *shared_params)
+                predictions = eq_info['func'](*var_args, *shared_params)
                 
                 # Validate predictions - check for extreme values first
                 if np.any(np.isnan(predictions)) or np.any(np.isinf(predictions)):
@@ -541,12 +586,20 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
             exception_type = type(e).__name__
             if 'RuntimeError' in exception_type or 'OptimizeWarning' in exception_type:
                 failure_stats['curve_fit_exception'] += 1
+            elif 'UFuncTypeError' in exception_type or 'TypeError' in exception_type:
+                failure_stats['other_exception'] += 1
             else:
                 failure_stats['other_exception'] += 1
             
-            # Skip failed equations
-            if verbose:
+            # Only print first few errors with details for debugging
+            total_errors = sum(failure_stats.values())
+            if verbose and total_errors <= 3:
                 print(f"    Skipped {eq_id}: {exception_type}")
+                print(f"      Equation: {eq_info.get('name', 'unknown')[:100]}")
+                print(f"      Error: {str(e)[:150]}")
+            elif verbose and total_errors % 50 == 0:
+                # Print summary every 50 errors
+                print(f"    ... {total_errors} equations skipped so far ...")
             continue
     
     # Sort by average correlation (descending)
@@ -570,6 +623,7 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
                  top_n_to_keep: int = 10,
                  elite_size: int = 5,
                  mandatory_vars: List[str] = None,
+                 allowed_vars: List[str] = None,
                  simplicity_weight: float = 0.1,
                  resume_from_checkpoint: str = None,
                  max_stagnation: int = 15,
@@ -585,6 +639,7 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
     
     Args:
         mandatory_vars: List of variable names that MUST appear in every equation (e.g., ['complexity'])
+        allowed_vars: List of variable names that CAN be used in equations (restricts available variables)
         simplicity_weight: Weight for simplicity in multi-objective optimization (higher = prefer simpler)
         resume_from_checkpoint: Path to checkpoint file to resume from (e.g., 'top_equations_gen10.py')
         max_stagnation: Maximum generations without improvement before stopping (default: 15)
@@ -601,6 +656,7 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
     print(f"Elite size: {elite_size}")
     print(f"Top equations to keep: {top_n_to_keep}")
     print(f"Mandatory variables: {mandatory_vars or 'None'}")
+    print(f"Allowed variables: {allowed_vars or 'All'}")
     print(f"Simplicity weight: {simplicity_weight}")
     print(f"Resume from checkpoint: {resume_from_checkpoint or 'No (fresh start)'}")
     print(f"Max stagnation: {max_stagnation} generations")
@@ -611,25 +667,33 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
     evolution_folder = os.path.join(output_folder, 'equation_evolution')
     os.makedirs(evolution_folder, exist_ok=True)
     
+    # Determine which variables to use (default to complexity and count if not specified)
+    if allowed_vars is None:
+        allowed_vars = ['complexity', 'count']
+    
     # Prepare benchmark data
     print("\nPreparing benchmark data...")
     all_benchmarks_data = {}
     for bench_name in bench_rows_names:
-        mask_bench = ~(
-            appended_benchmarks_df[bench_name].isna() |
-            appended_benchmarks_df['complexity'].isna() |
-            appended_benchmarks_df['count'].isna()
-        )
+        # Build mask for all required variables
+        mask_conditions = [appended_benchmarks_df[bench_name].isna()]
+        for var in allowed_vars:
+            if var in appended_benchmarks_df.columns:
+                mask_conditions.append(appended_benchmarks_df[var].isna())
         
+        mask_bench = ~np.logical_or.reduce(mask_conditions)
+        
+        # Extract data for all allowed variables
         benchmark_values = appended_benchmarks_df.loc[mask_bench, bench_name].values
-        complexity_values = appended_benchmarks_df.loc[mask_bench, 'complexity'].values
-        count_values = appended_benchmarks_df.loc[mask_bench, 'count'].values
+        var_data = {}
+        for var in allowed_vars:
+            if var in appended_benchmarks_df.columns:
+                var_data[var] = appended_benchmarks_df.loc[mask_bench, var].values
         
         if len(benchmark_values) >= 10:
             all_benchmarks_data[bench_name] = {
                 'benchmark_values': benchmark_values,
-                'complexity_values': complexity_values,
-                'count_values': count_values
+                **var_data  # Unpack all variable data
             }
             print(f"  {bench_name}: {len(benchmark_values)} data points")
     
@@ -731,7 +795,8 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
     # Initialize population
     print("\nInitializing population...")
     population = gae.Population(size=population_size, max_depth=4, num_params=5, 
-                               mandatory_vars=mandatory_vars, simplicity_weight=simplicity_weight)
+                               mandatory_vars=mandatory_vars, allowed_vars=allowed_vars, 
+                               simplicity_weight=simplicity_weight)
     
     # If we have checkpoint equations, use them to seed the population
     if checkpoint_equations:
@@ -742,7 +807,9 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         
         # Fill remaining slots if needed
         while len(population.equations) < population_size:
-            eq = gae.generate_random_equation(max_depth=4, num_params=5, mandatory_vars=mandatory_vars)
+            eq = gae.generate_random_equation(max_depth=4, num_params=5, 
+                                             mandatory_vars=mandatory_vars, 
+                                             allowed_vars=allowed_vars)
             population.equations.append(eq)
         
         print(f"  Population seeded: {len(checkpoint_equations)} from checkpoint + {population_size - len(checkpoint_equations)} new random")
@@ -780,7 +847,9 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         print(f"{'='*80}")
 
         # Convert equations to dict format
-        equations_dict, conversion_failures = equations_to_dict(population.equations, debug=False)
+        equations_dict, conversion_failures = equations_to_dict(population.equations, 
+                                                                 allowed_vars=allowed_vars, 
+                                                                 debug=False)
         
         # Total failures = equations that didn't make it to dict
         total_conversion_failures = len(population.equations) - len(equations_dict)
@@ -830,7 +899,8 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
         
         # Evaluate all valid equations
         print("Evaluating equations...")
-        eval_results, failure_stats = evaluate_equations(valid_equations_dict, all_benchmarks_data, verbose=True)
+        eval_results, failure_stats = evaluate_equations(valid_equations_dict, all_benchmarks_data, 
+                                                          allowed_vars=allowed_vars, verbose=True)
         
         if not eval_results:
             print("⚠️  No valid equations in this generation! Reinitializing...")
@@ -864,7 +934,7 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
                     eq_obj.avg_correlation = res['avg_correlation']
                     # Calculate fitness as: correlation - simplicity_weight * simplicity
                     # This balances accuracy with simplicity
-                    eq_obj.fitness = res['avg_correlation'] - simplicity_weight * eq_obj.simplicity_score
+                    eq_obj.fitness = (res['avg_correlation'] ** 2) - ((simplicity_weight * (1 + eq_obj.simplicity_score)) ** 2)
                     valid_eqs_updated += 1
         
         # Track equations that made it to evaluation but didn't return results
@@ -1007,7 +1077,7 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
             population.equations.sort(key=lambda eq: eq.fitness if eq.fitness > -np.inf else -1.0, reverse=True)
             for i in range(n_inject):
                 idx = -(i+1)  # Replace from worst
-                new_eq = gae.generate_random_equation(4, 5, mandatory_vars)
+                new_eq = gae.generate_random_equation(4, 5, mandatory_vars, allowed_vars)
                 new_eq.generation = generation
                 population.equations[idx] = new_eq
         
