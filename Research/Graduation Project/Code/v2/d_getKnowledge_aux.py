@@ -2979,7 +2979,7 @@ def analyze_equation_exploration_results(OUTPUT_FOLDER, appended_benchmarks_df):
                     # Fit parameters on ALL data
                     def fit_func_all(x_data, *params):
                         result = eq_func(all_complexity_values, all_count_values, *params)
-                        return np.clip(result, -1e100, 1e100)
+                        return np.clip(result, -1e300, 1e300)
                     
                     x_dummy_all = np.arange(len(all_bench_values))
                     

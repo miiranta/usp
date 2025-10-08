@@ -276,13 +276,13 @@ def tree_to_lambda_string(node: gae.ExprNode) -> str:
             elif node.op == 'log10':
                 return f'np.log10(np.abs({child_str}) + 1)'
             elif node.op == 'exp':
-                return f'np.exp(np.clip({child_str}, -100, 100))'
+                return f'np.exp(np.clip({child_str}, -500, 500))'
             elif node.op == 'sin':
                 return f'np.sin({child_str})'
             elif node.op == 'cos':
                 return f'np.cos({child_str})'
             elif node.op == 'tan':
-                return f'np.tan(np.clip({child_str}, -np.pi/2 + 0.1, np.pi/2 - 0.1))'
+                return f'np.tan(np.clip({child_str}, -np.pi/2 + 0.01, np.pi/2 - 0.01))'
             elif node.op == 'abs':
                 return f'np.abs({child_str})'
             elif node.op == 'square':
@@ -294,7 +294,7 @@ def tree_to_lambda_string(node: gae.ExprNode) -> str:
             elif node.op == 'reciprocal':
                 return f'(1.0 / (np.abs({child_str}) + 1e-6))'
             elif node.op == 'sigmoid':
-                return f'(1.0 / (1.0 + np.exp(-np.clip({child_str}, -100, 100))))'
+                return f'(1.0 / (1.0 + np.exp(-np.clip({child_str}, -500, 500))))'
             elif node.op == 'tanh':
                 return f'np.tanh({child_str})'
             elif node.op == 'cbrt':
@@ -314,9 +314,9 @@ def tree_to_lambda_string(node: gae.ExprNode) -> str:
             elif node.op == 'arctan':
                 return f'np.arctan({child_str})'
             elif node.op == 'sinh':
-                return f'np.sinh(np.clip({child_str}, -100, 100))'
+                return f'np.sinh(np.clip({child_str}, -500, 500))'
             elif node.op == 'cosh':
-                return f'np.cosh(np.clip({child_str}, -100, 100))'
+                return f'np.cosh(np.clip({child_str}, -500, 500))'
             elif node.op == 'fifth_root':
                 return f'(np.sign({child_str}) * np.abs({child_str})**0.2)'
             elif node.op == 'sixth_root':
@@ -337,7 +337,7 @@ def tree_to_lambda_string(node: gae.ExprNode) -> str:
             elif node.op == 'div':
                 return f'({left} / (np.abs({right}) + 1e-6))'
             elif node.op == 'pow':
-                return f'(np.abs({left})**np.clip({right}, -10, 10))'
+                return f'(np.abs({left})**np.clip({right}, -50, 50))'
             elif node.op == 'mod':
                 return f'np.mod({left}, np.abs({right}) + 1e-6)'
             elif node.op == 'min':
@@ -480,7 +480,7 @@ def evaluate_equations(equations_dict: Dict[str, Dict],
                 
                 result = eq_info['func'](*var_args, *params)
                 # Clip extreme values to prevent overflow in curve_fit
-                return np.clip(result, -1e100, 1e100)
+                return np.clip(result, -1e300, 1e300)
             
             # Prepare combined data from all benchmarks
             # Stack variable data as rows

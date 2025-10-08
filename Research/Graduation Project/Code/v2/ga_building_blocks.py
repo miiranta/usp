@@ -77,17 +77,17 @@ def safe_reciprocal(x):
 
 def safe_square(x):
     """Square function with overflow protection"""
-    x_clip = np.clip(x, -1e100, 1e100)
+    x_clip = np.clip(x, -1e150, 1e150)
     with np.errstate(over='ignore', invalid='ignore'):
         result = x_clip ** 2
-    return np.clip(result, -1e200, 1e200)
+    return np.clip(result, -1e300, 1e300)
 
 def safe_cube(x):
     """Cube function with overflow protection"""
-    x_clip = np.clip(x, -1e66, 1e66)
+    x_clip = np.clip(x, -1e100, 1e100)
     with np.errstate(over='ignore', invalid='ignore'):
         result = x_clip ** 3
-    return np.clip(result, -1e200, 1e200)
+    return np.clip(result, -1e300, 1e300)
 
 def safe_abs(x):
     """Absolute value"""
@@ -198,11 +198,11 @@ def safe_sub(x, y):
 def safe_mul(x, y):
     """Multiplication with overflow protection"""
     # Clip inputs to prevent overflow
-    x_clip = np.clip(x, -1e100, 1e100)
-    y_clip = np.clip(y, -1e100, 1e100)
+    x_clip = np.clip(x, -1e150, 1e150)
+    y_clip = np.clip(y, -1e150, 1e150)
     with np.errstate(over='ignore', invalid='ignore'):
         result = x_clip * y_clip
-    return np.clip(result, -1e200, 1e200)
+    return np.clip(result, -1e300, 1e300)
 
 def safe_div(x, y):
     """Safe division"""
@@ -210,13 +210,13 @@ def safe_div(x, y):
 
 def safe_pow(x, y):
     """Safe power function"""
-    x_clipped = np.clip(np.abs(x), 1e-100, 1e100)
+    x_clipped = np.clip(np.abs(x), 1e-100, 1e150)
     y_clipped = np.clip(y, -100, 100)
     
     with np.errstate(over='ignore', invalid='ignore'):
         result = x_clipped ** y_clipped
     
-    return np.nan_to_num(result, nan=1.0, posinf=1e200, neginf=-1e200)
+    return np.nan_to_num(result, nan=1.0, posinf=1e300, neginf=-1e300)
 
 def safe_mod(x, y):
     """Safe modulo"""
@@ -247,11 +247,11 @@ def safe_geometric_mean(x, y):
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
     
-    x_clip = np.clip(x, -1e100, 1e100)
-    y_clip = np.clip(y, -1e100, 1e100)
+    x_clip = np.clip(x, -1e150, 1e150)
+    y_clip = np.clip(y, -1e150, 1e150)
     with np.errstate(over='ignore', invalid='ignore', divide='ignore'):
         product = x_clip * y_clip
-    return np.sqrt(np.abs(np.clip(product, -1e200, 1e200)))
+    return np.sqrt(np.abs(np.clip(product, -1e300, 1e300)))
 
 def safe_harmonic_mean(x, y):
     """Harmonic mean"""
@@ -263,11 +263,11 @@ def safe_harmonic_mean(x, y):
 
 def safe_hypot(x, y):
     """Euclidean distance: sqrt(x^2 + y^2) with overflow protection"""
-    x_clipped = np.clip(x, -1e100, 1e100)
-    y_clipped = np.clip(y, -1e100, 1e100)
+    x_clipped = np.clip(x, -1e150, 1e150)
+    y_clipped = np.clip(y, -1e150, 1e150)
     with np.errstate(over='ignore', invalid='ignore'):
         result = np.sqrt(x_clipped**2 + y_clipped**2)
-    return np.clip(result, 0, 1e200)
+    return np.clip(result, 0, 1e300)
 
 def safe_atan2(y, x):
     """Two-argument arctangent"""
