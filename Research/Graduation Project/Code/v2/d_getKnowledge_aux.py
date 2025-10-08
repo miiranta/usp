@@ -2536,7 +2536,7 @@ def equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER):
     # Configuration for GA runs
     MIN_STOPPING_CORRELATION = 0.99
     POPULATION_SIZE = 500
-    MAX_GENERATIONS = 10
+    MAX_GENERATIONS = 200
     
     # ==================================================================
     # PART 1: ALL BENCHMARKS COMBINED - BY TYPE × FILTER
