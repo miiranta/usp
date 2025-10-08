@@ -57,6 +57,80 @@ def download_ipca_data():
         print(f"Error downloading IPCA data: {e}")
         return None
 
-# Download IPCA data
-ipca_data = download_ipca_data()
+
+def create_evaluation_csvs():
+    # Load IPCA data
+    print("Loading IPCA data...")
+    ipca_data = download_ipca_data()
+    
+    # Read optimization results to get the best result
+    opt_results_path = os.path.join(INPUT_FOLDER, 'all_optimization_results.csv')
+    print(f"\nReading optimization results from {opt_results_path}...")
+    opt_results = pd.read_csv(opt_results_path, sep='|')
+    
+    # Get the first row (best result)
+    best_result = opt_results.iloc[0]
+    run_title = best_result['Run_Title']
+    print(f"Best optimization result: {run_title}")
+    
+    # Extract model names part (before --eq)
+    model_names = run_title.split('--')[0]
+    
+    # Interpolated file path
+    interpolated_file = f"model_{model_names}_daily_averages_interpolated.csv"
+    interpolated_path = os.path.join(INPUT_FOLDER, 'interpolated', interpolated_file)
+    
+    # Optimized file path
+    optimized_file = f"{run_title}_optimized.csv"
+    optimized_path = os.path.join(INPUT_FOLDER, 'optimized', optimized_file)
+    
+    print(f"\nLoading interpolated data from: {interpolated_file}")
+    interpolated_data = pd.read_csv(interpolated_path, sep='|')
+    
+    print(f"Loading optimized data from: {optimized_file}")
+    optimized_data = pd.read_csv(optimized_path, sep='|')
+    
+    # Rename columns for consistency
+    interpolated_data.columns = ['date', 'sentiment']
+    optimized_data.columns = ['date', 'sentiment']
+    
+    # Convert dates to datetime
+    ipca_data['date'] = pd.to_datetime(ipca_data['date'], format='%d/%m/%Y')
+    interpolated_data['date'] = pd.to_datetime(interpolated_data['date'], format='%d/%m/%Y')
+    optimized_data['date'] = pd.to_datetime(optimized_data['date'], format='%d/%m/%Y')
+    
+    # Rename IPCA column
+    ipca_data = ipca_data.rename(columns={'ipca_monthly': 'inflation'})
+    
+    # 3. Create optimized CSV
+    print("\nCreating optimized CSV...")
+    optimized_merged = pd.merge(ipca_data, optimized_data, on='date', how='inner')
+    optimized_merged = optimized_merged[['date', 'inflation', 'sentiment']].dropna()
+    optimized_output = os.path.join(OUTPUT_FOLDER, 'sentiment_corrected.csv')
+    optimized_merged.to_csv(optimized_output, sep='|', index=False)
+    print(f"Saved optimized CSV with {len(optimized_merged)} rows to: {optimized_output}")
+    
+    # 2. Create interpolated CSV
+    print("\nCreating interpolated CSV...")
+    interpolated_merged = pd.merge(ipca_data, interpolated_data, on='date', how='inner')
+    interpolated_merged = interpolated_merged[['date', 'inflation', 'sentiment']].dropna()
+    interpolated_output = os.path.join(OUTPUT_FOLDER, 'sentiment_not_corrected.csv')
+    interpolated_merged.to_csv(interpolated_output, sep='|', index=False)
+    print(f"Saved interpolated CSV with {len(interpolated_merged)} rows to: {interpolated_output}")
+    
+    # 1. Create baseline CSV (sentiment = 0) - same dates as interpolated
+    print("\nCreating baseline CSV...")
+    baseline_df = interpolated_merged[['date', 'inflation']].copy()
+    baseline_df['sentiment'] = 0.0
+    baseline_output = os.path.join(OUTPUT_FOLDER, 'sentiment_baseline.csv')
+    baseline_df.to_csv(baseline_output, sep='|', index=False)
+    print(f"Saved baseline CSV with {len(baseline_df)} rows to: {baseline_output}")
+    
+    print("\n✓ All 3 evaluation CSVs created successfully!")
+    return baseline_df, interpolated_merged, optimized_merged
+
+
+# Main execution
+if __name__ == "__main__":
+    baseline, interpolated, optimized = create_evaluation_csvs()
 
