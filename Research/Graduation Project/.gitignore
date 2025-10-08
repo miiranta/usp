@@ -16,6 +16,7 @@ equation_exploration
 detailed_benchmarks_analysis
 detailed_param_count_analysis
 detailed_magical_var_analysis
+results_knowledge
 
 venv
 models

@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import warnings
+import ga_evolution
 
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -820,24 +821,40 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         x_line_bench = np.linspace(x_data_bench.min(), x_data_bench.max(), 100)
         y_line_bench = best_func_bench(x_line_bench, *best_params_bench)
         
+        # Calculate linear regression for comparison
+        linear_params, _ = curve_fit(lambda x, a, b: a * x + b, x_data_bench, y_data_bench, 
+                                     p0=[1, 1], maxfev=10000)
+        y_pred_linear = linear_params[0] * x_data_bench + linear_params[1]
+        r2_linear = 1 - (np.sum((y_data_bench - y_pred_linear)**2) / np.sum((y_data_bench - np.mean(y_data_bench))**2))
+        y_line_linear = linear_params[0] * x_line_bench + linear_params[1]
+        linear_equation = f'y = {linear_params[0]:.16f}x + {linear_params[1]:.16f}'
+        
         # Create subfolder for this benchmark
         bench_clean_name = bench_name.replace('BENCH-', '').replace('_', '-').lower()
         bench_folder = os.path.join(benchmarks_complexity_folder, bench_clean_name)
         if not os.path.exists(bench_folder):
             os.makedirs(bench_folder)
         
-        # Plot scatter with regression line
-        fig = plt.figure(figsize=(12, 9))
-        plt.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
-        plt.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Best fit ({best_name_bench})')
-        plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
-        plt.ylabel('Complexity')
-        plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity')
-        plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
-        plt.subplots_adjust(bottom=0.22)
-        plt.figtext(0.5, 0.07, f'{best_equation_bench}     R² = {best_r2_bench:.16f}', 
-                    ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-        plt.savefig(os.path.join(bench_folder, 'regression.png'))
+        # Plot scatter with both regression lines
+        fig, ax = plt.subplots(figsize=(12, 10))
+        ax.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
+        ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Free regression ({best_name_bench})')
+        ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=2, label='Linear regression')
+        ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
+        ax.set_ylabel('Complexity')
+        ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity')
+        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+        ax.grid(True, alpha=0.3)
+        
+        # Add equations and statistics below the plot
+        stats_text = (f'Free: {best_equation_bench}\n'
+                     f'Linear: {linear_equation}\n'
+                     f'Free R² = {best_r2_bench:.6f} | Linear R² = {r2_linear:.6f}')
+        plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8,
+                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
+        
+        plt.tight_layout(rect=[0, 0.08, 1, 1])
+        plt.savefig(os.path.join(bench_folder, 'regression.png'), bbox_inches='tight')
         plt.close()
         
         # Calculate Pearson correlation coefficient
@@ -882,12 +899,188 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         all_benchmark_results[bench_name] = {
             'best_function': best_name_bench,
             'r2_score': best_r2_bench,
+            'r2_linear': r2_linear,
             'correlation': correlation,
             'equation': best_equation_bench,
+            'linear_equation': linear_equation,
             'data_points': len(x_data_bench)
         }
         
         print(f"  Completed {bench_name}: R² = {best_r2_bench:.6f}, Correlation = {correlation:.6f}")
+
+    # ==============================================================================
+    # PROCESS "ALL" - Concatenate all benchmark data
+    # ==============================================================================
+    print("\nProcessing 'all' (concatenated benchmark data)...")
+    
+    # Collect all data points from all benchmarks
+    all_x_data = []
+    all_y_data = []
+    
+    for bench_name in BENCH_ROWS_NAMES:
+        mask_bench = ~(appended_benchmarks_df[bench_name].isna() | appended_benchmarks_df['complexity'].isna())
+        x_data_bench = appended_benchmarks_df.loc[mask_bench, bench_name].values
+        y_data_bench = appended_benchmarks_df.loc[mask_bench, 'complexity'].values
+        
+        if len(x_data_bench) >= 3:
+            all_x_data.extend(x_data_bench)
+            all_y_data.extend(y_data_bench)
+    
+    # Convert to numpy arrays
+    all_x_data = np.array(all_x_data)
+    all_y_data = np.array(all_y_data)
+    
+    if len(all_x_data) >= 3:
+        # Try different functions and find the best fit
+        best_r2_all = -np.inf
+        best_name_all = None
+        best_params_all = None
+        best_func_all = None
+        best_equation_all = None
+        
+        FUNCTIONS_TO_TEST_ALL = {
+            'linear': {
+                'func': lambda x, a, b: a * x + b,
+                'equation': lambda params: f'y = {params[0]:.16f}x + {params[1]:.16f}',
+                'initial_guess': [1, 1]
+            },
+            'quadratic': {
+                'func': lambda x, a, b, c: a * x**2 + b * x + c,
+                'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
+                'initial_guess': [1, 1, 1]
+            },
+            'cubic': {
+                'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
+                'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
+                'initial_guess': [1, 1, 1, 1]
+            },
+            'exponential': {
+                'func': lambda x, a, b, c: a * np.exp(b * x) + c,
+                'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
+                'initial_guess': [1, 0.1, 1]
+            },
+            'logarithmic': {
+                'func': lambda x, a, b, c: a * np.log(x + 1) + b * x + c,
+                'equation': lambda params: f'y = {params[0]:.16f}·ln(x+1) + {params[1]:.16f}x + {params[2]:.16f}',
+                'initial_guess': [1, 1, 1]
+            },
+            'power': {
+                'func': lambda x, a, b, c: a * (x + 1)**b + c,
+                'equation': lambda params: f'y = {params[0]:.16f}·(x+1)^{params[1]:.16f} + {params[2]:.16f}',
+                'initial_guess': [1, 0.5, 1]
+            }
+        }
+        
+        for name, func_info in FUNCTIONS_TO_TEST_ALL.items():
+            try:
+                params, _ = curve_fit(func_info['func'], all_x_data, all_y_data, 
+                                    p0=func_info['initial_guess'], maxfev=10000)
+                y_pred = func_info['func'](all_x_data, *params)
+                r2 = 1 - (np.sum((all_y_data - y_pred)**2) / np.sum((all_y_data - np.mean(all_y_data))**2))
+                
+                if r2 > best_r2_all:
+                    best_r2_all = r2
+                    best_name_all = name
+                    best_params_all = params
+                    best_func_all = func_info['func']
+                    best_equation_all = func_info['equation'](params)
+            except:
+                pass
+        
+        if best_func_all is not None:
+            # Create regression line with best fit
+            x_line_all = np.linspace(all_x_data.min(), all_x_data.max(), 100)
+            y_line_all = best_func_all(x_line_all, *best_params_all)
+            
+            # Calculate linear regression for comparison
+            linear_params, _ = curve_fit(lambda x, a, b: a * x + b, all_x_data, all_y_data, 
+                                        p0=[1, 1], maxfev=10000)
+            y_pred_linear = linear_params[0] * all_x_data + linear_params[1]
+            r2_linear_all = 1 - (np.sum((all_y_data - y_pred_linear)**2) / np.sum((all_y_data - np.mean(all_y_data))**2))
+            y_line_linear = linear_params[0] * x_line_all + linear_params[1]
+            linear_equation_all = f'y = {linear_params[0]:.16f}x + {linear_params[1]:.16f}'
+            
+            # Create subfolder for "all"
+            all_folder = os.path.join(benchmarks_complexity_folder, 'all')
+            if not os.path.exists(all_folder):
+                os.makedirs(all_folder)
+            
+            # Plot scatter with both regression lines
+            fig, ax = plt.subplots(figsize=(12, 10))
+            ax.scatter(all_x_data, all_y_data, alpha=0.6, label='Data')
+            ax.plot(x_line_all, y_line_all, 'r-', linewidth=2, label=f'Free regression ({best_name_all})')
+            ax.plot(x_line_all, y_line_linear, 'b--', linewidth=2, label='Linear regression')
+            ax.set_xlabel('Benchmark Score (All Benchmarks)')
+            ax.set_ylabel('Complexity')
+            ax.set_title('All Benchmarks vs Complexity')
+            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+            ax.grid(True, alpha=0.3)
+            
+            # Add equations and statistics below the plot
+            stats_text = (f'Free: {best_equation_all}\n'
+                         f'Linear: {linear_equation_all}\n'
+                         f'Free R² = {best_r2_all:.6f} | Linear R² = {r2_linear_all:.6f}')
+            plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8,
+                       bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
+            
+            plt.tight_layout(rect=[0, 0.08, 1, 1])
+            plt.savefig(os.path.join(all_folder, 'regression.png'), bbox_inches='tight')
+            plt.close()
+            
+            # Calculate Pearson correlation coefficient
+            correlation_all = np.corrcoef(all_x_data, all_y_data)[0, 1]
+            
+            # Save regression information to text file
+            with open(os.path.join(all_folder, 'regression_info.txt'), 'w', encoding='utf-8') as f:
+                f.write("ALL BENCHMARKS VS COMPLEXITY - REGRESSION ANALYSIS\n")
+                f.write("=" * 70 + "\n\n")
+                
+                f.write("REGRESSION:\n")
+                f.write("-" * 70 + "\n")
+                f.write(f"Best fit function: {best_name_all}\n")
+                f.write(f"Equation: {best_equation_all}\n")
+                f.write(f"R² score: {best_r2_all:.16f}\n")
+                f.write(f"Pearson correlation: {correlation_all:.16f}\n")
+                f.write(f"Parameters: {best_params_all}\n")
+            
+            # Save statistics to text file
+            with open(os.path.join(all_folder, 'statistics.txt'), 'w', encoding='utf-8') as f:
+                f.write("ALL BENCHMARKS VS COMPLEXITY - STATISTICS\n")
+                f.write("=" * 70 + "\n\n")
+                
+                f.write("COMPLEXITY STATISTICS:\n")
+                f.write("-" * 70 + "\n")
+                f.write(f"Number of data points: {len(all_y_data)}\n")
+                f.write(f"Mean complexity: {all_y_data.mean():.16f}\n")
+                f.write(f"Median complexity: {np.median(all_y_data):.16f}\n")
+                f.write(f"Std complexity: {all_y_data.std():.16f}\n")
+                f.write(f"Min complexity: {all_y_data.min():.16f}\n")
+                f.write(f"Max complexity: {all_y_data.max():.16f}\n\n")
+                
+                f.write("BENCHMARK SCORE STATISTICS:\n")
+                f.write("-" * 70 + "\n")
+                f.write(f"Min score: {all_x_data.min():.16f}\n")
+                f.write(f"Max score: {all_x_data.max():.16f}\n")
+                f.write(f"Mean score: {all_x_data.mean():.16f}\n")
+                f.write(f"Median score: {np.median(all_x_data):.16f}\n")
+                f.write(f"Std score: {all_x_data.std():.16f}\n")
+            
+            # Store results for summary
+            all_benchmark_results['ALL'] = {
+                'best_function': best_name_all,
+                'r2_score': best_r2_all,
+                'r2_linear': r2_linear_all,
+                'correlation': correlation_all,
+                'equation': best_equation_all,
+                'linear_equation': linear_equation_all,
+                'data_points': len(all_x_data)
+            }
+            
+            print(f"  Completed 'all': R² = {best_r2_all:.6f}, Correlation = {correlation_all:.6f}")
+    
+    # ==============================================================================
+    # END OF "ALL" PROCESSING
+    # ==============================================================================
 
     # Create summary file with all benchmark results
     with open(os.path.join(benchmarks_complexity_folder, 'summary.txt'), 'w', encoding='utf-8') as f:
@@ -896,8 +1089,11 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         f.write(f"{'Benchmark':<35} {'Best Fit':<15} {'R² Score':<15} {'Correlation':<15} {'Data Points':<15}\n")
         f.write("-" * 100 + "\n")
         
-        # Sort by R² score (descending)
+        # Sort by R² score (descending), but always put "ALL" last
         sorted_results = sorted(all_benchmark_results.items(), key=lambda x: x[1]['r2_score'], reverse=True)
+        # Move "ALL" to the end if it exists
+        sorted_results = [item for item in sorted_results if item[0] != 'ALL'] + \
+                        [item for item in sorted_results if item[0] == 'ALL']
         
         for bench_name, results in sorted_results:
             f.write(f"{bench_name:<35} {results['best_function']:<15} {results['r2_score']:<15.16f} "
@@ -920,19 +1116,25 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
     # Create comparison plot: R² scores for all benchmarks
     if len(all_benchmark_results) > 0:
         fig = plt.figure(figsize=(14, 8))
-        bench_names_short = [name.replace('BENCH-', '').replace('_', ' ') for name in all_benchmark_results.keys()]
-        r2_scores = [results['r2_score'] for results in all_benchmark_results.values()]
         
-        # Sort by R² score
-        sorted_indices = np.argsort(r2_scores)[::-1]
-        bench_names_short = [bench_names_short[i] for i in sorted_indices]
-        r2_scores = [r2_scores[i] for i in sorted_indices]
+        # Separate "ALL" from other benchmarks
+        bench_items = [(name, results) for name, results in all_benchmark_results.items() if name != 'ALL']
+        all_item = [(name, results) for name, results in all_benchmark_results.items() if name == 'ALL']
+        
+        # Sort other benchmarks by R² score
+        bench_items_sorted = sorted(bench_items, key=lambda x: x[1]['r2_score'], reverse=True)
+        
+        # Combine: sorted benchmarks + ALL at the end
+        combined_items = bench_items_sorted + all_item
+        
+        bench_names_short = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in combined_items]
+        r2_scores = [results['r2_score'] for _, results in combined_items]
         
         plt.barh(range(len(bench_names_short)), r2_scores, color='steelblue', alpha=0.7, edgecolor='black')
         plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
         plt.xlabel('R² Score')
         plt.ylabel('Benchmark')
-        plt.title('Regression Quality: R² Scores for Each Benchmark vs Complexity')
+        plt.title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Complexity')
         plt.grid(axis='x', alpha=0.3)
         
         # Add value labels on bars
@@ -943,10 +1145,28 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         plt.savefig(os.path.join(benchmarks_complexity_folder, 'r2_comparison.png'), dpi=150, bbox_inches='tight')
         plt.close()
         
+        # Create comparison plot: R² scores for LINEAR regression
+        fig = plt.figure(figsize=(14, 8))
+        r2_linear_scores = [results['r2_linear'] for _, results in combined_items]
+        
+        plt.barh(range(len(bench_names_short)), r2_linear_scores, color='cornflowerblue', alpha=0.7, edgecolor='black')
+        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
+        plt.xlabel('R² Score')
+        plt.ylabel('Benchmark')
+        plt.title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Complexity')
+        plt.grid(axis='x', alpha=0.3)
+        
+        # Add value labels on bars
+        for i, (name, score) in enumerate(zip(bench_names_short, r2_linear_scores)):
+            plt.text(score, i, f' {score:.4f}', va='center', fontsize=8)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(benchmarks_complexity_folder, 'r2_linear_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.close()
+        
         # Create comparison plot: Correlation coefficients for all benchmarks
         fig = plt.figure(figsize=(14, 8))
-        correlations = [all_benchmark_results[list(all_benchmark_results.keys())[i]]['correlation'] 
-                    for i in sorted_indices]
+        correlations = [results['correlation'] for _, results in combined_items]
         
         colors = ['green' if c > 0 else 'red' for c in correlations]
         plt.barh(range(len(bench_names_short)), correlations, color=colors, alpha=0.7, edgecolor='black')
@@ -982,6 +1202,12 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
 
     # Dictionary to store all detailed results
     all_detailed_results = []
+
+    # Create types_str column if it doesn't exist
+    if 'types_str' not in appended_benchmarks_df.columns:
+        appended_benchmarks_df['types_str'] = appended_benchmarks_df['types'].apply(
+            lambda x: '-'.join(sorted(x)) if isinstance(x, list) and len(x) > 0 else 'unknown'
+        )
 
     # Get unique types and filters
     unique_types = appended_benchmarks_df['types_str'].unique()
@@ -1095,25 +1321,37 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                 x_line_combo = np.linspace(x_data_combo.min(), x_data_combo.max(), 100)
                 y_line_combo = best_func_combo(x_line_combo, *best_params_combo)
                 
+                # Calculate linear regression for comparison
+                linear_params_combo, _ = curve_fit(lambda x, a, b: a * x + b, x_data_combo, y_data_combo, 
+                                                   p0=[1, 1], maxfev=10000)
+                y_pred_linear_combo = linear_params_combo[0] * x_data_combo + linear_params_combo[1]
+                r2_linear_combo = 1 - (np.sum((y_data_combo - y_pred_linear_combo)**2) / np.sum((y_data_combo - np.mean(y_data_combo))**2))
+                y_line_linear_combo = linear_params_combo[0] * x_line_combo + linear_params_combo[1]
+                linear_equation_combo = f'y = {linear_params_combo[0]:.16f}x + {linear_params_combo[1]:.16f}'
+                
                 # Create filename for this filter
                 filter_clean_name = f"filter_{int(filter_val)}"
                 
-                # Plot scatter with regression line
-                fig = plt.figure(figsize=(12, 9))
-                plt.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
-                plt.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Best fit ({best_name_combo})')
-                plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
-                plt.ylabel('Complexity')
-                plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity\nType: {type_str}, Filter: {int(filter_val)} sigma')
-                plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
-                plt.subplots_adjust(bottom=0.28)
+                # Plot scatter with both regression lines
+                fig, ax = plt.subplots(figsize=(12, 10))
+                ax.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
+                ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Free regression ({best_name_combo})')
+                ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=2, label='Linear regression')
+                ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
+                ax.set_ylabel('Complexity')
+                ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity\nType: {type_str}, Filter: {int(filter_val)} sigma')
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+                ax.grid(True, alpha=0.3)
                 
-                # Add equation and statistics
-                stats_text = f'{best_equation_combo}\nR² = {best_r2_combo:.16f}\nCorrelation = {correlation_combo:.16f}\nN = {len(x_data_combo)}'
-                plt.figtext(0.5, 0.07, stats_text, ha='center', fontsize=8, 
-                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+                # Add equation and statistics below the plot
+                stats_text = (f'Free Regression: {best_equation_combo}\n'
+                            f'Free R² = {best_r2_combo:.6f} | Linear R² = {r2_linear_combo:.6f}\n'
+                            f'Pearson Correlation = {correlation_combo:.6f} | N = {len(x_data_combo)}')
+                plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8, 
+                           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
                 
-                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'))
+                plt.tight_layout(rect=[0, 0.08, 1, 1])
+                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'), bbox_inches='tight')
                 plt.close()
                 
                 # Save statistics to text file
@@ -1146,10 +1384,12 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                     'filter': int(filter_val),
                     'best_function': best_name_combo,
                     'r2_score': best_r2_combo,
+                    'r2_linear': r2_linear_combo,
                     'pearson_correlation': correlation_combo,
                     'abs_correlation': abs(correlation_combo),
                     'data_points': len(x_data_combo),
                     'equation': best_equation_combo,
+                    'linear_equation': linear_equation_combo,
                     'complexity_mean': y_data_combo.mean(),
                     'complexity_std': y_data_combo.std(),
                     'benchmark_mean': x_data_combo.mean(),
@@ -1423,24 +1663,40 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         x_line_bench = np.linspace(x_data_bench.min(), x_data_bench.max(), 100)
         y_line_bench = best_func_bench(x_line_bench, *best_params_bench)
         
+        # Calculate linear regression for comparison
+        linear_params, _ = curve_fit(lambda x, a, b: a * x + b, x_data_bench, y_data_bench, 
+                                     p0=[1, 1], maxfev=10000)
+        y_pred_linear = linear_params[0] * x_data_bench + linear_params[1]
+        r2_linear = 1 - (np.sum((y_data_bench - y_pred_linear)**2) / np.sum((y_data_bench - np.mean(y_data_bench))**2))
+        y_line_linear = linear_params[0] * x_line_bench + linear_params[1]
+        linear_equation = f'y = {linear_params[0]:.16f}x + {linear_params[1]:.16f}'
+        
         # Create subfolder for this benchmark
         bench_clean_name = bench_name.replace('BENCH-', '').replace('_', '-').lower()
         bench_folder = os.path.join(param_benchmarks_folder, bench_clean_name)
         if not os.path.exists(bench_folder):
             os.makedirs(bench_folder)
         
-        # Plot scatter with regression line
-        fig = plt.figure(figsize=(12, 9))
-        plt.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
-        plt.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Best fit ({best_name_bench})')
-        plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
-        plt.ylabel('Parameter Count')
-        plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count')
-        plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
-        plt.subplots_adjust(bottom=0.22)
-        plt.figtext(0.5, 0.07, f'{best_equation_bench}     R² = {best_r2_bench:.16f}', 
-                    ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-        plt.savefig(os.path.join(bench_folder, 'regression.png'))
+        # Plot scatter with both regression lines
+        fig, ax = plt.subplots(figsize=(12, 10))
+        ax.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
+        ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Free regression ({best_name_bench})')
+        ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=2, label='Linear regression')
+        ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
+        ax.set_ylabel('Parameter Count')
+        ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count')
+        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+        ax.grid(True, alpha=0.3)
+        
+        # Add equations and statistics below the plot
+        stats_text = (f'Free: {best_equation_bench}\n'
+                     f'Linear: {linear_equation}\n'
+                     f'Free R² = {best_r2_bench:.6f} | Linear R² = {r2_linear:.6f}')
+        plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8,
+                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
+        
+        plt.tight_layout(rect=[0, 0.08, 1, 1])
+        plt.savefig(os.path.join(bench_folder, 'regression.png'), bbox_inches='tight')
         plt.close()
         
         # Calculate Pearson correlation coefficient
@@ -1485,12 +1741,190 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         all_param_benchmark_results[bench_name] = {
             'best_function': best_name_bench,
             'r2_score': best_r2_bench,
+            'r2_linear': r2_linear,
             'correlation': correlation,
             'equation': best_equation_bench,
+            'linear_equation': linear_equation,
             'data_points': len(x_data_bench)
         }
         
         print(f"  Completed {bench_name}: R² = {best_r2_bench:.6f}, Correlation = {correlation:.6f}")
+
+    # ==============================================================================
+    # PROCESS "ALL" - Concatenate all benchmark data for param count
+    # ==============================================================================
+    print("\nProcessing 'all' (concatenated benchmark data)...")
+    
+    # Collect all data points from all benchmarks
+    all_x_data_param = []
+    all_y_data_param = []
+    
+    for bench_name in BENCH_ROWS_NAMES:
+        mask_bench = ~(appended_benchmarks_df[bench_name].isna() | appended_benchmarks_df['count'].isna())
+        x_data_bench = appended_benchmarks_df.loc[mask_bench, bench_name].values
+        y_data_bench = appended_benchmarks_df.loc[mask_bench, 'count'].values
+        
+        if len(x_data_bench) >= 3:
+            all_x_data_param.extend(x_data_bench)
+            all_y_data_param.extend(y_data_bench)
+    
+    # Convert to numpy arrays
+    all_x_data_param = np.array(all_x_data_param)
+    all_y_data_param = np.array(all_y_data_param)
+    
+    if len(all_x_data_param) >= 3:
+        # Try different functions and find the best fit
+        best_r2_all_param = -np.inf
+        best_name_all_param = None
+        best_params_all_param = None
+        best_func_all_param = None
+        best_equation_all_param = None
+        
+        FUNCTIONS_TO_TEST_ALL_PARAM = {
+            'linear': {
+                'func': lambda x, a, b: a * x + b,
+                'equation': lambda params: f'y = {params[0]:.16f}x + {params[1]:.16f}',
+                'initial_guess': [1, 1]
+            },
+            'quadratic': {
+                'func': lambda x, a, b, c: a * x**2 + b * x + c,
+                'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
+                'initial_guess': [1, 1, 1]
+            },
+            'cubic': {
+                'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
+                'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
+                'initial_guess': [1, 1, 1, 1]
+            },
+            'exponential': {
+                'func': lambda x, a, b, c: a * np.exp(b * x) + c,
+                'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
+                'initial_guess': [1, 0.1, 1]
+            },
+            'logarithmic': {
+                'func': lambda x, a, b, c: a * np.log(x + 1) + b * x + c,
+                'equation': lambda params: f'y = {params[0]:.16f}·ln(x+1) + {params[1]:.16f}x + {params[2]:.16f}',
+                'initial_guess': [1, 1, 1]
+            },
+            'power': {
+                'func': lambda x, a, b, c: a * (x + 1)**b + c,
+                'equation': lambda params: f'y = {params[0]:.16f}·(x+1)^{params[1]:.16f} + {params[2]:.16f}',
+                'initial_guess': [1, 0.5, 1]
+            }
+        }
+        
+        for name, func_info in FUNCTIONS_TO_TEST_ALL_PARAM.items():
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    params, _ = curve_fit(func_info['func'], all_x_data_param, all_y_data_param, 
+                                        p0=func_info['initial_guess'], maxfev=10000)
+                y_pred = func_info['func'](all_x_data_param, *params)
+                r2 = 1 - (np.sum((all_y_data_param - y_pred)**2) / np.sum((all_y_data_param - np.mean(all_y_data_param))**2))
+                
+                if r2 > best_r2_all_param:
+                    best_r2_all_param = r2
+                    best_name_all_param = name
+                    best_params_all_param = params
+                    best_func_all_param = func_info['func']
+                    best_equation_all_param = func_info['equation'](params)
+            except:
+                pass
+        
+        if best_func_all_param is not None:
+            # Create regression line with best fit
+            x_line_all_param = np.linspace(all_x_data_param.min(), all_x_data_param.max(), 100)
+            y_line_all_param = best_func_all_param(x_line_all_param, *best_params_all_param)
+            
+            # Calculate linear regression for comparison
+            linear_params_all, _ = curve_fit(lambda x, a, b: a * x + b, all_x_data_param, all_y_data_param, 
+                                        p0=[1, 1], maxfev=10000)
+            y_pred_linear_param = linear_params_all[0] * all_x_data_param + linear_params_all[1]
+            r2_linear_all_param = 1 - (np.sum((all_y_data_param - y_pred_linear_param)**2) / np.sum((all_y_data_param - np.mean(all_y_data_param))**2))
+            y_line_linear_param = linear_params_all[0] * x_line_all_param + linear_params_all[1]
+            linear_equation_all_param = f'y = {linear_params_all[0]:.16f}x + {linear_params_all[1]:.16f}'
+            
+            # Create subfolder for "all"
+            all_folder_param = os.path.join(param_benchmarks_folder, 'all')
+            if not os.path.exists(all_folder_param):
+                os.makedirs(all_folder_param)
+            
+            # Plot scatter with both regression lines
+            fig, ax = plt.subplots(figsize=(12, 10))
+            ax.scatter(all_x_data_param, all_y_data_param, alpha=0.6, label='Data')
+            ax.plot(x_line_all_param, y_line_all_param, 'r-', linewidth=2, label=f'Free regression ({best_name_all_param})')
+            ax.plot(x_line_all_param, y_line_linear_param, 'b--', linewidth=2, label='Linear regression')
+            ax.set_xlabel('Benchmark Score (All Benchmarks)')
+            ax.set_ylabel('Parameter Count')
+            ax.set_title('All Benchmarks vs Parameter Count')
+            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+            ax.grid(True, alpha=0.3)
+            
+            # Add equations and statistics below the plot
+            stats_text = (f'Free: {best_equation_all_param}\n'
+                         f'Linear: {linear_equation_all_param}\n'
+                         f'Free R² = {best_r2_all_param:.6f} | Linear R² = {r2_linear_all_param:.6f}')
+            plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8,
+                       bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
+            
+            plt.tight_layout(rect=[0, 0.08, 1, 1])
+            plt.savefig(os.path.join(all_folder_param, 'regression.png'), bbox_inches='tight')
+            plt.close()
+            
+            # Calculate Pearson correlation coefficient
+            correlation_all_param = np.corrcoef(all_x_data_param, all_y_data_param)[0, 1]
+            
+            # Save regression information to text file
+            with open(os.path.join(all_folder_param, 'regression_info.txt'), 'w', encoding='utf-8') as f:
+                f.write("ALL BENCHMARKS VS PARAMETER COUNT - REGRESSION ANALYSIS\n")
+                f.write("=" * 70 + "\n\n")
+                
+                f.write("REGRESSION:\n")
+                f.write("-" * 70 + "\n")
+                f.write(f"Best fit function: {best_name_all_param}\n")
+                f.write(f"Equation: {best_equation_all_param}\n")
+                f.write(f"R² score: {best_r2_all_param:.16f}\n")
+                f.write(f"Pearson correlation: {correlation_all_param:.16f}\n")
+                f.write(f"Parameters: {best_params_all_param}\n")
+            
+            # Save statistics to text file
+            with open(os.path.join(all_folder_param, 'statistics.txt'), 'w', encoding='utf-8') as f:
+                f.write("ALL BENCHMARKS VS PARAMETER COUNT - STATISTICS\n")
+                f.write("=" * 70 + "\n\n")
+                
+                f.write("PARAMETER COUNT STATISTICS:\n")
+                f.write("-" * 70 + "\n")
+                f.write(f"Number of data points: {len(all_y_data_param)}\n")
+                f.write(f"Mean parameter count: {all_y_data_param.mean():.16f}\n")
+                f.write(f"Median parameter count: {np.median(all_y_data_param):.16f}\n")
+                f.write(f"Std parameter count: {all_y_data_param.std():.16f}\n")
+                f.write(f"Min parameter count: {all_y_data_param.min():.16f}\n")
+                f.write(f"Max parameter count: {all_y_data_param.max():.16f}\n\n")
+                
+                f.write("BENCHMARK SCORE STATISTICS:\n")
+                f.write("-" * 70 + "\n")
+                f.write(f"Min score: {all_x_data_param.min():.16f}\n")
+                f.write(f"Max score: {all_x_data_param.max():.16f}\n")
+                f.write(f"Mean score: {all_x_data_param.mean():.16f}\n")
+                f.write(f"Median score: {np.median(all_x_data_param):.16f}\n")
+                f.write(f"Std score: {all_x_data_param.std():.16f}\n")
+            
+            # Store results for summary
+            all_param_benchmark_results['ALL'] = {
+                'best_function': best_name_all_param,
+                'r2_score': best_r2_all_param,
+                'r2_linear': r2_linear_all_param,
+                'correlation': correlation_all_param,
+                'equation': best_equation_all_param,
+                'linear_equation': linear_equation_all_param,
+                'data_points': len(all_x_data_param)
+            }
+            
+            print(f"  Completed 'all': R² = {best_r2_all_param:.6f}, Correlation = {correlation_all_param:.6f}")
+    
+    # ==============================================================================
+    # END OF "ALL" PROCESSING
+    # ==============================================================================
 
     # Create summary file with all benchmark results
     with open(os.path.join(param_benchmarks_folder, 'summary.txt'), 'w', encoding='utf-8') as f:
@@ -1499,8 +1933,11 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         f.write(f"{'Benchmark':<35} {'Best Fit':<15} {'R² Score':<15} {'Correlation':<15} {'Data Points':<15}\n")
         f.write("-" * 100 + "\n")
         
-        # Sort by R² score (descending)
+        # Sort by R² score (descending), but always put "ALL" last
         sorted_results = sorted(all_param_benchmark_results.items(), key=lambda x: x[1]['r2_score'], reverse=True)
+        # Move "ALL" to the end if it exists
+        sorted_results = [item for item in sorted_results if item[0] != 'ALL'] + \
+                        [item for item in sorted_results if item[0] == 'ALL']
         
         for bench_name, results in sorted_results:
             f.write(f"{bench_name:<35} {results['best_function']:<15} {results['r2_score']:<15.16f} "
@@ -1523,19 +1960,25 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
     # Create comparison plot: R² scores for all benchmarks
     if len(all_param_benchmark_results) > 0:
         fig = plt.figure(figsize=(14, 8))
-        bench_names_short = [name.replace('BENCH-', '').replace('_', ' ') for name in all_param_benchmark_results.keys()]
-        r2_scores = [results['r2_score'] for results in all_param_benchmark_results.values()]
         
-        # Sort by R² score
-        sorted_indices = np.argsort(r2_scores)[::-1]
-        bench_names_short = [bench_names_short[i] for i in sorted_indices]
-        r2_scores = [r2_scores[i] for i in sorted_indices]
+        # Separate "ALL" from other benchmarks
+        bench_items_param = [(name, results) for name, results in all_param_benchmark_results.items() if name != 'ALL']
+        all_item_param = [(name, results) for name, results in all_param_benchmark_results.items() if name == 'ALL']
+        
+        # Sort other benchmarks by R² score
+        bench_items_param_sorted = sorted(bench_items_param, key=lambda x: x[1]['r2_score'], reverse=True)
+        
+        # Combine: sorted benchmarks + ALL at the end
+        combined_items_param = bench_items_param_sorted + all_item_param
+        
+        bench_names_short = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in combined_items_param]
+        r2_scores = [results['r2_score'] for _, results in combined_items_param]
         
         plt.barh(range(len(bench_names_short)), r2_scores, color='steelblue', alpha=0.7, edgecolor='black')
         plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
         plt.xlabel('R² Score')
         plt.ylabel('Benchmark')
-        plt.title('Regression Quality: R² Scores for Each Benchmark vs Parameter Count')
+        plt.title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Parameter Count')
         plt.grid(axis='x', alpha=0.3)
         
         # Add value labels on bars
@@ -1546,10 +1989,28 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         plt.savefig(os.path.join(param_benchmarks_folder, 'r2_comparison.png'), dpi=150, bbox_inches='tight')
         plt.close()
         
+        # Create comparison plot: R² scores for LINEAR regression
+        fig = plt.figure(figsize=(14, 8))
+        r2_linear_scores = [results['r2_linear'] for _, results in combined_items_param]
+        
+        plt.barh(range(len(bench_names_short)), r2_linear_scores, color='cornflowerblue', alpha=0.7, edgecolor='black')
+        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
+        plt.xlabel('R² Score')
+        plt.ylabel('Benchmark')
+        plt.title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Parameter Count')
+        plt.grid(axis='x', alpha=0.3)
+        
+        # Add value labels on bars
+        for i, (name, score) in enumerate(zip(bench_names_short, r2_linear_scores)):
+            plt.text(score, i, f' {score:.4f}', va='center', fontsize=8)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(param_benchmarks_folder, 'r2_linear_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.close()
+        
         # Create comparison plot: Correlation coefficients for all benchmarks
         fig = plt.figure(figsize=(14, 8))
-        correlations = [all_param_benchmark_results[list(all_param_benchmark_results.keys())[i]]['correlation'] 
-                    for i in sorted_indices]
+        correlations = [results['correlation'] for _, results in combined_items_param]
         
         colors = ['green' if c > 0 else 'red' for c in correlations]
         plt.barh(range(len(bench_names_short)), correlations, color=colors, alpha=0.7, edgecolor='black')
@@ -1585,6 +2046,12 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
 
     # Dictionary to store all detailed results
     all_detailed_param_results = []
+
+    # Create types_str column if it doesn't exist
+    if 'types_str' not in appended_benchmarks_df.columns:
+        appended_benchmarks_df['types_str'] = appended_benchmarks_df['types'].apply(
+            lambda x: '-'.join(sorted(x)) if isinstance(x, list) and len(x) > 0 else 'unknown'
+        )
 
     # Get unique types and filters (local to this function)
     unique_types = appended_benchmarks_df['types_str'].unique()
@@ -1698,25 +2165,37 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 x_line_combo = np.linspace(x_data_combo.min(), x_data_combo.max(), 100)
                 y_line_combo = best_func_combo(x_line_combo, *best_params_combo)
                 
+                # Calculate linear regression for comparison
+                linear_params_combo, _ = curve_fit(lambda x, a, b: a * x + b, x_data_combo, y_data_combo, 
+                                                   p0=[1, 1], maxfev=10000)
+                y_pred_linear_combo = linear_params_combo[0] * x_data_combo + linear_params_combo[1]
+                r2_linear_combo = 1 - (np.sum((y_data_combo - y_pred_linear_combo)**2) / np.sum((y_data_combo - np.mean(y_data_combo))**2))
+                y_line_linear_combo = linear_params_combo[0] * x_line_combo + linear_params_combo[1]
+                linear_equation_combo = f'y = {linear_params_combo[0]:.16f}x + {linear_params_combo[1]:.16f}'
+                
                 # Create filename for this filter
                 filter_clean_name = f"filter_{int(filter_val)}"
                 
-                # Plot scatter with regression line
-                fig = plt.figure(figsize=(12, 9))
-                plt.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
-                plt.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Best fit ({best_name_combo})')
-                plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
-                plt.ylabel('Parameter Count')
-                plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count\nType: {type_str}, Filter: {int(filter_val)} sigma')
-                plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
-                plt.subplots_adjust(bottom=0.28)
+                # Plot scatter with both regression lines
+                fig, ax = plt.subplots(figsize=(12, 10))
+                ax.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
+                ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Free regression ({best_name_combo})')
+                ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=2, label='Linear regression')
+                ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
+                ax.set_ylabel('Parameter Count')
+                ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count\nType: {type_str}, Filter: {int(filter_val)} sigma')
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+                ax.grid(True, alpha=0.3)
                 
-                # Add equation and statistics
-                stats_text = f'{best_equation_combo}\nR² = {best_r2_combo:.16f}\nCorrelation = {correlation_combo:.16f}\nN = {len(x_data_combo)}'
-                plt.figtext(0.5, 0.07, stats_text, ha='center', fontsize=8, 
-                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+                # Add equation and statistics below the plot
+                stats_text = (f'Free Regression: {best_equation_combo}\n'
+                            f'Free R² = {best_r2_combo:.6f} | Linear R² = {r2_linear_combo:.6f}\n'
+                            f'Pearson Correlation = {correlation_combo:.6f} | N = {len(x_data_combo)}')
+                plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8, 
+                           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
                 
-                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'))
+                plt.tight_layout(rect=[0, 0.08, 1, 1])
+                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'), bbox_inches='tight')
                 plt.close()
                 
                 # Save statistics to text file
@@ -1749,10 +2228,12 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                     'filter': int(filter_val),
                     'best_function': best_name_combo,
                     'r2_score': best_r2_combo,
+                    'r2_linear': r2_linear_combo,
                     'pearson_correlation': correlation_combo,
                     'abs_correlation': abs(correlation_combo),
                     'data_points': len(x_data_combo),
                     'equation': best_equation_combo,
+                    'linear_equation': linear_equation_combo,
                     'param_count_mean': y_data_combo.mean(),
                     'param_count_std': y_data_combo.std(),
                     'benchmark_mean': x_data_combo.mean(),
@@ -1952,8 +2433,6 @@ def equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER):
     print("EVOLUTIONARY EQUATION DISCOVERY MODE")
     print("="*80)
     
-    import ga_evolution
-    
     # Run the evolutionary algorithm
     top_equations, evolution_history = ga_evolution.run_evolution(
         appended_benchmarks_df=appended_benchmarks_df,
@@ -1974,7 +2453,7 @@ def equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER):
     )
     
     # Convert top equations to the format expected by the rest of the code
-    EQUATIONS_TO_TEST = ga_evolution.equations_to_dict(top_equations)
+    EQUATIONS_TO_TEST, conversion_failures = ga_evolution.equations_to_dict(top_equations)
     
     print("\n" + "="*80)
     print(f"Evolution complete! Using top {len(EQUATIONS_TO_TEST)} equations for analysis.")

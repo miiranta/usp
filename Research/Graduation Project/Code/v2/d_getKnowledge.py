@@ -41,34 +41,59 @@ appended_benchmarks_df['filter'] = appended_benchmarks_df['filter'].replace(0, F
 def main():
     
     # (1) COMPLEXITY vs FILTER
-    aux.plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER)
+    # 1.1 Para cada valor de filter, calcular a complexidade média e máxima (desvio padrao?)
+    # 1.2 Regressao livre entre filter e complexidade, Regressao livre na complexidade maxima
+    if False:
+        aux.plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # (2) COMPLEXITY vs TYPES
-    aux.plot_complexity_vs_types(appended_benchmarks_df, OUTPUT_FOLDER)
+    # 2.1 Para cada tipo, calcular a complexidade média e máxima
+    if False:
+        aux.plot_complexity_vs_types(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # (3) COMPLEXITY vs NUMBER OF PARAMS
-    aux.plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER)
+    # 3.1 Para cada número de parâmetros, calcular a complexidade média, com histograma
+    # 3.2 Regressao livre entre número de parâmetros e complexidade
+    if False:
+        aux.plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # (4) COMPLEXITY vs NUMBER OF BINS
-    aux.plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER)
+    # 4.1 Para cada número de bins, calcular a complexidade média, com histograma
+    # 4.2 Regressao livre entre número de bins e complexidade
+    if False:
+        aux.plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # ===========
     
-    # (5) FOR EACH BENCHMARK - COMPLEXITY vs BENCHMARK
-    aux.analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER)
+    # (5) FOR EACH BENCHMARK, FILTER and TYPE - COMPLEXITY vs BENCHMARK
+    # 5.1 Para cada benchmark, regressao livre e linear entre complexidade e benchmark
+    # 5.2 Plot das correlações lineares
+    # 5.3 Plot das correlações livres
+    # 5.4 Plot dos R2 das regressões lineares
+    # 5.5 Plot dos R2 das regressões livres
+    if True:
+        aux.analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # ===========
     
-    # (6) FOR EACH BENCHMARK - PARAM COUNT vs BENCHMARK
-    aux.analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER)
+    # (6) FOR EACH BENCHMARK, FILTER and TYPE - PARAM COUNT vs BENCHMARK
+    # 6.1 Para cada benchmark, regressao livre e linear entre número de parâmetros e benchmark
+    # 6.2 Plot das correlações lineares
+    # 6.3 Plot das correlações livres
+    # 6.4 Plot dos R2 das regressões lineares
+    # 6.5 Plot dos R2 das regressões livres
+    if True:
+        aux.analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # ===========
     
     # (7) MAGICAL VARIABLE EXPLORE
-    aux.equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER)
+    if True:
+        aux.equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # (8) FOR EACH BENCHMARK - MAGICAL VARIABLE vs BENCHMARK
-    aux.analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER)
+    if True:
+        aux.analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER)
     
 if __name__ == "__main__":
     main()
