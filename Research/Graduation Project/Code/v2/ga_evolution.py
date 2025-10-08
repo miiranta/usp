@@ -690,7 +690,7 @@ def run_evolution(appended_benchmarks_df: pd.DataFrame,
             if var in appended_benchmarks_df.columns:
                 var_data[var] = appended_benchmarks_df.loc[mask_bench, var].values
         
-        if len(benchmark_values) >= 10:
+        if len(benchmark_values) >= 3:
             all_benchmarks_data[bench_name] = {
                 'benchmark_values': benchmark_values,
                 **var_data  # Unpack all variable data

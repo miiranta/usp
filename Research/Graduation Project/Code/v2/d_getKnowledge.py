@@ -71,7 +71,7 @@ def main():
     # 5.3 Plot das correlações livres
     # 5.4 Plot dos R2 das regressões lineares
     # 5.5 Plot dos R2 das regressões livres
-    if True:
+    if False:
         aux.analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # ===========
@@ -82,7 +82,7 @@ def main():
     # 6.3 Plot das correlações livres
     # 6.4 Plot dos R2 das regressões lineares
     # 6.5 Plot dos R2 das regressões livres
-    if True:
+    if False:
         aux.analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # ===========
@@ -92,7 +92,7 @@ def main():
         aux.equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # (8) FOR EACH BENCHMARK - MAGICAL VARIABLE vs BENCHMARK
-    if True:
+    if False:
         aux.analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER)
     
 if __name__ == "__main__":
