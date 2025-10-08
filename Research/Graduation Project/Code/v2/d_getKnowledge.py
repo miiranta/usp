@@ -88,11 +88,11 @@ def main():
     # ===========
     
     # (7) MAGICAL VARIABLE EXPLORE
-    if False:
+    if True:
         aux.equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER)
         
     if True:
-        aux.analyze_equation_exploration_results(OUTPUT_FOLDER)
+        aux.analyze_equation_exploration_results(OUTPUT_FOLDER, appended_benchmarks_df)
     
     # (8) FOR EACH BENCHMARK - MAGICAL VARIABLE vs BENCHMARK
     if False:
