@@ -2798,16 +2798,6 @@ def equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER):
     print("="*80)
 
 def reconstruct_equation_from_csv_row(row):
-    """
-    Reconstruct an Equation object from a CSV row.
-    This allows verification and re-evaluation of saved equations.
-    
-    Args:
-        row: A pandas Series or dict with equation data from the CSV
-        
-    Returns:
-        Equation object reconstructed from the saved data
-    """
     import ast
     from ga_engine import Equation, ExprNode
     
@@ -2831,6 +2821,78 @@ def reconstruct_equation_from_csv_row(row):
     )
     
     return eq
+
+def analyze_equation_exploration_results(OUTPUT_FOLDER):
+    results_csv_path = os.path.join(OUTPUT_FOLDER, '7_equation_exploration', 'all_runs_results.csv')
+    if not os.path.exists(results_csv_path):
+        print(f"Results CSV not found: {results_csv_path}")
+        return
+    
+    all_results_df = pd.read_csv(results_csv_path, encoding='utf-8')
+    if all_results_df.empty:
+        print("No results found in the CSV.")
+        return
+    
+    print("\n" + "="*70)
+    print("Analyzing Equation Exploration Results...")
+    print("="*70)
+    
+    if not os.path.exists(os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration')):
+        os.makedirs(os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration'), exist_ok=True)
+    
+    # LOCAL RANKING
+    
+    # Get the top equation (rank 1) for each (benchmark, type, filter) combination
+    top_per_combination = all_results_df[all_results_df['rank'] == 1].copy()
+    
+    # Sort these top equations by fitness and correlation
+    results_df = top_per_combination.sort_values(
+        by=['fitness', 'correlation'], 
+        ascending=[False, False]
+    )
+    
+    # csv
+    local_ranking_csv = os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration', 'local_ranking.csv')
+    results_df.to_csv(local_ranking_csv, index=False, encoding='utf-8')
+    
+    print(f"✓ Created top-per-combination file: {len(results_df)} unique combinations")
+    print(f"✓ File: top_per_combination_sorted.csv")
+    
+    # txt
+    local_ranking_top20 = results_df.head(20)
+    top_20_file = os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration', 'local_ranking.txt')
+    with open(top_20_file, 'w', encoding='utf-8') as f:
+        f.write("TOP 20 EQUATIONS OVERALL\n")
+        f.write("="*80 + "\n\n")
+        for rank, (_, row) in enumerate(local_ranking_top20.iterrows(), 1):
+            f.write(f"{rank}. {row['equation_string']}\n")
+            f.write(f"   Benchmark: {row['benchmark']}, Type: {row['type']}, Filter: {row['filter']}\n")
+            f.write(f"   Fitness: {row['fitness']:.6f}, Correlation: {row['correlation']:.6f}, R²: {row['r2']:.6f}\n")
+            f.write(f"   Simplicity: {row['simplicity']:.6f}, Complexity: {row['complexity']}, Depth: {row['depth']}, Size: {row['size']}\n\n")
+    
+    # png
+    fig = plt.figure(figsize=(16, max(10, len(local_ranking_top20) * 0.5)))
+    
+    labels = [f"{row['equation_string'][:60]}\n{row['benchmark'][:20]}, {row['type'][:15]}, F={row['filter']}" 
+            for _, row in local_ranking_top20.iterrows()][::-1]
+    fitness_scores = local_ranking_top20['fitness'].values[::-1]
+    
+    y_pos = range(len(labels))
+    
+    plt.barh(y_pos, fitness_scores, alpha=0.7, color='steelblue', edgecolor='black')
+    plt.yticks(y_pos, labels, fontsize=7)
+    plt.xlabel('Fitness', fontsize=10)
+    plt.ylabel('Expression', fontsize=10)
+    plt.title('Top 20 Equations - Local Ranking', fontsize=12)
+    plt.grid(axis='x', alpha=0.3)
+    
+    for i, fitness in enumerate(fitness_scores):
+        plt.text(fitness + 0.001, i, f'{fitness:.4f}', va='center', fontsize=7)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration', 'local_ranking.png'), 
+                dpi=150, bbox_inches='tight')
+    plt.close()
 
 # ================================================================================
 
