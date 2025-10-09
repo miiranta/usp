@@ -1,13 +1,12 @@
 import os
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from math import sqrt
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from statsmodels.tsa.arima.model import ARIMA
 import torch
 import torch.nn as nn
-
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from statsmodels.tsa.arima.model import ARIMA
 from g_modelEval_aux import create_evaluation_csvs
 
 # Configure PyTorch to use GPU if available
@@ -25,9 +24,9 @@ else:
 ARIMA_ORDER = (1, 1, 1)  # (p, d, q)
 
 # LSTM Parameters
-LSTM_EPOCHS = 100
-LSTM_NEURONS = 100
-LSTM_BATCH_SIZE = 1  # Batch size for training
+LSTM_EPOCHS = 10000
+LSTM_NEURONS = 5000
+LSTM_BATCH_SIZE = 1
 LSTM_EARLY_STOPPING_PATIENCE = 10  
 LSTM_LEARNING_RATE = 0.001
 

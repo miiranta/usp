@@ -13,6 +13,7 @@ OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "stats_results")
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(os.path.join(OUTPUT_FOLDER, 'global_plots', 'ARIMA'), exist_ok=True)
 os.makedirs(os.path.join(OUTPUT_FOLDER, 'global_plots', 'LSTM'), exist_ok=True)
+os.makedirs(os.path.join(OUTPUT_FOLDER, 'global_plots', 'Combined'), exist_ok=True)
 os.makedirs(os.path.join(OUTPUT_FOLDER, 'aggregated_plots'), exist_ok=True)
 os.makedirs(os.path.join(OUTPUT_FOLDER, 'heatmaps'), exist_ok=True)
 os.makedirs(os.path.join(OUTPUT_FOLDER, 'box_plots'), exist_ok=True)
@@ -134,6 +135,97 @@ def create_global_plots(df):
             plt.close()
         
         print(f"Created global plots for {model}")
+
+def create_combined_global_plots(df):
+    """Create combined global plots with both LSTM and ARIMA data in a single graph."""
+    metrics = ['R2', 'RMSE', 'MAE', 'MSE']
+    
+    # Add category column
+    df['category'] = df['dataset'].apply(categorize_dataset)
+    
+    # Define color palette for categories
+    color_palette = {
+        'Baseline': '#e74c3c',
+        'Without Correction': '#f39c12',
+        'With Correction': '#2ecc71'
+    }
+    
+    for metric in metrics:
+        # Prepare data for both models
+        lstm_data = df[df['method'] == 'LSTM'].copy()
+        arima_data = df[df['method'] == 'ARIMA'].copy()
+        
+        # Add model column for identification
+        lstm_data['model'] = 'LSTM'
+        arima_data['model'] = 'ARIMA'
+        
+        # Combine both datasets
+        combined_data = pd.concat([lstm_data, arima_data], ignore_index=True)
+        
+        # Sort by metric value
+        if metric == 'R2':
+            combined_data = combined_data.sort_values(metric, ascending=False)
+        else:
+            combined_data = combined_data.sort_values(metric, ascending=True)
+        
+        # Calculate figure dimensions
+        num_points = len(combined_data)
+        fig_width = max(20, 20 + (num_points - 100) * 0.15) if num_points > 100 else 20
+        
+        # Create single plot
+        plt.figure(figsize=(fig_width, 8))
+        ax = plt.subplot(111)
+        
+        x_labels = []
+        x_positions = []
+        colors = []
+        values = []
+        
+        for idx, (_, row) in enumerate(combined_data.iterrows()):
+            # Clean run_id
+            run_id_clean = '--'.join(row['run_id'].split('--')[1:]) if '--' in row['run_id'] else row['run_id']
+            # Add model name in bold to the label
+            label = f"$\\bf{{{row['model']}}}$ - {run_id_clean}"
+            x_labels.append(label)
+            x_positions.append(idx)
+            colors.append(color_palette[row['category']])
+            values.append(row[metric])
+        
+        bars = ax.bar(x_positions, values, color=colors, alpha=0.8, edgecolor='black', linewidth=0.5)
+        
+        # Add value labels on top of each bar
+        for bar, value in zip(bars, values):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{value:.4f}', ha='center', va='bottom', fontsize=5, rotation=0)
+        
+        # Customize plot
+        ax.set_ylabel(metric, fontsize=12, fontweight='bold')
+        
+        if metric == 'R2':
+            ax.set_title(f'LSTM vs ARIMA - {metric} Comparison (Best to Worst - Higher is Better)', 
+                        fontsize=14, fontweight='bold')
+        else:
+            ax.set_title(f'LSTM vs ARIMA - {metric} Comparison (Best to Worst - Lower is Better)', 
+                        fontsize=14, fontweight='bold')
+        
+        # Show ALL labels, rotated 90 degrees with smaller font
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(x_labels, rotation=90, ha='center', fontsize=5)
+        ax.grid(axis='y', alpha=0.3, linestyle='--')
+        
+        # Add legend
+        from matplotlib.patches import Patch
+        legend_elements = [Patch(facecolor=color_palette[cat], label=cat, alpha=0.8, edgecolor='black') 
+                          for cat in ['Baseline', 'Without Correction', 'With Correction']]
+        ax.legend(handles=legend_elements, loc='best', fontsize=10)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(OUTPUT_FOLDER, 'global_plots', 'Combined', f'combined_{metric.lower()}_comparison.png'), 
+                   dpi=300, bbox_inches='tight')
+        plt.close()
+    
+    print(f"Created combined global plots (LSTM vs ARIMA)")
 
 def create_aggregated_plots(df):
     """Create aggregated plots showing average performance by category and model."""
@@ -539,6 +631,9 @@ def main():
     
     print("\nCreating global plots...")
     create_global_plots(df)
+    
+    print("\nCreating combined global plots (LSTM vs ARIMA)...")
+    create_combined_global_plots(df)
     
     print("\nCreating aggregated plots...")
     create_aggregated_plots(df)
