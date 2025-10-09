@@ -1,6 +1,8 @@
 atas
 optimized
 interpolated
+eval_results
+stats_results
 
 .env
 
