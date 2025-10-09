@@ -20,6 +20,21 @@ else:
     print("No GPU found. Running on CPU.")
     print(f"Device: {device}")
 
+# ==================== GLOBAL CONFIGURATION ====================
+# ARIMA Parameters
+ARIMA_ORDER = (1, 1, 1)  # (p, d, q)
+
+# LSTM Parameters
+LSTM_EPOCHS = 100
+LSTM_NEURONS = 100
+LSTM_BATCH_SIZE = 1  # Batch size for training
+LSTM_EARLY_STOPPING_PATIENCE = 10  
+LSTM_LEARNING_RATE = 0.001
+
+# Data Split
+TRAIN_RATIO = 0.7  # 70% training, 30% testing
+# ============================================================
+
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "optimized_results")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "eval_results")
@@ -63,7 +78,9 @@ def load_evaluation_data(rank):
         'optimized': optimized
     }
 
-def split_data(df, train_ratio=0.7):
+def split_data(df, train_ratio=None):
+    if train_ratio is None:
+        train_ratio = TRAIN_RATIO
     size = int(len(df) * train_ratio)
     train = df.iloc[:size].copy()
     test = df.iloc[size:].copy()
@@ -84,7 +101,10 @@ def calculate_metrics(y_true, y_pred):
 
 # ==================== ARIMA Models ====================
 
-def arima_with_exog(train, test, order=(1, 1, 1)):
+def arima_with_exog(train, test, order=None):
+    if order is None:
+        order = ARIMA_ORDER
+    
     history_inflation = list(train['inflation'].values)
     history_sentiment = list(train['sentiment'].values)
     predictions = []
@@ -121,7 +141,7 @@ def arima_with_exog(train, test, order=(1, 1, 1)):
 # ==================== LSTM Models ====================
 
 class LSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size=500, num_layers=1):
+    def __init__(self, input_size, hidden_size, num_layers=1):
         super(LSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -140,25 +160,43 @@ class LSTMModel(nn.Module):
         out = self.fc(out[:, -1, :])
         return out
 
-def prepare_lstm_data(data, lookback=1):
-    features = data[['inflation', 'sentiment']].values
-
-    X, y = [], []
-    for i in range(lookback, len(features)):
-        X.append(features[i-lookback:i])
-        y.append(features[i, 0])  # Predict inflation
+def prepare_lstm_data(data):
+    # Extract features: inflation and sentiment
+    inflation = data['inflation'].values
+    sentiment = data['sentiment'].values
     
-    return np.array(X), np.array(y), lookback
+    # Create sequences: use previous values to predict next inflation
+    X, y = [], []
+    for i in range(len(inflation) - 1):
+        # Input: [inflation[i], sentiment[i]]
+        X.append([inflation[i], sentiment[i]])
+        # Output: inflation[i+1]
+        y.append(inflation[i + 1])
+    
+    X = np.array(X)
+    y = np.array(y)
+    
+    # Reshape X for LSTM: (samples, timesteps, features)
+    X = X.reshape((X.shape[0], 1, X.shape[1]))
+    y = y.reshape((y.shape[0], 1))
+    
+    return X, y
 
-def lstm_model(train, test,  epochs=100, neurons=500, lookback=1):
-    # Prepare data
-    X_train, y_train, _ = prepare_lstm_data(train, lookback)
-    X_test, y_test, _ = prepare_lstm_data(test, lookback)
+def fit_lstm(X_train, y_train, epochs=None, neurons=None, batch_size=None, patience=None, learning_rate=None):
+    if epochs is None:
+        epochs = LSTM_EPOCHS
+    if neurons is None:
+        neurons = LSTM_NEURONS
+    if batch_size is None:
+        batch_size = LSTM_BATCH_SIZE
+    if patience is None:
+        patience = LSTM_EARLY_STOPPING_PATIENCE
+    if learning_rate is None:
+        learning_rate = LSTM_LEARNING_RATE
     
     # Convert to PyTorch tensors
     X_train_tensor = torch.FloatTensor(X_train).to(device)
-    y_train_tensor = torch.FloatTensor(y_train).unsqueeze(1).to(device)
-    X_test_tensor = torch.FloatTensor(X_test).to(device)
+    y_train_tensor = torch.FloatTensor(y_train).to(device)
     
     # Create model
     input_size = X_train.shape[2]
@@ -166,12 +204,11 @@ def lstm_model(train, test,  epochs=100, neurons=500, lookback=1):
     
     # Loss and optimizer
     criterion = nn.MSELoss()
-    optimizer = torch.optim.NAdam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.NAdam(model.parameters(), lr=learning_rate)
     
     # Training loop with early stopping
     model.train()
     best_loss = float('inf')
-    patience = 10
     patience_counter = 0
     best_model_state = None
     
@@ -197,15 +234,47 @@ def lstm_model(train, test,  epochs=100, neurons=500, lookback=1):
                 model.load_state_dict(best_model_state)
                 break
     
-    # Predict
+    return model
+
+def forecast_lstm(model, X):
     model.eval()
+    X_tensor = torch.FloatTensor(X).to(device)
     with torch.no_grad():
-        predictions = model(X_test_tensor).cpu().numpy().flatten()
+        pred = model(X_tensor).cpu().numpy()[0, 0]
+    return pred
+
+def lstm_model(train, test, epochs=None, neurons=None, batch_size=None):
+    if epochs is None:
+        epochs = LSTM_EPOCHS
+    if neurons is None:
+        neurons = LSTM_NEURONS
+    if batch_size is None:
+        batch_size = LSTM_BATCH_SIZE
     
-    # Calculate per-step errors
-    errors = np.abs(y_test - predictions)
+    # Prepare training data
+    X_train, y_train = prepare_lstm_data(train)
     
-    return predictions.tolist(), errors.tolist(), lookback
+    # Fit model
+    model = fit_lstm(X_train, y_train, epochs=epochs, neurons=neurons, batch_size=batch_size)
+    
+    # Prepare test data
+    X_test, y_test = prepare_lstm_data(test)
+    
+    # Make predictions
+    predictions = []
+    errors = []
+    
+    for i in range(len(X_test)):
+        # Forecast
+        pred = forecast_lstm(model, X_test[i:i+1])
+        predictions.append(pred)
+        
+        # Calculate error
+        observed = y_test[i, 0]
+        error = abs(observed - pred)
+        errors.append(error)
+    
+    return predictions, errors, 1
 
 # ==================== Evaluation and Plotting ====================
 
@@ -354,7 +423,7 @@ def run_full_evaluation():
             print(f"{'='*70}")
             
             # Split data
-            train, test = split_data(dataset, train_ratio=0.7)
+            train, test = split_data(dataset)
             print(f"Train size: {len(train)}, Test size: {len(test)}")
             
             for model_name, model_func in models:
@@ -364,9 +433,9 @@ def run_full_evaluation():
                     # Run model
                     lookback = 0
                     if 'ARIMA' in model_name:
-                        predictions, errors = model_func(train, test, order=(1, 1, 1))
+                        predictions, errors = model_func(train, test)
                     else:  # LSTM
-                        predictions, errors, lookback = model_func(train, test, epochs=100, neurons=500, lookback=1)
+                        predictions, errors, lookback = model_func(train, test, epochs=LSTM_EPOCHS, neurons=LSTM_NEURONS, batch_size=LSTM_BATCH_SIZE)
                     
                     # Evaluate
                     metrics = evaluate_model(model_name, dataset_name, predictions, test, lookback)
