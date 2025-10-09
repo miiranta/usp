@@ -3,3 +3,5 @@ optimized
 interpolated
 
 .env
+
+__pycache__
