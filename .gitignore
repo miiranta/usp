@@ -7,3 +7,5 @@ IDK/*
 
 spacy-data/
 *.spacy
+
+outputs/

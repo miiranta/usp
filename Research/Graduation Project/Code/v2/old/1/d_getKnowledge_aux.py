@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 import warnings
+import ga_evolution
 
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -2407,31 +2408,1108 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
 # --------------------------------------------------------------
 # 7 MAGICAL VARIABLE EXPLORE
 
+def _clear_evolution_folder(output_folder):
+    """Helper function to clear the equation_evolution folder before each run"""
+    import shutil
+    evolution_folder = os.path.join(output_folder, 'equation_evolution')
+    if os.path.exists(evolution_folder):
+        print(f"  Clearing equation_evolution folder: {evolution_folder}")
+        shutil.rmtree(evolution_folder)
+    os.makedirs(evolution_folder, exist_ok=True)
+
+def _run_ga_and_save_top_equations(appended_benchmarks_df, bench_rows_names, output_folder,
+                                   run_name, subfolder_path, population_size, max_generations,
+                                   min_stopping_correlation=0.99, num_datapoints=None):
+    print(f"\n{'='*80}")
+    print(f"Running GA Evolution for: {run_name}")
+    print(f"{'='*80}")
+    
+    # Clear equation_evolution folder before each run
+    _clear_evolution_folder(output_folder)
+    
+    # Run evolution
+    VARIABLES_TO_USE = ["complexity", "count"]
+    VARIABLES_MANDATORY_TO_USE = []
+    
+    top_equations, evolution_history = ga_evolution.run_evolution(
+        appended_benchmarks_df=appended_benchmarks_df,
+        bench_rows_names=bench_rows_names,
+        output_folder=output_folder,
+        min_stopping_correlation=min_stopping_correlation,
+        population_size=population_size,
+        max_generations=max_generations,
+        top_n_to_keep=20,
+        elite_size=25,
+        mandatory_vars=VARIABLES_MANDATORY_TO_USE,
+        allowed_vars=VARIABLES_TO_USE,
+        simplicity_weight=0.01,
+        resume_from_checkpoint=None,
+        max_stagnation=100000000000,
+        adaptive_mutation=True,
+        diversity_injection_rate=0.4
+    )
+    
+    # Convert to dict format
+    equations_dict, conversion_failures = ga_evolution.equations_to_dict(top_equations)
+    
+    print(f"\n✓ Evolution complete! Got {len(equations_dict)} equations")
+    
+    # Take top 20 equations
+    top_20_equations = top_equations[:20]
+    # Take top 20 from dictionary
+    top_20_dict = dict(list(equations_dict.items())[:20])
+    
+    # Create subfolder for this run
+    os.makedirs(subfolder_path, exist_ok=True)
+    
+    # Save top 20 equations
+    top_20_file = os.path.join(subfolder_path, 'top_20_equations.txt')
+    with open(top_20_file, 'w', encoding='utf-8') as f:
+        title = f"TOP 20 EQUATIONS - {run_name}"
+        if num_datapoints is not None:
+            title += f" ({num_datapoints} datapoints)"
+        f.write(title + "\n")
+        f.write("="*80 + "\n\n")
+        for rank, eq in enumerate(top_20_equations, 1):
+            f.write(f"{rank}. {eq.to_string()}\n")
+            f.write(f"   Fitness: {eq.fitness:.6f}\n")
+            f.write(f"   Correlation: {eq.avg_correlation:.6f}\n")
+            f.write(f"   Simplicity: {eq.simplicity_score:.6f}\n\n")
+    
+    # Create ranking plot
+    fig = plt.figure(figsize=(16, max(10, len(top_20_equations) * 0.4)))
+    
+    labels = [eq.to_string()[:70] for eq in top_20_equations][::-1]
+    fitness_scores = [eq.fitness for eq in top_20_equations][::-1]
+    
+    y_pos = range(len(labels))
+    
+    plt.barh(y_pos, fitness_scores, alpha=0.7, color='steelblue', edgecolor='black')
+    plt.yticks(y_pos, labels, fontsize=8)
+    plt.xlabel('Fitness', fontsize=10)
+    plt.ylabel('Expression', fontsize=10)
+    plot_title = f'Top 20 Expressions Ranking - {run_name}'
+    if num_datapoints is not None:
+        plot_title += f' ({num_datapoints} datapoints)'
+    plt.title(plot_title, fontsize=12)
+    plt.grid(axis='x', alpha=0.3)
+    
+    # Add value labels
+    for i, fitness in enumerate(fitness_scores):
+        plt.text(fitness + 0.01, i, f'{fitness:.4f}', va='center', fontsize=7)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(subfolder_path, 'equation_ranking.png'), dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    print(f"✓ Saved top 20 equations and ranking plot to: {subfolder_path}")
+    
+    return top_20_equations, top_20_dict
+
 def equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER):
     # Get rows in header that start with "BENCH"
     BENCH_ROWS_NAMES = appended_benchmarks_df.columns[appended_benchmarks_df.columns.str.startswith('BENCH')].tolist()
+
+    print("\n" + "="*70)
+    print("Starting COMPREHENSIVE EQUATION EXPLORATION...")
+    print("="*70)
+    print(f"Total benchmarks: {len(BENCH_ROWS_NAMES)}")
+    
+    # Create types_str column if it doesn't exist
+    if 'types_str' not in appended_benchmarks_df.columns:
+        appended_benchmarks_df['types_str'] = appended_benchmarks_df['types'].apply(
+            lambda x: '-'.join(sorted(x)) if isinstance(x, list) and len(x) > 0 else 'unknown'
+        )
+    
+    # Get unique types and filters
+    unique_types = appended_benchmarks_df['types_str'].unique()
     unique_filters = sorted([f for f in appended_benchmarks_df['filter'].unique() if pd.notna(f)])
     
-    for filter_val in unique_filters:
-        # Filter only rows with this filter
-        filtered_df = appended_benchmarks_df[appended_benchmarks_df['filter'] == filter_val]
+    print(f"Unique types: {len(unique_types)}")
+    print(f"Unique filters: {len(unique_filters)}")
+
+    # Create main output folder
+    equation_exploration_folder = os.path.join(OUTPUT_FOLDER, '7_equation_exploration')
+    if not os.path.exists(equation_exploration_folder):
+        os.makedirs(equation_exploration_folder)
+
+    # Configuration for GA runs
+    MIN_STOPPING_CORRELATION = 0.99
+    POPULATION_SIZE = 500
+    MAX_GENERATIONS = 200
+    
+    # ==================================================================
+    # PART 1: ALL BENCHMARKS COMBINED - BY TYPE × FILTER
+    # ==================================================================
+    print("\n" + "="*80)
+    print("PART 1: Running GA for ALL BENCHMARKS COMBINED - BY TYPE × FILTER")
+    print("="*80)
+    
+    # Create folder for "all" benchmark
+    all_bench_folder = os.path.join(equation_exploration_folder, 'all')
+    os.makedirs(all_bench_folder, exist_ok=True)
+    
+    total_combinations = 0
+    skipped_combinations = 0
+    skipped_already_done = 0
+    
+    # Process ALL benchmarks with TYPE × FILTER combinations
+    for type_str in unique_types:
+        type_clean_name = type_str.replace('-', '_').replace(' ', '_').lower()
+        if type_clean_name == 'unknown':
+            continue  # Skip unknown types
         
-        for benchmark in BENCH_ROWS_NAMES:
-            # df (count, complexity, benchmark)
-            exploration_df = filtered_df[['count', 'complexity', benchmark]].copy()
+        # Create folder for this type
+        type_folder = os.path.join(all_bench_folder, type_clean_name)
+        os.makedirs(type_folder, exist_ok=True)
+        
+        # Iterate through filters
+        for filter_val in unique_filters:
+            filter_clean_name = f"filter_{int(filter_val)}"
+            combo_subfolder = os.path.join(type_folder, filter_clean_name)
             
-            # Remove rows with invalid values
-            exploration_df = exploration_df.dropna(subset=['count', 'complexity', benchmark])
-            exploration_df = exploration_df[(exploration_df['count'] > 0) & (exploration_df['complexity'] > 0)]
+            # Skip if this filter folder already exists
+            if os.path.exists(combo_subfolder):
+                skipped_already_done += 1
+                print(f"  ALL - Type: {type_str}, Filter: {int(filter_val)}σ - Already done, skipping")
+                continue
             
-            print(f"Filter {filter_val}, Benchmark {benchmark}:")
+            # Filter data for this specific combination
+            mask_combo = (
+                (appended_benchmarks_df['types_str'] == type_str) &
+                (appended_benchmarks_df['filter'] == filter_val) &
+                ~(appended_benchmarks_df['complexity'].isna()) &
+                ~(appended_benchmarks_df['count'].isna())
+            )
             
-            # (count, complexity, benchmark)
-            # benchmark =~ f(count, complexity)
+            combo_df = appended_benchmarks_df[mask_combo].copy()
             
+            # Check if we have enough data points with at least one valid benchmark value
+            valid_rows = 0
+            for _, row in combo_df.iterrows():
+                has_valid_bench = any(pd.notna(row[bench_name]) for bench_name in BENCH_ROWS_NAMES)
+                if has_valid_bench:
+                    valid_rows += 1
             
+            # Skip if not enough data points
+            if valid_rows < 3:
+                skipped_combinations += 1
+                print(f"  ALL - Type: {type_str}, Filter: {int(filter_val)}σ - Insufficient data ({valid_rows} valid rows), skipping")
+                continue
             
+            total_combinations += 1
             
+            print(f"  ALL - Type: {type_str}, Filter: {int(filter_val)}σ - {len(combo_df)} points - Running GA...")
+            
+            # Run GA for this combination
+            top_20_combo, dict_combo = _run_ga_and_save_top_equations(
+                appended_benchmarks_df=combo_df,
+                bench_rows_names=BENCH_ROWS_NAMES,
+                output_folder=OUTPUT_FOLDER,
+                run_name=f"ALL | {type_str} | {int(filter_val)}σ",
+                subfolder_path=combo_subfolder,
+                min_stopping_correlation=MIN_STOPPING_CORRELATION,
+                population_size=POPULATION_SIZE,
+                max_generations=MAX_GENERATIONS,
+                num_datapoints=valid_rows
+            )
+            
+            results_csv_path = os.path.join(equation_exploration_folder, 'all_runs_results.csv')
+            for rank, eq in enumerate(top_20_combo, 1):
+                result_row = {
+                    'benchmark': 'ALL',
+                    'type': type_str,
+                    'filter': f"{int(filter_val)}_sigma",
+                    'equation_string': eq.to_string(),
+                    'equation_id': eq.get_id(),
+                    'rank': rank,
+                    'fitness': eq.fitness,
+                    'correlation': eq.avg_correlation,
+                    'r2': eq.avg_r2,
+                    'simplicity': eq.simplicity_score,
+                    'complexity': eq.get_complexity(),
+                    'depth': eq.get_depth(),
+                    'size': eq.get_size(),
+                    'num_params': eq.num_params,
+                    'generation': eq.generation,
+                    'tree_structure': str(eq.tree.to_dict()),  # Serialized tree for reconstruction
+                    'param_initial_guess': str(eq.param_initial_guess),  # Initial parameter values
+                    'variables_used': ','.join(sorted(eq.get_all_variables()))  # Variables used in equation
+                }
+                # Append to CSV file
+                result_df = pd.DataFrame([result_row])
+                if os.path.exists(results_csv_path):
+                    result_df.to_csv(results_csv_path, mode='a', header=False, index=False, encoding='utf-8')
+                else:
+                    result_df.to_csv(results_csv_path, mode='w', header=True, index=False, encoding='utf-8')
+    
+    print(f"\n✓ Completed {total_combinations} GA runs for ALL benchmarks")
+    print(f"  Skipped {skipped_combinations} due to insufficient data")
+    print(f"  Skipped {skipped_already_done} already completed runs")
+    
+    # ==================================================================
+    # PART 2: EACH BENCHMARK × TYPE × FILTER
+    # ==================================================================
+    print("\n" + "="*80)
+    print(f"PART 2: Running GA for EACH BENCHMARK × TYPE × FILTER")
+    print(f"Total possible combinations: {len(BENCH_ROWS_NAMES)} × {len(unique_types)} × {len(unique_filters)}")
+    print("="*80)
+    
+    total_combinations_part2 = 0
+    skipped_combinations_part2 = 0
+    skipped_already_done_part2 = 0
+    
+    for bench_idx, bench_name in enumerate(BENCH_ROWS_NAMES, 1):
+        bench_clean_name = bench_name.replace('BENCH-', '').replace('_', '-').lower()
+        print(f"\n[Benchmark {bench_idx}/{len(BENCH_ROWS_NAMES)}] {bench_name}")
+        
+        # Create folder for this benchmark directly under equation_exploration_folder
+        bench_folder = os.path.join(equation_exploration_folder, bench_clean_name)
+        os.makedirs(bench_folder, exist_ok=True)
+        
+        # Counter for this benchmark
+        bench_combinations = 0
+        
+        # Iterate through types
+        for type_str in unique_types:
+            type_clean_name = type_str.replace('-', '_').replace(' ', '_').lower()
+            if type_clean_name == 'unknown':
+                continue  # Skip unknown types
+            
+            # Create folder for this type
+            type_folder = os.path.join(bench_folder, type_clean_name)
+            os.makedirs(type_folder, exist_ok=True)
+            
+            # Iterate through filters
+            for filter_val in unique_filters:
+                filter_clean_name = f"filter_{int(filter_val)}"
+                combo_subfolder = os.path.join(type_folder, filter_clean_name)
+                
+                # Skip if this filter folder already exists
+                if os.path.exists(combo_subfolder):
+                    skipped_already_done_part2 += 1
+                    print(f"  Type: {type_str}, Filter: {int(filter_val)}σ - Already done, skipping")
+                    continue
+                
+                # Filter data for this specific combination
+                mask_combo = (
+                    (appended_benchmarks_df['types_str'] == type_str) &
+                    (appended_benchmarks_df['filter'] == filter_val) &
+                    ~(appended_benchmarks_df[bench_name].isna()) &
+                    ~(appended_benchmarks_df['complexity'].isna()) &
+                    ~(appended_benchmarks_df['count'].isna())
+                )
+                
+                combo_df = appended_benchmarks_df[mask_combo].copy()
+                
+                # Check if we have enough valid data points with all required values
+                # Count rows where benchmark, complexity, and count are all valid
+                valid_mask = (
+                    ~combo_df[bench_name].isna() &
+                    ~combo_df['complexity'].isna() &
+                    ~combo_df['count'].isna()
+                )
+                valid_rows = valid_mask.sum()
+                
+                # Skip if not enough data points
+                if valid_rows < 3:
+                    skipped_combinations_part2 += 1
+                    print(f"  Type: {type_str}, Filter: {int(filter_val)}σ - Insufficient data ({valid_rows} valid rows), skipping")
+                    continue
+                
+                total_combinations_part2 += 1
+                bench_combinations += 1
+                
+                print(f"  Type: {type_str}, Filter: {int(filter_val)}σ - {len(combo_df)} points - Running GA...")
+                
+                # Run GA for this combination
+                top_20_combo, dict_combo = _run_ga_and_save_top_equations(
+                    appended_benchmarks_df=combo_df,
+                    bench_rows_names=[bench_name],
+                    output_folder=OUTPUT_FOLDER,
+                    run_name=f"{bench_name} | {type_str} | {int(filter_val)}σ",
+                    subfolder_path=combo_subfolder,
+                    min_stopping_correlation=MIN_STOPPING_CORRELATION,
+                    population_size=POPULATION_SIZE,
+                    max_generations=MAX_GENERATIONS,
+                    num_datapoints=len(combo_df)
+                )
+                
+                results_csv_path = os.path.join(equation_exploration_folder, 'all_runs_results.csv')
+                for rank, eq in enumerate(top_20_combo, 1):
+                    result_row = {
+                        'benchmark': bench_name,
+                        'type': type_str,
+                        'filter': f"{int(filter_val)}",
+                        'equation_string': eq.to_string(),
+                        'equation_id': eq.get_id(),
+                        'rank': rank,
+                        'fitness': eq.fitness,
+                        'correlation': eq.avg_correlation,
+                        'r2': eq.avg_r2,
+                        'simplicity': eq.simplicity_score,
+                        'complexity': eq.get_complexity(),
+                        'depth': eq.get_depth(),
+                        'size': eq.get_size(),
+                        'num_params': eq.num_params,
+                        'generation': eq.generation,
+                        'tree_structure': str(eq.tree.to_dict()),  # Serialized tree for reconstruction
+                        'param_initial_guess': str(eq.param_initial_guess),  # Initial parameter values
+                        'variables_used': ','.join(sorted(eq.get_all_variables()))  # Variables used in equation
+                    }
+                    # Append to CSV file
+                    result_df = pd.DataFrame([result_row])
+                    if os.path.exists(results_csv_path):
+                        result_df.to_csv(results_csv_path, mode='a', header=False, index=False, encoding='utf-8')
+                    else:
+                        result_df.to_csv(results_csv_path, mode='w', header=True, index=False, encoding='utf-8')
+        
+        print(f"  Processed {bench_combinations} combinations for {bench_name}")
+    
+    # Sort all results by fitness and correlation
+    results_csv_path = os.path.join(equation_exploration_folder, 'all_runs_results.csv')
+    if os.path.exists(results_csv_path):
+        all_results_df = pd.read_csv(results_csv_path, encoding='utf-8')
+        all_results_df_sorted = all_results_df.sort_values(
+            by=['fitness', 'correlation'], 
+            ascending=[False, False]
+        )
+        all_results_df_sorted.to_csv(results_csv_path, index=False, encoding='utf-8')
+    
+    # Calculate final statistics
+    total_all = total_combinations + total_combinations_part2
+    skipped_all = skipped_combinations + skipped_combinations_part2
+    skipped_done_all = skipped_already_done + skipped_already_done_part2
+    
+    print(f"\n{'='*80}")
+    print(f"TOTAL STATISTICS:")
+    print(f"  Total GA runs completed: {total_all}")
+    print(f"  Total skipped (insufficient data): {skipped_all}")
+    print(f"  Total skipped (already done): {skipped_done_all}")
+    print(f"{'='*80}")
+    
+    print("\n" + "="*80)
+    print("EQUATION EXPLORATION COMPLETE!")
+    print("="*80)
+    print(f"Results saved to: {equation_exploration_folder}")
+    print(f"All runs saved to: all_runs_results.csv")
+    print(f"\nTo create global rankings and heatmaps, run:")
+    print(f"  analyze_equation_exploration_results(OUTPUT_FOLDER, appended_benchmarks_df)")
+    print("="*80)
+
+def reconstruct_equation_from_csv_row(row):
+    """Reconstruct an Equation object from a CSV row.
+    
+    Handles both local ranking CSV (with 'fitness', 'correlation', etc.) 
+    and global ranking CSV (with 'original_fitness', 'original_correlation', etc.)
+    """
+    import ast
+    from ga_engine import Equation, ExprNode
+    
+    # Parse the tree structure from string representation
+    tree_dict = ast.literal_eval(row['tree_structure'])
+    tree = ExprNode.from_dict(tree_dict)
+    
+    # Parse parameter initial guesses
+    param_initial_guess = ast.literal_eval(row['param_initial_guess'])
+    
+    # Handle column name variations between local and global ranking CSVs
+    # Check if this is from global ranking (has 'original_fitness') or local ranking (has 'fitness')
+    if 'original_fitness' in row.index:
+        # Global ranking CSV
+        fitness = float(row['original_fitness'])
+        correlation = float(row['original_correlation'])
+        r2 = float(row.get('original_r2', 0.0))  # May not exist in older versions
+        simplicity = float(row['complexity'])  # Use complexity as simplicity proxy
+    else:
+        # Local ranking CSV
+        fitness = float(row['fitness'])
+        correlation = float(row['correlation'])
+        r2 = float(row['r2'])
+        simplicity = float(row['simplicity'])
+    
+    # Reconstruct the equation
+    eq = Equation(
+        tree=tree,
+        num_params=int(row['num_params']),
+        param_initial_guess=param_initial_guess,
+        fitness=fitness,
+        avg_correlation=correlation,
+        avg_r2=r2,
+        simplicity_score=simplicity,
+        generation=int(row['generation'])
+    )
+    
+    return eq
+
+def analyze_equation_exploration_results(OUTPUT_FOLDER, appended_benchmarks_df):
+    results_csv_path = os.path.join(OUTPUT_FOLDER, '7_equation_exploration', 'all_runs_results.csv')
+    if not os.path.exists(results_csv_path):
+        print(f"Results CSV not found: {results_csv_path}")
+        return
+    
+    all_results_df = pd.read_csv(results_csv_path, encoding='utf-8')
+    if all_results_df.empty:
+        print("No results found in the CSV.")
+        return
+    
+    print("\n" + "="*70)
+    print("Analyzing Equation Exploration Results...")
+    print("="*70)
+    
+    if not os.path.exists(os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration')):
+        os.makedirs(os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration'), exist_ok=True)
+    
+    # LOCAL RANKING
+    
+    print("\n" + "="*70)
+    print("Creating LOCAL RANKING...")
+    print("="*70)
+    
+    # Get the top equation (rank 1) for each (benchmark, type, filter) combination
+    top_per_combination = all_results_df[all_results_df['rank'] == 1].copy()
+    
+    # Sort these top equations by fitness and correlation
+    results_df = top_per_combination.sort_values(
+        by=['fitness', 'correlation'], 
+        ascending=[False, False]
+    )
+    
+    # csv
+    local_ranking_csv = os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration', 'local_ranking.csv')
+    results_df.to_csv(local_ranking_csv, index=False, encoding='utf-8')
+    
+    # txt
+    local_ranking_top20 = results_df.head(20)
+    top_20_file = os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration', 'local_ranking.txt')
+    with open(top_20_file, 'w', encoding='utf-8') as f:
+        f.write("TOP 20 EQUATIONS OVERALL\n")
+        f.write("="*80 + "\n\n")
+        for rank, (_, row) in enumerate(local_ranking_top20.iterrows(), 1):
+            f.write(f"{rank}. {row['equation_string']}\n")
+            f.write(f"   Benchmark: {row['benchmark']}, Type: {row['type']}, Filter: {row['filter']}\n")
+            f.write(f"   Fitness: {row['fitness']:.6f}, Correlation: {row['correlation']:.6f}, R²: {row['r2']:.6f}\n")
+            f.write(f"   Simplicity: {row['simplicity']:.6f}, Complexity: {row['complexity']}, Depth: {row['depth']}, Size: {row['size']}\n\n")
+    
+    # png
+    fig = plt.figure(figsize=(16, max(10, len(local_ranking_top20) * 0.5)))
+    
+    labels = [f"{row['equation_string'][:60]}\n{row['benchmark'][:20]}, {row['type'][:15]}, F={row['filter']}" 
+            for _, row in local_ranking_top20.iterrows()][::-1]
+    fitness_scores = local_ranking_top20['fitness'].values[::-1]
+    
+    y_pos = range(len(labels))
+    
+    plt.barh(y_pos, fitness_scores, alpha=0.7, color='steelblue', edgecolor='black')
+    plt.yticks(y_pos, labels, fontsize=7)
+    plt.xlabel('Fitness', fontsize=10)
+    plt.ylabel('Expression', fontsize=10)
+    plt.title('Top 20 Equations - Local Ranking', fontsize=12)
+    plt.grid(axis='x', alpha=0.3)
+    
+    for i, fitness in enumerate(fitness_scores):
+        plt.text(fitness + 0.001, i, f'{fitness:.4f}', va='center', fontsize=7)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration', 'local_ranking.png'), 
+                dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    # GLOBAL RANKING
+    
+    print("\n" + "="*70)
+    print("Creating GLOBAL RANKING...")
+    print("="*70)
+
+    BENCH_ROWS_NAMES = appended_benchmarks_df.columns[appended_benchmarks_df.columns.str.startswith('BENCH')].tolist()
+    
+    # Create output folder
+    global_ranking_folder = os.path.join(OUTPUT_FOLDER, '7_2_analyze_equation_exploration')
+    
+    # Initialize list to store global ranking results
+    global_ranking_results = []
+    print(f"Evaluating {len(results_df)} equations across {len(BENCH_ROWS_NAMES)} benchmarks...")
+    
+    # Process each equation from local ranking
+    for idx, (_, row) in enumerate(results_df.iterrows(), 1):
+        if idx % 10 == 0 or idx == 1 or idx == len(results_df):
+            print(f"  Processing equation {idx}/{len(results_df)}...")
+        
+        try:
+            # Reconstruct the equation
+            eq = reconstruct_equation_from_csv_row(row)
+            
+            # Convert equation to lambda function
+            allowed_vars = ['complexity', 'count']
+            eq_func = eq.to_lambda(allowed_vars=allowed_vars)
+            
+            if eq_func is None:
+                print(f"    Warning: Failed to create lambda for equation {idx}")
+                continue
+            
+            # STEP 1: Optimize parameters using ALL benchmarks combined
+            all_fitted_params = []
+            all_complexity_values = np.array([])
+            all_count_values = np.array([])
+            all_bench_values = np.array([])
+            
+            try:
+                # Collect all valid benchmark data
+                all_bench_values_list = []
+                all_complexity_values_list = []
+                all_count_values_list = []
+                
+                for bench_name in BENCH_ROWS_NAMES:
+                    mask_bench = ~(
+                        appended_benchmarks_df[bench_name].isna() | 
+                        appended_benchmarks_df['complexity'].isna() | 
+                        appended_benchmarks_df['count'].isna()
+                    )
+                    
+                    if mask_bench.sum() >= 3:
+                        all_bench_values_list.extend(appended_benchmarks_df.loc[mask_bench, bench_name].values)
+                        all_complexity_values_list.extend(appended_benchmarks_df.loc[mask_bench, 'complexity'].values)
+                        all_count_values_list.extend(appended_benchmarks_df.loc[mask_bench, 'count'].values)
+                
+                all_bench_values = np.array(all_bench_values_list)
+                all_complexity_values = np.array(all_complexity_values_list)
+                all_count_values = np.array(all_count_values_list)
+                
+                if len(all_bench_values) >= 3:
+                    # Fit parameters on ALL data
+                    def fit_func_all(x_data, *params):
+                        result = eq_func(all_complexity_values, all_count_values, *params)
+                        return np.clip(result, -1e300, 1e300)
+                    
+                    x_dummy_all = np.arange(len(all_bench_values))
+                    
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        fitted_params_all, _ = curve_fit(
+                            fit_func_all,
+                            x_dummy_all,
+                            all_bench_values,
+                            p0=eq.param_initial_guess,
+                            maxfev=100000
+                        )
+                    
+                    # Validate fitted parameters
+                    if np.any(np.isnan(fitted_params_all)) or np.any(np.isinf(fitted_params_all)) or np.any(np.abs(fitted_params_all) > 1e50):
+                        raise ValueError("Invalid fitted parameters")
+                    
+                    all_fitted_params = fitted_params_all.tolist()
+                    
+                else:
+                    # Not enough data to fit
+                    print(f"    Warning: Equation {idx} - not enough data points for ALL benchmarks")
+                    continue
+                    
+            except Exception as e:
+                print(f"    Warning: Equation {idx} - failed to fit on ALL data: {type(e).__name__}")
+                continue
+            
+            # STEP 2: Evaluate using the SAME parameters on ALL benchmarks and each individual benchmark
+            benchmark_results = {}
+            benchmark_correlations = []
+            benchmark_r2_scores = []
+            valid_benchmarks = 0
+            
+            # Evaluate on ALL (with the fitted parameters)
+            try:
+                predictions_all = eq_func(all_complexity_values, all_count_values, *all_fitted_params)
+                
+                # Validate predictions
+                if np.any(np.isnan(predictions_all)) or np.any(np.isinf(predictions_all)) or np.any(np.abs(predictions_all) > 1e100):
+                    raise ValueError("Invalid predictions")
+                
+                # Check for constant predictions
+                if np.std(predictions_all) < 1e-10:
+                    raise ValueError("Constant predictions")
+                
+                correlation_all = np.corrcoef(all_bench_values, predictions_all)[0, 1]
+                
+                if np.isnan(correlation_all) or np.isinf(correlation_all):
+                    raise ValueError("Invalid correlation")
+                
+                r2_all = 1 - (np.sum((all_bench_values - predictions_all)**2) / np.sum((all_bench_values - np.mean(all_bench_values))**2))
+                
+                benchmark_results['ALL'] = {
+                    'correlation': correlation_all,
+                    'r2': r2_all,
+                    'data_points': len(all_bench_values)
+                }
+                
+                benchmark_correlations.append(correlation_all)
+                benchmark_r2_scores.append(r2_all)
+                valid_benchmarks += 1
+                
+            except Exception as e:
+                benchmark_results['ALL'] = {
+                    'correlation': np.nan,
+                    'r2': np.nan,
+                    'data_points': len(all_bench_values)
+                }
+            
+            # Evaluate on each individual benchmark (using the same parameters)
+            for bench_name in BENCH_ROWS_NAMES:
+                # Filter data for this benchmark
+                mask_bench = ~(
+                    appended_benchmarks_df[bench_name].isna() | 
+                    appended_benchmarks_df['complexity'].isna() | 
+                    appended_benchmarks_df['count'].isna()
+                )
+                
+                if mask_bench.sum() < 3:
+                    # Not enough data for this benchmark
+                    benchmark_results[bench_name] = {
+                        'correlation': np.nan,
+                        'r2': np.nan,
+                        'data_points': 0
+                    }
+                    continue
+                
+                # Extract data
+                bench_values = appended_benchmarks_df.loc[mask_bench, bench_name].values
+                complexity_values = appended_benchmarks_df.loc[mask_bench, 'complexity'].values
+                count_values = appended_benchmarks_df.loc[mask_bench, 'count'].values
+                
+                try:
+                    # Evaluate using the SAME parameters fitted on ALL data
+                    predictions = eq_func(complexity_values, count_values, *all_fitted_params)
+                    
+                    # Validate predictions
+                    if np.any(np.isnan(predictions)) or np.any(np.isinf(predictions)) or np.any(np.abs(predictions) > 1e100):
+                        raise ValueError("Invalid predictions")
+                    
+                    # Check for constant predictions
+                    if np.std(predictions) < 1e-10:
+                        raise ValueError("Constant predictions")
+                    
+                    # Calculate correlation
+                    correlation = np.corrcoef(bench_values, predictions)[0, 1]
+                    
+                    if np.isnan(correlation) or np.isinf(correlation):
+                        raise ValueError("Invalid correlation")
+                    
+                    # Calculate R²
+                    r2 = 1 - (np.sum((bench_values - predictions)**2) / np.sum((bench_values - np.mean(bench_values))**2))
+                    
+                    # Store results
+                    benchmark_results[bench_name] = {
+                        'correlation': correlation,
+                        'r2': r2,
+                        'data_points': len(bench_values)
+                    }
+                    
+                    benchmark_correlations.append(correlation)
+                    benchmark_r2_scores.append(r2)
+                    valid_benchmarks += 1
+                    
+                except Exception as e:
+                    # Failed to evaluate for this benchmark
+                    benchmark_results[bench_name] = {
+                        'correlation': np.nan,
+                        'r2': np.nan,
+                        'data_points': len(bench_values)
+                    }
+            
+            # Calculate global metrics (including ALL)
+            if len(benchmark_correlations) > 0:
+                avg_correlation = np.mean(benchmark_correlations)
+                avg_r2 = np.mean(benchmark_r2_scores)
+                min_correlation = np.min(benchmark_correlations)
+                max_correlation = np.max(benchmark_correlations)
+                std_correlation = np.std(benchmark_correlations)
+            else:
+                avg_correlation = np.nan
+                avg_r2 = np.nan
+                min_correlation = np.nan
+                max_correlation = np.nan
+                std_correlation = np.nan
+            
+            # Format fitted parameters for ALL benchmarks with a,b,c... labels
+            param_labels = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't']
+            if len(all_fitted_params) > 0:
+                fitted_params_str = ', '.join([f'{param_labels[i]}={param:.6f}' 
+                                               for i, param in enumerate(all_fitted_params[:len(param_labels)])])
+            else:
+                fitted_params_str = 'N/A'
+            
+            # Create global ranking entry
+            global_entry = {
+                'equation_string': row['equation_string'],
+                'equation_id': row['equation_id'],
+                'original_benchmark': row['benchmark'],
+                'original_type': row['type'],
+                'original_filter': row['filter'],
+                'original_rank': row['rank'],
+                'original_fitness': row['fitness'],
+                'original_correlation': row['correlation'],
+                'global_avg_correlation': avg_correlation,
+                'global_avg_r2': avg_r2,
+                'global_min_correlation': min_correlation,
+                'global_max_correlation': max_correlation,
+                'global_std_correlation': std_correlation,
+                'valid_benchmarks_count': valid_benchmarks,
+                'best_params': fitted_params_str,
+                'complexity': row['complexity'],
+                'depth': row['depth'],
+                'size': row['size'],
+                'num_params': row['num_params'],
+                'variables_used': row['variables_used'],
+                'tree_structure': row['tree_structure'],  # Keep tree structure for reconstruction
+                'param_initial_guess': row['param_initial_guess'],  # Keep initial param guesses
+                'generation': row['generation']  # Keep generation info
+            }
+            
+            # Add individual benchmark results as columns (all using the same parameters)
+            for bench_name in BENCH_ROWS_NAMES + ['ALL']:
+                if bench_name in benchmark_results:
+                    bench_clean = bench_name.replace('BENCH-', '').replace('_', '-').lower()
+                    global_entry[f'{bench_clean}_correlation'] = benchmark_results[bench_name]['correlation']
+                    global_entry[f'{bench_clean}_r2'] = benchmark_results[bench_name]['r2']
+                    global_entry[f'{bench_clean}_datapoints'] = benchmark_results[bench_name]['data_points']
+            
+            global_ranking_results.append(global_entry)
+            
+        except Exception as e:
+            print(f"    Error processing equation {idx}: {type(e).__name__}: {str(e)[:100]}")
+            continue
+    
+    # Convert to DataFrame
+    if len(global_ranking_results) > 0:
+        global_ranking_df = pd.DataFrame(global_ranking_results)
+        
+        # Sort by global average correlation (descending)
+        global_ranking_df = global_ranking_df.sort_values('global_avg_correlation', ascending=False)
+        
+        # Save to CSV
+        global_ranking_csv = os.path.join(global_ranking_folder, 'global_ranking.csv')
+        global_ranking_df.to_csv(global_ranking_csv, index=False, encoding='utf-8')
+        
+        print(f"\n✓ Created global ranking with {len(global_ranking_df)} equations")
+        print(f"✓ File: global_ranking.csv")
+        
+        # Create global ranking text file with top 20
+        global_ranking_top20 = global_ranking_df.head(20)
+        top_20_global_file = os.path.join(global_ranking_folder, 'global_ranking.txt')
+        with open(top_20_global_file, 'w', encoding='utf-8') as f:
+            f.write("TOP 20 EQUATIONS - GLOBAL RANKING\n")
+            f.write("(Evaluated across all benchmarks)\n")
+            f.write("="*80 + "\n\n")
+            for rank, (_, row) in enumerate(global_ranking_top20.iterrows(), 1):
+                # Reconstruct equation to get version with substituted parameters
+                try:
+                    eq_reconstructed = reconstruct_equation_from_csv_row(row)
+                    
+                    # Parse best params to substitute
+                    best_params_str = row['best_params']
+                    if best_params_str != 'N/A' and not pd.isna(best_params_str):
+                        best_params = []
+                        param_pairs = best_params_str.split(', ')
+                        for pair in param_pairs:
+                            if '=' in pair:
+                                _, value = pair.split('=')
+                                best_params.append(float(value))
+                        
+                        # Get equation string with parameters substituted
+                        eq_str_with_params = eq_reconstructed.to_string(param_values=best_params)
+                    else:
+                        eq_str_with_params = row['equation_string']
+                except Exception as e:
+                    # Fallback to original string if reconstruction fails
+                    eq_str_with_params = row['equation_string']
+                
+                f.write(f"{rank}. {row['equation_string']}\n")
+                f.write(f"   Substituted: {eq_str_with_params}\n")
+                f.write(f"   Original: {row['original_benchmark']}, {row['original_type']}, Filter={row['original_filter']}\n")
+                f.write(f"   Best Params (ALL): {row['best_params']}\n")
+                f.write(f"   Global Avg Correlation: {row['global_avg_correlation']:.6f}\n")
+                f.write(f"   Global Avg R²: {row['global_avg_r2']:.6f}\n")
+                f.write(f"   Range: [{row['global_min_correlation']:.6f}, {row['global_max_correlation']:.6f}]\n")
+                f.write(f"   Std: {row['global_std_correlation']:.6f}\n")
+                f.write(f"   Valid Benchmarks: {row['valid_benchmarks_count']}/{len(BENCH_ROWS_NAMES)}\n")
+                f.write(f"   Complexity: {row['complexity']}, Depth: {row['depth']}, Size: {row['size']}\n\n")
+        
+        # Create global ranking plot
+        fig = plt.figure(figsize=(16, max(10, len(global_ranking_top20) * 0.5)))
+        
+        labels = [f"{row['equation_string'][:60]}\n" 
+                for _, row in global_ranking_top20.iterrows()][::-1]
+        correlations = global_ranking_top20['global_avg_correlation'].values[::-1]
+        
+        colors = ['green' if c > 0 else 'red' for c in correlations]
+        
+        plt.barh(range(len(labels)), correlations, color=colors, alpha=0.7, edgecolor='black')
+        plt.yticks(range(len(labels)), labels, fontsize=7)
+        plt.xlabel('Global Average Correlation', fontsize=10)
+        plt.ylabel('Expression', fontsize=10)
+        plt.title('Top 20 Expressions - Global Ranking', fontsize=12)
+        plt.grid(axis='x', alpha=0.3)
+        plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
+        
+        for i, corr in enumerate(correlations):
+            plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=7, 
+                    ha='left' if corr > 0 else 'right')
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(global_ranking_folder, 'global_ranking.png'), 
+                    dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        print(f"✓ Created global ranking plot and text summary")
+    else:
+        print("⚠️  No equations successfully evaluated for global ranking")
+    
+    
+    # GLOBAL HEATMAP
+    
+    print("\n" + "="*70)
+    print("Creating GLOBAL HEATMAP...")
+    print("="*70)
+    
+    if len(global_ranking_results) > 0:
+        # Get top 20 equations
+        heatmap_top20 = global_ranking_df.head(20)
+        
+        # Prepare data for heatmap
+        # Rows: equations (top 20)
+        # Columns: benchmarks (ALL + individual benchmarks)
+        
+        benchmark_cols = ['ALL'] + BENCH_ROWS_NAMES
+        heatmap_data = []
+        equation_labels = []
+        
+        for idx, (_, row) in enumerate(heatmap_top20.iterrows(), 1):
+            # Create equation label (truncated for readability)
+            eq_label = f"{idx}. {row['equation_string'][:40]}..."
+            equation_labels.append(eq_label)
+            
+            # Collect correlation values for each benchmark
+            bench_correlations = []
+            for bench in benchmark_cols:
+                bench_clean = bench.replace('BENCH-', '').replace('_', '-').lower()
+                corr_col = f'{bench_clean}_correlation'
+                
+                if corr_col in row:
+                    corr_value = row[corr_col]
+                    # Handle NaN values
+                    if pd.isna(corr_value):
+                        bench_correlations.append(0)  # Use 0 for missing values
+                    else:
+                        bench_correlations.append(corr_value)
+                else:
+                    bench_correlations.append(0)
+            
+            heatmap_data.append(bench_correlations)
+        
+        # Convert to numpy array
+        heatmap_array = np.array(heatmap_data)
+        
+        # Create benchmark labels (clean names)
+        benchmark_labels = ['ALL'] + [b.replace('BENCH-', '').replace('_', ' ') for b in BENCH_ROWS_NAMES]
+        
+        # Create heatmap
+        fig, ax = plt.subplots(figsize=(max(12, len(benchmark_labels) * 1.5), max(12, len(equation_labels) * 0.6)))
+        
+        # Create heatmap with seaborn-like colors
+        im = ax.imshow(heatmap_array, cmap='RdYlGn', aspect='auto', vmin=-1, vmax=1)
+        
+        # Set ticks
+        ax.set_xticks(np.arange(len(benchmark_labels)))
+        ax.set_yticks(np.arange(len(equation_labels)))
+        
+        # Set labels
+        ax.set_xticklabels(benchmark_labels, rotation=45, ha='right', fontsize=9)
+        ax.set_yticklabels(equation_labels, fontsize=8)
+        
+        # Add colorbar
+        cbar = plt.colorbar(im, ax=ax)
+        cbar.set_label('Pearson Correlation', rotation=270, labelpad=20, fontsize=10)
+        
+        # Add text annotations
+        for i in range(len(equation_labels)):
+            for j in range(len(benchmark_labels)):
+                value = heatmap_array[i, j]
+                # Only show text for non-zero values
+                if abs(value) > 0.01:
+                    text_color = 'white' if abs(value) > 0.5 else 'black'
+                    ax.text(j, i, f'{value:.2f}', ha='center', va='center', 
+                           color=text_color, fontsize=7)
+        
+        # Set title
+        ax.set_title('Top 20 Expressions - Correlation Heatmap', 
+                    fontsize=14, pad=20)
+        
+        # Add grid
+        ax.set_xticks(np.arange(len(benchmark_labels)) - 0.5, minor=True)
+        ax.set_yticks(np.arange(len(equation_labels)) - 0.5, minor=True)
+        ax.grid(which='minor', color='gray', linestyle='-', linewidth=0.5, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(global_ranking_folder, 'global_ranking_heatmap.png'), 
+                    dpi=200, bbox_inches='tight')
+        plt.close()
+        
+        print(f"✓ Created global ranking heatmap")
+        
+        # Also create a CSV with just the heatmap data for easier analysis
+        heatmap_df = pd.DataFrame(heatmap_array, 
+                                  index=[f"Eq{i+1}" for i in range(len(equation_labels))],
+                                  columns=benchmark_labels)
+        heatmap_csv = os.path.join(global_ranking_folder, 'global_ranking_heatmap.csv')
+        heatmap_df.to_csv(heatmap_csv, encoding='utf-8')
+        
+    else:
+        print("⚠️  No data available for heatmap")
+    
+    # EQUATIONS PLOTTING
+    
+    print("\n" + "="*70)
+    print("Creating INDIVIDUAL EXPRESSION PLOTS...")
+    print("="*70)
+    
+    if len(global_ranking_results) > 0:
+        # Create folder for plots
+        plots_folder = os.path.join(global_ranking_folder, 'global_ranking_plots')
+        os.makedirs(plots_folder, exist_ok=True)
+        
+        # Get top 20 equations
+        plot_top20 = global_ranking_df.head(20)
+        
+        print(f"Generating plots for top 20 expressions...")
+        
+        # Define ranges for count and complexity
+        count_range = np.logspace(0, 11, 500)  # 0 to 100 billion (log scale)
+        complexity_range = np.linspace(0, 1, 100)  # 0 to 1
+        
+        for rank, (_, row) in enumerate(plot_top20.iterrows(), 1):
+            print(f"  Plotting expression {rank}/20...")
+            
+            try:
+                # Reconstruct the equation
+                eq = reconstruct_equation_from_csv_row(row)
+                
+                # Convert to lambda function
+                allowed_vars = ['complexity', 'count']
+                eq_func = eq.to_lambda(allowed_vars=allowed_vars)
+                
+                if eq_func is None:
+                    print(f"    Warning: Failed to create lambda for equation {rank}")
+                    continue
+                
+                # Parse the best parameters from the string format
+                # Format is: "a=value, b=value, ..."
+                best_params_str = row['best_params']
+                if best_params_str == 'N/A' or pd.isna(best_params_str):
+                    print(f"    Warning: No parameters available for equation {rank}")
+                    continue
+                
+                # Extract parameter values from string
+                best_params = []
+                param_pairs = best_params_str.split(', ')
+                for pair in param_pairs:
+                    if '=' in pair:
+                        _, value = pair.split('=')
+                        best_params.append(float(value))
+                
+                # Get the equation string with parameters substituted
+                eq_str_with_params = eq.to_string(param_values=best_params)
+                
+                # ============================================================
+                # PLOT 1: Full range (0 to 100 billion)
+                # ============================================================
+                fig = plt.figure(figsize=(14, 10))
+                
+                # Plot for varying complexity values
+                for i, complexity in enumerate(complexity_range):
+                    try:
+                        y = eq_func(complexity, count_range, *best_params)
+                        
+                        # Handle infinities and NaN
+                        y = np.where(np.isfinite(y), y, np.nan)
+                        
+                        # Only label first and last lines
+                        label = f'complexity={complexity:.2f}' if i == 0 or i == len(complexity_range) - 1 else None
+                        
+                        # Use colormap for gradient
+                        color = plt.cm.viridis(i / len(complexity_range))
+                        plt.plot(count_range, y, color=color, alpha=0.7, linewidth=0.8, label=label)
+                        
+                    except Exception as e:
+                        # Skip this complexity value if evaluation fails
+                        continue
+                
+                plt.title(f"Rank {rank}: {eq_str_with_params}\n"
+                         f"Global Avg Correlation: {row['global_avg_correlation']:.4f}",
+                         fontsize=8)
+                plt.xlabel('Parameter Count (log scale)', fontsize=10)
+                plt.ylabel('Result', fontsize=10)
+                plt.xscale('log')
+                plt.grid(True, alpha=0.3)
+                
+                # Add legend
+                plt.legend(loc='best', fontsize=8)
+                
+                plt.tight_layout()
+                
+                # Save plot
+                plot_filename = f"rank_{rank:02d}_equation.png"
+                plt.savefig(os.path.join(plots_folder, plot_filename), 
+                           dpi=150, bbox_inches='tight')
+                plt.close()
+                
+                # ============================================================
+                # PLOT 2: Small range (0 to 1000)
+                # ============================================================
+                count_range_small = np.linspace(0, 1000, 500)  # 0 to 1000 (linear scale)
+                
+                fig = plt.figure(figsize=(14, 10))
+                
+                # Plot for varying complexity values
+                for i, complexity in enumerate(complexity_range):
+                    try:
+                        y = eq_func(complexity, count_range_small, *best_params)
+                        
+                        # Handle infinities and NaN
+                        y = np.where(np.isfinite(y), y, np.nan)
+                        
+                        # Only label first and last lines
+                        label = f'complexity={complexity:.2f}' if i == 0 or i == len(complexity_range) - 1 else None
+                        
+                        # Use colormap for gradient
+                        color = plt.cm.viridis(i / len(complexity_range))
+                        plt.plot(count_range_small, y, color=color, alpha=0.7, linewidth=0.8, label=label)
+                        
+                    except Exception as e:
+                        # Skip this complexity value if evaluation fails
+                        continue
+                
+                plt.title(f"Rank {rank}: {eq_str_with_params}\n"
+                         f"Global Avg Correlation: {row['global_avg_correlation']:.4f}",
+                         fontsize=8)
+                plt.xlabel('Parameter Count', fontsize=10)
+                plt.ylabel('Result', fontsize=10)
+                plt.grid(True, alpha=0.3)
+                
+                # Add legend
+                plt.legend(loc='best', fontsize=8)
+                
+                plt.tight_layout()
+                
+                # Save plot
+                plot_filename_small = f"rank_{rank:02d}_equation_small.png"
+                plt.savefig(os.path.join(plots_folder, plot_filename_small), 
+                           dpi=150, bbox_inches='tight')
+                plt.close()
+                
+            except Exception as e:
+                print(f"    Error plotting equation {rank}: {type(e).__name__}: {str(e)[:100]}")
+                continue
+        
+        print(f"\n✓ Created individual expression plots in: {plots_folder}")
+    else:
+        print("⚠️  No equations available for plotting")
 
 # ================================================================================
 
