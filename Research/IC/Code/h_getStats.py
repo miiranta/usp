@@ -105,11 +105,11 @@ def create_global_plots(df):
             
             bars = ax.bar(x_positions, values, color=colors, alpha=0.8, edgecolor='black', linewidth=0.5)
             
-            # Add value labels on top of each bar
+            # Add value labels inside each bar, rotated 90 degrees
             for i, (bar, value) in enumerate(zip(bars, values)):
                 height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height,
-                       f'{value:.4f}', ha='center', va='bottom', fontsize=5, rotation=0)
+                ax.text(bar.get_x() + bar.get_width()/2., height/2.,
+                       f'{value:.4f}', ha='center', va='center', fontsize=5, rotation=90, color='white', fontweight='bold')
             
             # Customize plot
             ax.set_ylabel(metric, fontsize=12, fontweight='bold')
@@ -193,11 +193,11 @@ def create_combined_global_plots(df):
         
         bars = ax.bar(x_positions, values, color=colors, alpha=0.8, edgecolor='black', linewidth=0.5)
         
-        # Add value labels on top of each bar
+        # Add value labels inside each bar, rotated 90 degrees
         for bar, value in zip(bars, values):
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                   f'{value:.4f}', ha='center', va='bottom', fontsize=5, rotation=0)
+            ax.text(bar.get_x() + bar.get_width()/2., height/2.,
+                   f'{value:.4f}', ha='center', va='center', fontsize=5, rotation=90, color='white', fontweight='bold')
         
         # Customize plot
         ax.set_ylabel(metric, fontsize=12, fontweight='bold')
