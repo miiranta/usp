@@ -91,8 +91,11 @@ def main():
     if False:
         aux.equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER)
         
-    if True:
+    if False:
         aux.analyze_equation_exploration(OUTPUT_FOLDER)
+        
+    if True:
+        aux.create_equation_rankings(OUTPUT_FOLDER)
         
     # (8) FOR EACH BENCHMARK - MAGICAL VARIABLE vs BENCHMARK
     if False:

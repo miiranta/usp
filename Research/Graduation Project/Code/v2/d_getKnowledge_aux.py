@@ -2950,6 +2950,201 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
     for group, folder in plot_folders.items():
         print(f"  {group} plots saved to: {folder}")
     print("="*70)
+
+def create_equation_rankings(OUTPUT_FOLDER):
+    
+    # Create output subfolder for equation exploration
+    equation_output_folder = os.path.join(OUTPUT_FOLDER, '7_equation_exploration')
+    if not os.path.exists(equation_output_folder):
+        os.makedirs(equation_output_folder)
+    
+    # Create rankings folder
+    rankings_folder = os.path.join(equation_output_folder, 'rankings')
+    if not os.path.exists(rankings_folder):
+        os.makedirs(rankings_folder)
+    
+    # Read the summary.csv file
+    summary_csv_path = os.path.join(equation_output_folder, 'summary.csv')
+    
+    if not os.path.exists(summary_csv_path):
+        print(f"Summary CSV not found at: {summary_csv_path}")
+        return
+    
+    print("\n" + "="*70)
+    print("Starting equation rankings generation...")
+    print("="*70)
+    
+    # Read the CSV
+    summary_df = pd.read_csv(summary_csv_path)
+    
+    # Error columns to visualize
+    error_columns = ['rmse', 'mae', 'mse']
+    
+    # Check if error columns exist
+    missing_cols = [col for col in error_columns if col not in summary_df.columns]
+    if missing_cols:
+        print(f"Warning: Missing error columns: {missing_cols}")
+        error_columns = [col for col in error_columns if col in summary_df.columns]
+        if not error_columns:
+            print("No error columns found. Cannot create rankings.")
+            return
+    
+    # Process each group
+    groups = summary_df['group'].unique()
+    
+    for group in groups:
+        print(f"\nProcessing group: {group}")
+        
+        # Filter data for this group
+        group_df = summary_df[summary_df['group'] == group].copy()
+        
+        if len(group_df) == 0:
+            print(f"  No data for group {group}")
+            continue
+        
+        # Calculate average error (mean of all error columns)
+        group_df['avg_error'] = group_df[error_columns].mean(axis=1)
+        
+        # Sort by average error (ascending - lower is better)
+        group_df = group_df.sort_values('avg_error', ascending=True)
+        
+        # Get top 20 (or all if less than 20)
+        top_n = min(20, len(group_df))
+        top_df = group_df.head(top_n)
+        
+        print(f"  Creating heatmap for top {top_n} functions")
+        
+        # Create labels combining filter, benchmark, and average error
+        labels = []
+        for _, row in top_df.iterrows():
+            filter_val = int(row['filter'])
+            benchmark = row['benchmark'].replace('BENCH-', '')
+            avg_err = row['avg_error']
+            # Truncate benchmark name if too long
+            if len(benchmark) > 20:
+                benchmark = benchmark[:17] + '...'
+            label = f"F{filter_val}-{benchmark} (Avg: {avg_err:.4f})"
+            labels.append(label)
+        
+        # Extract error values for heatmap
+        error_data = top_df[error_columns].values
+        
+        # Create the heatmap
+        fig, ax = plt.subplots(figsize=(10, max(8, top_n * 0.4)))
+        
+        # Create heatmap using imshow
+        im = ax.imshow(error_data, aspect='auto', cmap='YlOrRd', interpolation='nearest')
+        
+        # Set ticks and labels
+        ax.set_xticks(np.arange(len(error_columns)))
+        ax.set_yticks(np.arange(len(labels)))
+        ax.set_xticklabels([col.upper() for col in error_columns], fontsize=11, fontweight='bold')
+        ax.set_yticklabels(labels, fontsize=9)
+        
+        # Rotate the x-axis labels if needed
+        plt.setp(ax.get_xticklabels(), rotation=0, ha="center")
+        
+        # Add colorbar
+        cbar = plt.colorbar(im, ax=ax)
+        cbar.set_label('Error Value', rotation=270, labelpad=20, fontsize=10)
+        
+        # Add values in cells
+        for i in range(len(labels)):
+            for j in range(len(error_columns)):
+                text = ax.text(j, i, f'{error_data[i, j]:.4f}',
+                             ha="center", va="center", color="black", fontsize=7)
+        
+        # Set title
+        ax.set_title(f'Top {top_n} Functions by Average Error - Group: {group.replace("_", " ").title()}\n'
+                    f'(Lower values are better)', 
+                    fontsize=12, fontweight='bold', pad=15)
+        
+        # Set labels
+        ax.set_xlabel('Error Measures', fontsize=11, fontweight='bold')
+        ax.set_ylabel('Filter-Benchmark (Average Error)', fontsize=11, fontweight='bold')
+        
+        # Add grid
+        ax.set_xticks(np.arange(len(error_columns)) - 0.5, minor=True)
+        ax.set_yticks(np.arange(len(labels)) - 0.5, minor=True)
+        ax.grid(which="minor", color="gray", linestyle='-', linewidth=0.5)
+        
+        plt.tight_layout()
+        
+        # Save plot
+        plot_filename = f'ranking_{group}.png'
+        plot_path = os.path.join(rankings_folder, plot_filename)
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        print(f"  Saved ranking heatmap to: rankings/{plot_filename}")
+        
+        # Also save the ranking data to CSV
+        csv_filename = f'ranking_{group}.csv'
+        csv_path = os.path.join(rankings_folder, csv_filename)
+        
+        # Select relevant columns for CSV
+        ranking_cols = ['filter', 'benchmark', 'equation', 'r2_score', 'avg_error'] + error_columns + ['n_points']
+        top_df[ranking_cols].to_csv(csv_path, index=False)
+        
+        print(f"  Saved ranking data to: rankings/{csv_filename}")
+    
+    # Create a summary comparison across groups
+    print("\n  Creating cross-group comparison...")
+    
+    # For each group, get the best function (lowest avg error)
+    best_per_group = []
+    for group in groups:
+        group_df = summary_df[summary_df['group'] == group].copy()
+        if len(group_df) > 0:
+            group_df['avg_error'] = group_df[error_columns].mean(axis=1)
+            best_row = group_df.loc[group_df['avg_error'].idxmin()]
+            best_per_group.append({
+                'group': group,
+                'filter': best_row['filter'],
+                'benchmark': best_row['benchmark'],
+                'avg_error': best_row['avg_error'],
+                'r2_score': best_row['r2_score'],
+                **{col: best_row[col] for col in error_columns}
+            })
+    
+    if len(best_per_group) > 0:
+        best_df = pd.DataFrame(best_per_group)
+        
+        # Create comparison plot
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        x_pos = np.arange(len(best_df))
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c']  # Different colors for each group
+        
+        bars = ax.bar(x_pos, best_df['avg_error'], color=colors[:len(best_df)], alpha=0.7, edgecolor='black')
+        
+        ax.set_xlabel('Group', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Average Error (Lower is Better)', fontsize=12, fontweight='bold')
+        ax.set_title('Best Function per Group - Average Error Comparison', fontsize=13, fontweight='bold', pad=15)
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels([g.replace('_', ' ').title() for g in best_df['group']], fontsize=10)
+        ax.grid(axis='y', alpha=0.3, linestyle='--')
+        
+        # Add value labels on bars
+        for i, (bar, val) in enumerate(zip(bars, best_df['avg_error'])):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{val:.4f}',
+                   ha='center', va='bottom', fontsize=9, fontweight='bold')
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(rankings_folder, 'best_per_group_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        # Save summary CSV
+        best_df.to_csv(os.path.join(rankings_folder, 'best_per_group.csv'), index=False)
+        
+        print(f"  Saved cross-group comparison to: rankings/best_per_group_comparison.png")
+    
+    print("\n" + "="*70)
+    print("Equation rankings generation complete!")
+    print(f"Rankings saved to: {rankings_folder}")
+    print("="*70)
             
             
 # ================================================================================
