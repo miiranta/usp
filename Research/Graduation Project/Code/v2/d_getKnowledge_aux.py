@@ -2473,37 +2473,26 @@ def equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER):
                 
                 # Configure PySR
                 model = PySRRegressor(
-                    niterations=200,
                     # Binary operators: arithmetic and comparison
                     binary_operators=[
                         "+", "-", "*", "/",         # Basic arithmetic
                         "^",                        # Power
                         "max", "min",               # Comparison
-                        "mod"
                     ],
                     # Unary operators organized by category
                     unary_operators=[
-                        # Powers and roots
-                        "square", "cube", "sqrt",
-                        # Exponentials (base e and 2)
-                        "exp", "exp2", "expm1",
-                        # Logarithms (natural, base 2, base 10)
-                        "log", "log2", "log10", "log1p",
-                        # Trigonometric
-                        "sin", "cos", "tan",
-                        # Hyperbolic
-                        "sinh", "cosh", "tanh",
-                        # Inverse hyperbolic
-                        "asinh", "acosh", "atanh",
+                        # Exponential
+                        "exp",
+                        # Logarithm
+                        "log",
                         # Basic transformations
-                        "abs", "neg", "inv", "sign",
+                        "abs",
                         # Rounding
                         "ceil", "floor",
-                        # Activation functions
-                        "relu"
                     ],
-                    populations=15,
-                    population_size=30,
+                    niterations=500,
+                    populations=10,
+                    population_size=500,
                     maxsize=20, 
                     model_selection="best",  # or "accuracy"
                     verbosity=0,
@@ -2533,8 +2522,13 @@ def equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER):
                     equations.to_csv(output_file, index=False)
                     
                     # Get best equation
-                    best_equation = model.sympy()
-                    best_score = model.score(X, y)
+                    # find lowest-loss equation
+                    min_loss = equations["loss"].min()
+                    # choose the simplest equation within 5% of best loss
+                    subset = equations[equations["loss"] <= 1.05 * min_loss]
+                    best_row = subset.loc[subset["complexity"].idxmin()]
+                    best_equation = best_row["equation"]
+                    best_score = best_row["score"]
                     
                     # Calculate prediction error metrics
                     y_pred = model.predict(X)
@@ -3020,17 +3014,18 @@ def create_equation_rankings(OUTPUT_FOLDER):
             filter_val = int(row['filter'])
             benchmark = row['benchmark'].replace('BENCH-', '')
             avg_err = row['avg_error']
+            equation = row['equation']
             # Truncate benchmark name if too long
             if len(benchmark) > 20:
                 benchmark = benchmark[:17] + '...'
-            label = f"F{filter_val}-{benchmark} (Avg: {avg_err:.4f})"
+            label = f"F{filter_val}-{benchmark} (Avg: {avg_err:.4f})\n{equation}"
             labels.append(label)
         
         # Extract error values for heatmap
         error_data = top_df[error_columns].values
         
-        # Create the heatmap
-        fig, ax = plt.subplots(figsize=(10, max(8, top_n * 0.4)))
+        # Create the heatmap (increased height to accommodate two-line labels)
+        fig, ax = plt.subplots(figsize=(14, max(10, top_n * 0.6)))
         
         # Create heatmap using imshow
         im = ax.imshow(error_data, aspect='auto', cmap='YlOrRd', interpolation='nearest')
@@ -3039,7 +3034,7 @@ def create_equation_rankings(OUTPUT_FOLDER):
         ax.set_xticks(np.arange(len(error_columns)))
         ax.set_yticks(np.arange(len(labels)))
         ax.set_xticklabels([col.upper() for col in error_columns], fontsize=11, fontweight='bold')
-        ax.set_yticklabels(labels, fontsize=9)
+        ax.set_yticklabels(labels, fontsize=8, linespacing=1.2)
         
         # Rotate the x-axis labels if needed
         plt.setp(ax.get_xticklabels(), rotation=0, ha="center")
@@ -3133,13 +3128,13 @@ def create_equation_rankings(OUTPUT_FOLDER):
                    ha='center', va='bottom', fontsize=9, fontweight='bold')
         
         plt.tight_layout()
-        plt.savefig(os.path.join(rankings_folder, 'best_per_group_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.savefig(os.path.join(rankings_folder, 'best_per_group.png'), dpi=150, bbox_inches='tight')
         plt.close()
         
         # Save summary CSV
         best_df.to_csv(os.path.join(rankings_folder, 'best_per_group.csv'), index=False)
         
-        print(f"  Saved cross-group comparison to: rankings/best_per_group_comparison.png")
+        print(f"  Saved cross-group comparison to: rankings/best_per_group.png")
     
     print("\n" + "="*70)
     print("Equation rankings generation complete!")
