@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 import warnings
-
+from pysr import PySRRegressor
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
@@ -2408,31 +2408,550 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
 # 7 MAGICAL VARIABLE EXPLORE
 
 def equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER):
+
+    # Create output subfolder for equation exploration
+    equation_output_folder = os.path.join(OUTPUT_FOLDER, '7_equation_exploration')
+    if not os.path.exists(equation_output_folder):
+        os.makedirs(equation_output_folder)
+    
     # Get rows in header that start with "BENCH"
     BENCH_ROWS_NAMES = appended_benchmarks_df.columns[appended_benchmarks_df.columns.str.startswith('BENCH')].tolist()
     unique_filters = sorted([f for f in appended_benchmarks_df['filter'].unique() if pd.notna(f)])
+    
+    # Store results
+    results = []
+    
+    # Define the three test groups with their configurations
+    test_groups = {
+        'combined': {
+            'columns': ['count', 'complexity'],
+            'folder': 'combined',
+            'description': 'count + complexity'
+        },
+        'only_count': {
+            'columns': ['count'],
+            'folder': 'only_count',
+            'description': 'count only'
+        },
+        'only_complexity': {
+            'columns': ['complexity'],
+            'folder': 'only_complexity',
+            'description': 'complexity only'
+        }
+    }
     
     for filter_val in unique_filters:
         # Filter only rows with this filter
         filtered_df = appended_benchmarks_df[appended_benchmarks_df['filter'] == filter_val]
         
         for benchmark in BENCH_ROWS_NAMES:
-            # df (count, complexity, benchmark)
-            exploration_df = filtered_df[['count', 'complexity', benchmark]].copy()
             
-            # Remove rows with invalid values
-            exploration_df = exploration_df.dropna(subset=['count', 'complexity', benchmark])
-            exploration_df = exploration_df[(exploration_df['count'] > 0) & (exploration_df['complexity'] > 0)]
+            # Process each test group
+            for group_name, group_config in test_groups.items():
+                print(f"\nFilter {filter_val}, Benchmark {benchmark}, Group {group_name}:")
+                
+                # Prepare columns for this group
+                columns_to_use = group_config['columns'] + [benchmark]
+                exploration_df = filtered_df[columns_to_use].copy()
+                
+                # Remove rows with invalid values
+                exploration_df = exploration_df.dropna(subset=columns_to_use)
+                for col in group_config['columns']:
+                    exploration_df = exploration_df[exploration_df[col] > 0]
+                
+                if len(exploration_df) < 5:  # Need at least 5 data points
+                    print(f"  Not enough data points ({len(exploration_df)})")
+                    continue
+                
+                print(f"  Data points: {len(exploration_df)}")
+                
+                # Prepare data for PySR
+                X = exploration_df[group_config['columns']].values
+                if len(group_config['columns']) == 1:
+                    X = X.reshape(-1, 1)  # Reshape for single variable
+                y = exploration_df[benchmark].values
+                
+                # Configure PySR
+                model = PySRRegressor(
+                    niterations=200,
+                    # Binary operators: arithmetic and comparison
+                    binary_operators=[
+                        "+", "-", "*", "/",         # Basic arithmetic
+                        "^",                        # Power
+                        "max", "min",               # Comparison
+                        "mod"
+                    ],
+                    # Unary operators organized by category
+                    unary_operators=[
+                        # Powers and roots
+                        "square", "cube", "sqrt",
+                        # Exponentials (base e and 2)
+                        "exp", "exp2", "expm1",
+                        # Logarithms (natural, base 2, base 10)
+                        "log", "log2", "log10", "log1p",
+                        # Trigonometric
+                        "sin", "cos", "tan",
+                        # Hyperbolic
+                        "sinh", "cosh", "tanh",
+                        # Inverse hyperbolic
+                        "asinh", "acosh", "atanh",
+                        # Basic transformations
+                        "abs", "neg", "inv", "sign",
+                        # Rounding
+                        "ceil", "floor",
+                        # Activation functions
+                        "relu"
+                    ],
+                    populations=15,
+                    population_size=30,
+                    maxsize=20, 
+                    model_selection="best",  # or "accuracy"
+                    verbosity=0,
+                    progress=False
+                )
+                
+                try:
+                    # Fit the model
+                    print(f"  Running symbolic regression...")
+                    model.fit(X, y)
+                    
+                    # Get the best equations
+                    equations = model.equations_
+                    
+                    # Save equations to file
+                    benchmark_clean = benchmark.replace('BENCH-', '')
+                    
+                    evals_folder = os.path.join(equation_output_folder, 'evals')
+                    group_folder = os.path.join(evals_folder, group_config['folder'])
+                    if not os.path.exists(group_folder):
+                        os.makedirs(group_folder)
+                    
+                    output_file = os.path.join(
+                        group_folder,
+                        f'filter_{filter_val}_{benchmark_clean}.csv'
+                    )
+                    equations.to_csv(output_file, index=False)
+                    
+                    # Get best equation
+                    best_equation = model.sympy()
+                    best_score = model.score(X, y)
+                    
+                    # Calculate prediction error metrics
+                    y_pred = model.predict(X)
+                    mse = np.mean((y - y_pred) ** 2)
+                    rmse = np.sqrt(mse)
+                    mae = np.mean(np.abs(y - y_pred))
+                    
+                    print(f"  Best equation: {best_equation}")
+                    print(f"  R² score: {best_score:.4f}")
+                    print(f"  RMSE: {rmse:.4f}, MAE: {mae:.4f}")
+                    
+                    # Store results
+                    results.append({
+                        'filter': filter_val,
+                        'benchmark': benchmark,
+                        'group': group_name,
+                        'equation': str(best_equation),
+                        'r2_score': best_score,
+                        'rmse': rmse,
+                        'mae': mae,
+                        'mse': mse,
+                        'n_points': len(exploration_df)
+                    })
+                    
+                except Exception as e:
+                    print(f"  Error: {e}")
+                    continue
+    
+    # Save summary.csv
+    if len(results) > 0:
+        results_df = pd.DataFrame(results)
+        summary_csv_path = os.path.join(equation_output_folder, 'summary.csv')
+        results_df.to_csv(summary_csv_path, index=False)
+        print(f"\n{'='*70}")
+        print(f"Equation exploration complete!")
+        print(f"Total equations found: {len(results)}")
+        print(f"  Combined: {len(results_df[results_df['group'] == 'combined'])}")
+        print(f"  Only count: {len(results_df[results_df['group'] == 'only_count'])}")
+        print(f"  Only complexity: {len(results_df[results_df['group'] == 'only_complexity'])}")
+        print(f"Summary saved to: {summary_csv_path}")
+        print(f"{'='*70}\n")
+    else:
+        print(f"\n{'='*70}")
+        print("Warning: No equations were successfully generated!")
+        print(f"{'='*70}\n")
+        
+def analyze_equation_exploration(OUTPUT_FOLDER):
+    
+    # Create output subfolder for equation exploration
+    equation_output_folder = os.path.join(OUTPUT_FOLDER, '7_equation_exploration')
+    if not os.path.exists(equation_output_folder):
+        os.makedirs(equation_output_folder)
+    
+    # Create plot folders for each group
+    plot_folders = {
+        'combined': os.path.join(equation_output_folder, 'plots', 'combined'),
+        'only_count': os.path.join(equation_output_folder, 'plots', 'only_count'),
+        'only_complexity': os.path.join(equation_output_folder, 'plots', 'only_complexity')
+    }
+    
+    for folder in plot_folders.values():
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+    
+    # Read the summary.csv file
+    summary_csv_path = os.path.join(equation_output_folder, 'summary.csv')
+    
+    if not os.path.exists(summary_csv_path):
+        print(f"Summary CSV not found at: {summary_csv_path}")
+        return
+    
+    print("\n" + "="*70)
+    print("Starting equation exploration plot generation...")
+    print("="*70)
+    
+    # Read the CSV
+    summary_df = pd.read_csv(summary_csv_path)
+    
+    # Define ranges for x0 (count) and x1 (complexity)
+    # Count: 1 to 100 billion (1e11)
+    # Complexity: 0.01 to 1.0 (avoid 0 for some functions)
+    count_range = np.logspace(0, 11, 500)  # 1 to 100 billion, log-spaced
+    
+    # Create multiple complexity values to plot as separate curves
+    # From 0.01 to 1.0 with 20 different values
+    complexity_values = np.linspace(0.01, 1.0, 20)
+    
+    # Process each equation
+    for idx, row in summary_df.iterrows():
+        filter_val = int(row['filter'])
+        benchmark = row['benchmark'].replace('BENCH-', '')
+        equation_str = row['equation']
+        r2_score = row['r2_score']
+        n_points = row['n_points']
+        group = row['group']  # Get the group (combined, only_count, only_complexity)
+        
+        print(f"\nProcessing: Filter {filter_val}, {benchmark}, Group {group}")
+        print(f"  Equation: {equation_str}")
+        print(f"  R² score: {r2_score:.4f}")
+        
+        try:
+            # Convert the equation string to a SymPy expression
+            import sympy as sp
             
-            print(f"Filter {filter_val}, Benchmark {benchmark}:")
+            # Determine number of variables based on group
+            if group == 'combined':
+                # Both x0 (count) and x1 (complexity)
+                x0, x1 = sp.symbols('x0 x1')
+                symbols = (x0, x1)
+            elif group == 'only_count':
+                # Only x0 (count)
+                x0 = sp.symbols('x0')
+                symbols = (x0,)
+            elif group == 'only_complexity':
+                # Only x0 (but represents complexity in this case)
+                x0 = sp.symbols('x0')
+                symbols = (x0,)
+            else:
+                print(f"  Warning: Unknown group '{group}', skipping")
+                continue
             
-            # (count, complexity, benchmark)
-            # benchmark =~ f(count, complexity)
+            # Parse the equation with custom functions
+            local_dict = {
+                'x0': symbols[0] if len(symbols) >= 1 else None,
+                'x1': symbols[1] if len(symbols) >= 2 else None,
+                'log': sp.log,
+                'log2': lambda x: sp.log(x, 2),
+                'log10': lambda x: sp.log(x, 10),
+                'exp': sp.exp,
+                'exp2': lambda x: 2**x,
+                'sqrt': sp.sqrt,
+                'sin': sp.sin, 'cos': sp.cos, 'tan': sp.tan,
+                'sinh': sp.sinh, 'cosh': sp.cosh, 'tanh': sp.tanh,
+                'asinh': sp.asinh, 'acosh': sp.acosh, 'atanh': sp.atanh,
+                'ceiling': sp.ceiling, 'floor': sp.floor,
+                'sign': sp.sign, 'Abs': sp.Abs,
+                'Mod': sp.Mod, 'Piecewise': sp.Piecewise
+            }
+            expr = sp.sympify(equation_str, locals=local_dict)
+            
+            # Create a numerical function from the symbolic expression
+            numpy_funcs = {
+                'Mod': np.mod,
+                'ceiling': np.ceil,
+                'floor': np.floor,
+                'sign': np.sign,
+                'Abs': np.abs
+            }
+            func = sp.lambdify(symbols, expr, modules=[numpy_funcs, 'numpy'])
+            
+            # Get the plot folder for this group
+            current_plot_folder = plot_folders[group]
+            
+            # ============================================================
+            # PLOTTING LOGIC DEPENDS ON GROUP
+            # ============================================================
+            
+            if group == 'combined':
+                # Plot with multiple complexity curves (original behavior)
+                # Create the plot
+                fig, ax = plt.subplots(figsize=(14, 10))
+                
+                # Use a colormap for gradual color changes
+                cmap = plt.cm.viridis
+                colors = [cmap(i / len(complexity_values)) for i in range(len(complexity_values))]
+                
+                # Plot a curve for each complexity value
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore')
+                    
+                    for i, complexity_val in enumerate(complexity_values):
+                        try:
+                            # Evaluate function with this complexity value across all count values
+                            y_values = func(count_range, complexity_val)
+                            
+                            # If function returns a scalar (doesn't depend on x0), broadcast it
+                            if np.isscalar(y_values) or (isinstance(y_values, np.ndarray) and y_values.shape == ()):
+                                y_values = np.full_like(count_range, y_values)
+                            elif isinstance(y_values, np.ndarray) and len(y_values) == 1:
+                                y_values = np.full_like(count_range, y_values[0])
+                            
+                            # Handle any invalid values
+                            y_values = np.nan_to_num(y_values, nan=0, posinf=1e6, neginf=-1e6)
+                            
+                            # Plot this curve
+                            label = f'Complexity = {complexity_val:.2f}'
+                            ax.plot(count_range, y_values, color=colors[i], linewidth=1.5, 
+                                   label=label, alpha=0.8)
+                            
+                        except Exception as e:
+                            print(f"  Warning: Could not evaluate for complexity={complexity_val:.2f}: {e}")
+                            continue
+                
+                # Configure the plot
+                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=12, fontweight='bold')
+                ax.set_ylabel('Benchmark Score', fontsize=12, fontweight='bold')
+                ax.set_xscale('log')
+                ax.set_title(f'Filter {filter_val}, {benchmark} [Combined]\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
+                            fontsize=11, pad=15)
+                ax.grid(True, alpha=0.3, linestyle='--')
+                
+                # Add legend with smaller font and multiple columns
+                ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=8, 
+                         ncol=1, frameon=True, fancybox=True, shadow=True)
+                
+                # Create the plot filename
+                plot_filename = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}.png"
+                plot_path = os.path.join(current_plot_folder, plot_filename)
+                
+                plt.tight_layout()
+                plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+                plt.close()
+                
+                print(f"  Saved plot to: {group}/plots/{plot_filename}")
+                
+                # ============================================================
+                # CREATE SECOND PLOT: Linear scale, count from 1 to 1000
+                # ============================================================
+                
+                count_range_linear = np.linspace(1, 1000, 500)  # 1 to 1000, linear-spaced
+                
+                fig, ax = plt.subplots(figsize=(14, 10))
+                
+                # Use the same colormap for consistency
+                cmap = plt.cm.viridis
+                colors = [cmap(i / len(complexity_values)) for i in range(len(complexity_values))]
+                
+                # Plot a curve for each complexity value
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore')
+                    
+                    for i, complexity_val in enumerate(complexity_values):
+                        try:
+                            # Evaluate function with this complexity value across all count values
+                            y_values = func(count_range_linear, complexity_val)
+                            
+                            # If function returns a scalar (doesn't depend on x0), broadcast it
+                            if np.isscalar(y_values) or (isinstance(y_values, np.ndarray) and y_values.shape == ()):
+                                y_values = np.full_like(count_range_linear, y_values)
+                            elif isinstance(y_values, np.ndarray) and len(y_values) == 1:
+                                y_values = np.full_like(count_range_linear, y_values[0])
+                            
+                            # Handle any invalid values
+                            y_values = np.nan_to_num(y_values, nan=0, posinf=1e6, neginf=-1e6)
+                            
+                            # Plot this curve
+                            label = f'Complexity = {complexity_val:.2f}'
+                            ax.plot(count_range_linear, y_values, color=colors[i], linewidth=1.5, 
+                                   label=label, alpha=0.8)
+                            
+                        except Exception as e:
+                            print(f"  Warning: Could not evaluate for complexity={complexity_val:.2f} (linear): {e}")
+                            continue
+                
+                # Configure the plot
+                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=12, fontweight='bold')
+                ax.set_ylabel('Benchmark Score', fontsize=12, fontweight='bold')
+                # Linear scale - no set_xscale('log')
+                ax.set_title(f'Filter {filter_val}, {benchmark} [Combined] (Linear Scale: 1-1000)\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
+                            fontsize=11, pad=15)
+                ax.grid(True, alpha=0.3, linestyle='--')
+                
+                # Add legend with smaller font and multiple columns
+                ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=8, 
+                         ncol=1, frameon=True, fancybox=True, shadow=True)
+                
+                # Create the plot filename for linear version
+                plot_filename_linear = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}_linear.png"
+                plot_path_linear = os.path.join(current_plot_folder, plot_filename_linear)
+                
+                plt.tight_layout()
+                plt.savefig(plot_path_linear, dpi=150, bbox_inches='tight')
+                plt.close()
+                
+                print(f"  Saved linear plot to: {group}/plots/{plot_filename_linear}")
+                
+            elif group == 'only_count':
+                # Plot with count only (log scale)
+                fig, ax = plt.subplots(figsize=(14, 10))
+                
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore')
+                    
+                    try:
+                        # Evaluate function with count values
+                        y_values = func(count_range)
+                        
+                        # If function returns a scalar, broadcast it
+                        if np.isscalar(y_values) or (isinstance(y_values, np.ndarray) and y_values.shape == ()):
+                            y_values = np.full_like(count_range, y_values)
+                        elif isinstance(y_values, np.ndarray) and len(y_values) == 1:
+                            y_values = np.full_like(count_range, y_values[0])
+                        
+                        # Handle any invalid values
+                        y_values = np.nan_to_num(y_values, nan=0, posinf=1e6, neginf=-1e6)
+                        
+                        # Plot the curve
+                        ax.plot(count_range, y_values, color='steelblue', linewidth=2, 
+                               label='Prediction', alpha=0.8)
+                        
+                    except Exception as e:
+                        print(f"  Warning: Could not evaluate equation: {e}")
+                
+                # Configure the plot
+                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=12, fontweight='bold')
+                ax.set_ylabel('Benchmark Score', fontsize=12, fontweight='bold')
+                ax.set_xscale('log')
+                ax.set_title(f'Filter {filter_val}, {benchmark} [Count Only]\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
+                            fontsize=11, pad=15)
+                ax.grid(True, alpha=0.3, linestyle='--')
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+                
+                # Create the plot filename
+                plot_filename = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}.png"
+                plot_path = os.path.join(current_plot_folder, plot_filename)
+                
+                plt.tight_layout()
+                plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+                plt.close()
+                
+                print(f"  Saved plot to: {group}/plots/{plot_filename}")
+                
+                # Linear scale version
+                count_range_linear = np.linspace(1, 1000, 500)
+                fig, ax = plt.subplots(figsize=(14, 10))
+                
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore')
+                    
+                    try:
+                        y_values = func(count_range_linear)
+                        if np.isscalar(y_values) or (isinstance(y_values, np.ndarray) and y_values.shape == ()):
+                            y_values = np.full_like(count_range_linear, y_values)
+                        elif isinstance(y_values, np.ndarray) and len(y_values) == 1:
+                            y_values = np.full_like(count_range_linear, y_values[0])
+                        y_values = np.nan_to_num(y_values, nan=0, posinf=1e6, neginf=-1e6)
+                        ax.plot(count_range_linear, y_values, color='steelblue', linewidth=2, 
+                               label='Prediction', alpha=0.8)
+                    except Exception as e:
+                        print(f"  Warning: Could not evaluate equation (linear): {e}")
+                
+                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=12, fontweight='bold')
+                ax.set_ylabel('Benchmark Score', fontsize=12, fontweight='bold')
+                ax.set_title(f'Filter {filter_val}, {benchmark} [Count Only] (Linear Scale: 1-1000)\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
+                            fontsize=11, pad=15)
+                ax.grid(True, alpha=0.3, linestyle='--')
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+                
+                plot_filename_linear = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}_linear.png"
+                plot_path_linear = os.path.join(current_plot_folder, plot_filename_linear)
+                
+                plt.tight_layout()
+                plt.savefig(plot_path_linear, dpi=150, bbox_inches='tight')
+                plt.close()
+                
+                print(f"  Saved linear plot to: {group}/plots/{plot_filename_linear}")
+                
+            elif group == 'only_complexity':
+                # Plot with complexity only
+                complexity_range = np.linspace(0.01, 1.0, 500)  # Complexity from 0.01 to 1.0
+                
+                fig, ax = plt.subplots(figsize=(14, 10))
+                
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore')
+                    
+                    try:
+                        # Evaluate function with complexity values
+                        y_values = func(complexity_range)
+                        
+                        # If function returns a scalar, broadcast it
+                        if np.isscalar(y_values) or (isinstance(y_values, np.ndarray) and y_values.shape == ()):
+                            y_values = np.full_like(complexity_range, y_values)
+                        elif isinstance(y_values, np.ndarray) and len(y_values) == 1:
+                            y_values = np.full_like(complexity_range, y_values[0])
+                        
+                        # Handle any invalid values
+                        y_values = np.nan_to_num(y_values, nan=0, posinf=1e6, neginf=-1e6)
+                        
+                        # Plot the curve
+                        ax.plot(complexity_range, y_values, color='darkgreen', linewidth=2, 
+                               label='Prediction', alpha=0.8)
+                        
+                    except Exception as e:
+                        print(f"  Warning: Could not evaluate equation: {e}")
+                
+                # Configure the plot
+                ax.set_xlabel('Complexity (x0)', fontsize=12, fontweight='bold')
+                ax.set_ylabel('Benchmark Score', fontsize=12, fontweight='bold')
+                ax.set_title(f'Filter {filter_val}, {benchmark} [Complexity Only]\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
+                            fontsize=11, pad=15)
+                ax.grid(True, alpha=0.3, linestyle='--')
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+                
+                # Create the plot filename
+                plot_filename = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}.png"
+                plot_path = os.path.join(current_plot_folder, plot_filename)
+                
+                plt.tight_layout()
+                plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+                plt.close()
+                
+                print(f"  Saved plot to: {group}/plots/{plot_filename}")
+            
+        except Exception as e:
+            print(f"  Error processing equation: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+    
+    print("\n" + "="*70)
+    print("Equation exploration plot generation complete!")
+    for group, folder in plot_folders.items():
+        print(f"  {group} plots saved to: {folder}")
+    print("="*70)
             
             
-            
-            
-
 # ================================================================================
 
 # --------------------------------------------------------------
