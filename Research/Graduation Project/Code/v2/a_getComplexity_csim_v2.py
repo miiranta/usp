@@ -604,8 +604,8 @@ MODELS_TO_TEST = [
     # META
     #'meta-llama/Llama-4-Scout-17B-16E',
     
-    'meta-llama/Llama-3.2-3B',
-    'meta-llama/Llama-3.2-1B',
+    #'meta-llama/Llama-3.2-3B',
+    #'meta-llama/Llama-3.2-1B',
     
     'meta-llama/Llama-3.1-70B',
     'meta-llama/Llama-3.1-8B',
