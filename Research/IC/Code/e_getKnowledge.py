@@ -48,7 +48,6 @@ def get_appended_csvs():
     result_csv_data = []
     result_human_data = []
     header = None
-    header_human = None
     for csv_file in csv_files:
         file_path = os.path.join(INPUT_FOLDER, csv_file)
         csv_data, csv_human_data = read_csv(file_path)
@@ -57,15 +56,23 @@ def get_appended_csvs():
             csv_data = csv_data[1:]
             result_csv_data.extend(csv_data)
         if csv_human_data:
-            header_human = csv_human_data[0]
-            csv_human_data = csv_human_data[1:]
+            csv_human_data = csv_human_data[0:]
             result_human_data.extend(csv_human_data)
        
     result_csv_data.sort(key=lambda row: (row[1], _date_key(row[0])))
     result_human_data.sort(key=lambda row: (row[1], _date_key(row[0])))
     
+    # Remove grades
+    grades_to_remove = {'-2', '-3', '0'}
+    for row in result_csv_data[:]:
+        if row[2].strip() in grades_to_remove:
+            result_csv_data.remove(row)
+    for row in result_human_data[:]:
+        if row[2].strip() in grades_to_remove:
+            result_human_data.remove(row)
+    
     # Check if any grade values are invalid (anything other than -1, 0, 1)
-    valid_grades = {-1, 0, 1}
+    valid_grades = {-1, 1}
     for row in result_csv_data:
         try:
             grade = int(row[2])
@@ -83,8 +90,7 @@ def get_appended_csvs():
        
     if header:
         result_csv_data.insert(0, header)
-    if header_human:
-        result_human_data.insert(0, header_human)
+        result_human_data.insert(0, header)
 
     return result_csv_data, result_human_data
 

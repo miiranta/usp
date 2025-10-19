@@ -4,7 +4,7 @@ from datetime import datetime
 import openpyxl
 import base64
 
-CONVERT_2_AND_3_TO_0 = False
+CONVERT_2_AND_3_TO_0 = True
 
 SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "toConvert")

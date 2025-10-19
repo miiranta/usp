@@ -136,19 +136,32 @@ def create_evaluation_csvs(rank):
     print("\nCreating optimized CSV...")
     optimized_merged = pd.merge(ipca_data, optimized_data, on='date', how='inner')
     optimized_merged = optimized_merged[['date', 'inflation', 'sentiment']].dropna()
-    optimized_output = os.path.join(OUTPUT_FOLDER, 'sentiment_corrected.csv')
-    optimized_merged.to_csv(optimized_output, sep='|', index=False)
-    print(f"Saved optimized CSV with {len(optimized_merged)} rows to: {optimized_output}")
     
     # 2. Create interpolated CSV
     print("\nCreating interpolated CSV...")
     interpolated_merged = pd.merge(ipca_data, interpolated_data, on='date', how='inner')
     interpolated_merged = interpolated_merged[['date', 'inflation', 'sentiment']].dropna()
+    
+    # Find common dates across all datasets (use minimum row count)
+    print("\nFinding common dates across all datasets...")
+    common_dates = set(optimized_merged['date']) & set(interpolated_merged['date'])
+    print(f"Common dates found: {len(common_dates)}")
+    
+    # Filter all datasets to only include common dates
+    optimized_merged = optimized_merged[optimized_merged['date'].isin(common_dates)].sort_values('date').reset_index(drop=True)
+    interpolated_merged = interpolated_merged[interpolated_merged['date'].isin(common_dates)].sort_values('date').reset_index(drop=True)
+    
+    # Save optimized CSV
+    optimized_output = os.path.join(OUTPUT_FOLDER, 'sentiment_corrected.csv')
+    optimized_merged.to_csv(optimized_output, sep='|', index=False)
+    print(f"Saved optimized CSV with {len(optimized_merged)} rows to: {optimized_output}")
+    
+    # Save interpolated CSV
     interpolated_output = os.path.join(OUTPUT_FOLDER, 'sentiment_not_corrected.csv')
     interpolated_merged.to_csv(interpolated_output, sep='|', index=False)
     print(f"Saved interpolated CSV with {len(interpolated_merged)} rows to: {interpolated_output}")
     
-    # 1. Create baseline CSV (sentiment = 0) - same dates as interpolated
+    # 1. Create baseline CSV (sentiment = 0) - same dates as other datasets
     print("\nCreating baseline CSV...")
     baseline_df = interpolated_merged[['date', 'inflation']].copy()
     baseline_df['sentiment'] = 0.0
