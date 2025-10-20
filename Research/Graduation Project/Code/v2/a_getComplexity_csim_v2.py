@@ -628,11 +628,11 @@ MODELS_TO_TEST = [
     #'google/gemma-3-270m',
     
     #'google/gemma-2-27b',
-    'google/gemma-2-9b',
-    'google/gemma-2-2b',
+    #'google/gemma-2-9b',
+    #'google/gemma-2-2b',
     
-    'google/gemma-7b',
-    'google/gemma-2b',
+    #'google/gemma-7b',
+    #'google/gemma-2b',
     
     'google/recurrentgemma-9b',
     'google/recurrentgemma-2b',
