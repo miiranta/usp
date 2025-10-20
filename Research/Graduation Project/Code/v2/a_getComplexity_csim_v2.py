@@ -607,27 +607,27 @@ MODELS_TO_TEST = [
     #'meta-llama/Llama-3.2-3B',
     #'meta-llama/Llama-3.2-1B',
     
-    'meta-llama/Llama-3.1-70B',
-    'meta-llama/Llama-3.1-8B',
+    #'meta-llama/Llama-3.1-70B',
+    #'meta-llama/Llama-3.1-8B',
     
-    'meta-llama/Meta-Llama-3-70B',
-    'meta-llama/Meta-Llama-3-8B',
+    #'meta-llama/Meta-Llama-3-70B',
+    #'meta-llama/Meta-Llama-3-8B',
     
-    'meta-llama/Llama-2-70b-hf',
-    'meta-llama/Llama-2-13b-hf',
-    'meta-llama/Llama-2-7b-hf',
+    #'meta-llama/Llama-2-70b-hf',
+    #'meta-llama/Llama-2-13b-hf',
+    #'meta-llama/Llama-2-7b-hf',
     
     # GOOGLE
-    'google/gemma-3n-E4B',
-    'google/gemma-3n-E2B',
+    #'google/gemma-3n-E4B',
+    #'google/gemma-3n-E2B',
     
-    'google/gemma-3-27b-pt',
-    'google/gemma-3-12b-pt',
-    'google/gemma-3-4b-pt',
-    'google/gemma-3-1b-pt',
-    'google/gemma-3-270m',
+    #'google/gemma-3-27b-pt',
+    #'google/gemma-3-12b-pt',
+    #'google/gemma-3-4b-pt',
+    #'google/gemma-3-1b-pt',
+    #'google/gemma-3-270m',
     
-    'google/gemma-2-27b',
+    #'google/gemma-2-27b',
     'google/gemma-2-9b',
     'google/gemma-2-2b',
     
