@@ -45,6 +45,11 @@ def main():
     # 1.2 Regressao livre entre filter e complexidade, Regressao livre na complexidade maxima
     if False:
         aux.plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER)
+        
+    # (1.1) NUMBER OF BINS vs FILTER
+    #
+    if True:
+        aux.plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # (2) COMPLEXITY vs TYPES
     # 2.1 Para cada tipo, calcular a complexidade média e máxima
@@ -88,13 +93,13 @@ def main():
     # ===========
     
     # (7) MAGICAL VARIABLE EXPLORE
-    if True:
+    if False:
         aux.equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER)
         
-    if True:
+    if False:
         aux.analyze_equation_exploration(OUTPUT_FOLDER)
         
-    if True:
+    if False:
         aux.create_equation_rankings(OUTPUT_FOLDER)
         
     # (8) FOR EACH BENCHMARK - MAGICAL VARIABLE vs BENCHMARK
