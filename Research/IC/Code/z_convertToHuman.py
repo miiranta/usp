@@ -10,7 +10,7 @@ SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "toConvert")
 OUTPUT_FOLDER = os.path.join(SCRIPT_FOLDER, "toConvert/output")
 
-input_files = ["mateus.csv", "evandro.xlsx", "cezio.xlsx", "human_cezio_350.csv"]
+input_files = ["mateus.csv", "evandro.xlsx", "cezio.xlsx", "human_cezio_350.csv", "conciliado_first220.csv"]
 output_file = "output.csv"
 
 def decode_date_from_id(file_id):
@@ -64,6 +64,38 @@ def read_csv_file_pipe_delimited(filepath):
         for line_num, line in enumerate(f, 1):
             # Skip header line if it contains 'cod|texto|cezio'
             if line_num == 1 and 'cod|texto|cezio' in line.lower():
+                continue
+            
+            line = line.strip()
+            if not line:
+                continue
+            
+            parts = line.split('|')
+            if len(parts) >= 3:
+                file_id = parts[0].strip()
+                phrase = parts[1].strip()
+                sentiment_str = parts[2].strip()
+                
+                # Ignore if sentiment is empty
+                if not sentiment_str:
+                    continue
+                
+                try:
+                    sentiment = int(float(sentiment_str))
+                    data.append((file_id, phrase, sentiment))
+                except ValueError:
+                    # Skip rows with invalid sentiment values
+                    print(f"  Warning: Skipping row {line_num} with invalid sentiment: '{sentiment_str}'")
+                    continue
+    return data
+
+def read_csv_file_pipe_delimited2(filepath):
+    """Read CSV file with pipe delimiter (format: cod|texto|conciliado)"""
+    data = []
+    with open(filepath, 'r', encoding='utf-8') as f:
+        for line_num, line in enumerate(f, 1):
+            # Skip header line if it contains 'cod|texto|conciliado'
+            if line_num == 1 and 'cod|texto|conciliado' in line.lower():
                 continue
             
             line = line.strip()
@@ -177,6 +209,8 @@ def main():
             # Check if it's human_cezio_350.csv with pipe delimiter format
             if filename == 'human_cezio_350.csv':
                 data = read_csv_file_pipe_delimited(filepath)
+            elif filename == 'conciliado_first220.csv':
+                data = read_csv_file_pipe_delimited2(filepath)
             else:
                 data = read_csv_file(filepath)
         elif filename.endswith('.xlsx'):

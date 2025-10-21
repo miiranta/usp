@@ -83,7 +83,7 @@ if __name__ == "__main__":
     SCRIPT_FOLDER = os.path.dirname(os.path.abspath(__file__))
     INPUT_FOLDER = os.path.join(SCRIPT_FOLDER, 'stats_results')
 
-    TARGET_WIDTH = 1920  # Change this to your desired width (e.g., 1920 for Full HD, 3840 for 4K)
+    TARGET_WIDTH = 262144  # Change this to your desired width (e.g., 1920 for Full HD, 3840 for 4K)
     TARGET_HEIGHT = None  # Set to None to maintain aspect ratio, or specify a height
     
     # Run the resize operation
