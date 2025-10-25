@@ -634,20 +634,20 @@ MODELS_TO_TEST = [
     #'google/gemma-7b',
     #'google/gemma-2b',
     
-    'google/recurrentgemma-9b',
-    'google/recurrentgemma-2b',
+    #'google/recurrentgemma-9b',
+    #'google/recurrentgemma-2b',
     
     # MICROSOFT
-    'microsoft/Phi-4-mini-reasoning',
-    'microsoft/Phi-4-reasoning',
-    'microsoft/Phi-4-reasoning-plus',
-    'microsoft/phi-4',
+    #'microsoft/Phi-4-mini-reasoning',
+    #'microsoft/Phi-4-reasoning',
+    #'microsoft/Phi-4-reasoning-plus',
+    #'microsoft/phi-4',
     
-    'microsoft/phi-2',
+    #'microsoft/phi-2',
     
-    'microsoft/phi-1_5',
+    #'microsoft/phi-1_5',
     
-    'microsoft/phi-1',
+    #'microsoft/phi-1',
     
     # OPENAI
     'openai/gpt-oss-120b',
