@@ -13,7 +13,7 @@ if not os.path.exists(INPUT_FOLDER):
 if not os.path.exists(OUTPUT_FOLDER):
     os.makedirs(OUTPUT_FOLDER)
 
-FILTER_DEFAULT_REPLACE = 30  # Replace filter "0 sigma" with this value
+FILTER_DEFAULT_REPLACE = 40  # Replace filter "0 sigma" with this value
 
 # Load appended_benchmarks.csv
 appended_benchmarks_path = os.path.join(INPUT_FOLDER, 'appended_benchmarks.csv')
@@ -27,7 +27,7 @@ def parse_filter(value):
     if pd.isnull(value):
         return None
     try:
-        return int(value.split()[0])
+        return float(value.split()[0])
     except (ValueError, IndexError):
         return None
 appended_benchmarks_df['filter'] = appended_benchmarks_df['filter'].apply(parse_filter)
@@ -43,7 +43,7 @@ def main():
     # (1) COMPLEXITY vs FILTER
     # 1.1 Para cada valor de filter, calcular a complexidade média e máxima (desvio padrao?)
     # 1.2 Regressao livre entre filter e complexidade, Regressao livre na complexidade maxima
-    if False:
+    if True:
         aux.plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER)
         
     # (1.1) NUMBER OF BINS vs FILTER
@@ -53,19 +53,19 @@ def main():
     
     # (2) COMPLEXITY vs TYPES
     # 2.1 Para cada tipo, calcular a complexidade média e máxima
-    if False:
+    if True:
         aux.plot_complexity_vs_types(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # (3) COMPLEXITY vs NUMBER OF PARAMS
     # 3.1 Para cada número de parâmetros, calcular a complexidade média, com histograma
     # 3.2 Regressao livre entre número de parâmetros e complexidade
-    if False:
+    if True:
         aux.plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # (4) COMPLEXITY vs NUMBER OF BINS
     # 4.1 Para cada número de bins, calcular a complexidade média, com histograma
     # 4.2 Regressao livre entre número de bins e complexidade
-    if False:
+    if True:
         aux.plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # ===========
@@ -76,7 +76,7 @@ def main():
     # 5.3 Plot das correlações livres
     # 5.4 Plot dos R2 das regressões lineares
     # 5.5 Plot dos R2 das regressões livres
-    if False:
+    if True:
         aux.analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # ===========
@@ -87,23 +87,23 @@ def main():
     # 6.3 Plot das correlações livres
     # 6.4 Plot dos R2 das regressões lineares
     # 6.5 Plot dos R2 das regressões livres
-    if False:
+    if True:
         aux.analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER)
     
     # ===========
     
     # (7) MAGICAL VARIABLE EXPLORE
-    if False:
+    if True:
         aux.equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER)
         
-    if False:
+    if True:
         aux.analyze_equation_exploration(OUTPUT_FOLDER)
         
-    if False:
+    if True:
         aux.create_equation_rankings(OUTPUT_FOLDER)
         
     # (8) FOR EACH BENCHMARK - MAGICAL VARIABLE vs BENCHMARK
-    if False:
+    if True:
         aux.analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER)
          
 if __name__ == "__main__":

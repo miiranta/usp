@@ -37,11 +37,6 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                 'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
                 'initial_guess': [1, 1, 1]
             },
-            'cubic': {
-                'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-                'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-                'initial_guess': [1, 1, 1, 1]
-            },
             'exponential': {
                 'func': lambda x, a, b, c: a * np.exp(b * x) + c,
                 'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
@@ -103,11 +98,6 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
             'func': lambda x, a, b, c: a * x**2 + b * x + c,
             'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
             'initial_guess': [1, 1, 1]
-        },
-        'cubic': {
-            'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-            'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-            'initial_guess': [1, 1, 1, 1]
         },
         'exponential': {
             'func': lambda x, a, b, c: a * np.exp(b * x) + c,
@@ -286,11 +276,6 @@ def plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER):
                 'func': lambda x, a, b, c: a * x**2 + b * x + c,
                 'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
                 'initial_guess': [1, 1, 1]
-            },
-            'cubic': {
-                'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-                'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-                'initial_guess': [1, 1, 1, 1]
             },
             'exponential': {
                 'func': lambda x, a, b, c: a * np.exp(b * x) + c,
@@ -564,11 +549,6 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
             'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
             'initial_guess': [1, 1, 1]
         },
-        'cubic': {
-            'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-            'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-            'initial_guess': [1, 1, 1, 1]
-        },
         'exponential': {
             'func': lambda x, a, b, c: a * np.exp(b * x) + c,
             'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
@@ -657,7 +637,7 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
     # Plot histogram: average complexity per parameter count interval
     fig = plt.figure(figsize=(14, 9))
     bars = plt.bar(bin_centers, avg_complexity_per_bin, width=(param_bins[1] - param_bins[0]) * 0.9, 
-                color='steelblue', alpha=0.7, edgecolor='black')
+                color='steelblue', alpha=0.7, edgecolor='none', linewidth=0, antialiased=False, clip_on=False)
     plt.xlabel('Number of Parameters')
     plt.ylabel('Average Complexity')
     plt.title(f'Average Complexity by Parameter Count Range (Freedman-Diaconis: {n_bins_fd} bins)')
@@ -761,11 +741,6 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
             'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
             'initial_guess': [1, 1, 1]
         },
-        'cubic': {
-            'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-            'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-            'initial_guess': [1, 1, 1, 1]
-        },
         'exponential': {
             'func': lambda x, a, b, c: a * np.exp(b * x) + c,
             'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
@@ -854,7 +829,7 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
     # Plot histogram: average complexity per bin count interval
     fig = plt.figure(figsize=(14, 9))
     bars = plt.bar(bin_centers_bins, avg_complexity_per_bin_bins, width=(bin_bins[1] - bin_bins[0]) * 0.9, 
-                color='steelblue', alpha=0.7, edgecolor='black')
+                color='steelblue', alpha=0.7, edgecolor='none', linewidth=0, antialiased=False, clip_on=False)
     plt.xlabel('Number of Bins')
     plt.ylabel('Average Complexity')
     plt.title(f'Average Complexity by Bin Count Range (Freedman-Diaconis: {n_bins_fd_bins} bins)')
@@ -977,11 +952,6 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                 'func': lambda x, a, b, c: a * x**2 + b * x + c,
                 'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
                 'initial_guess': [1, 1, 1]
-            },
-            'cubic': {
-                'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-                'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-                'initial_guess': [1, 1, 1, 1]
             },
             'exponential': {
                 'func': lambda x, a, b, c: a * np.exp(b * x) + c,
@@ -1153,11 +1123,6 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                 'func': lambda x, a, b, c: a * x**2 + b * x + c,
                 'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
                 'initial_guess': [1, 1, 1]
-            },
-            'cubic': {
-                'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-                'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-                'initial_guess': [1, 1, 1, 1]
             },
             'exponential': {
                 'func': lambda x, a, b, c: a * np.exp(b * x) + c,
@@ -1475,11 +1440,6 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                         'func': lambda x, a, b, c: a * x**2 + b * x + c,
                         'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
                         'initial_guess': [1, 1, 1]
-                    },
-                    'cubic': {
-                        'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-                        'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-                        'initial_guess': [1, 1, 1, 1]
                     },
                     'exponential': {
                         'func': lambda x, a, b, c: a * np.exp(b * x) + c,
@@ -1815,11 +1775,6 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
                 'initial_guess': [1, 1, 1]
             },
-            'cubic': {
-                'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-                'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-                'initial_guess': [1, 1, 1, 1]
-            },
             'exponential': {
                 'func': lambda x, a, b, c: a * np.exp(b * x) + c,
                 'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
@@ -1992,11 +1947,6 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 'func': lambda x, a, b, c: a * x**2 + b * x + c,
                 'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
                 'initial_guess': [1, 1, 1]
-            },
-            'cubic': {
-                'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-                'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-                'initial_guess': [1, 1, 1, 1]
             },
             'exponential': {
                 'func': lambda x, a, b, c: a * np.exp(b * x) + c,
@@ -2317,11 +2267,6 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                         'func': lambda x, a, b, c: a * x**2 + b * x + c,
                         'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
                         'initial_guess': [1, 1, 1]
-                    },
-                    'cubic': {
-                        'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-                        'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-                        'initial_guess': [1, 1, 1, 1]
                     },
                     'exponential': {
                         'func': lambda x, a, b, c: a * np.exp(b * x) + c,
@@ -3401,11 +3346,6 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
                 'initial_guess': [1, 1, 1]
             },
-            'cubic': {
-                'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-                'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-                'initial_guess': [1, 1, 1, 1]
-            },
             'exponential': {
                 'func': lambda x, a, b, c: a * np.exp(b * x) + c,
                 'equation': lambda params: f'y = {params[0]:.16f}·e^({params[1]:.16f}x) + {params[2]:.16f}',
@@ -3682,11 +3622,6 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                         'func': lambda x, a, b, c: a * x**2 + b * x + c,
                         'equation': lambda params: f'y = {params[0]:.16f}x² + {params[1]:.16f}x + {params[2]:.16f}',
                         'initial_guess': [1, 1, 1]
-                    },
-                    'cubic': {
-                        'func': lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d,
-                        'equation': lambda params: f'y = {params[0]:.16f}x³ + {params[1]:.16f}x² + {params[2]:.16f}x + {params[3]:.16f}',
-                        'initial_guess': [1, 1, 1, 1]
                     },
                     'exponential': {
                         'func': lambda x, a, b, c: a * np.exp(b * x) + c,

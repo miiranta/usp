@@ -97,6 +97,12 @@ def filter_rows(infos):
         if any(isinstance(field, str) and (field.lower() == 'nan' or field.lower() == 'inf') for field in numeric_fields):
             print(f"[{info.model} | {info.types} | {info.filter}] Removing (nan or inf values)")
             infos.remove(info)
+            
+    # Remove any rows with number of bins = 1 billion
+    for info in infos[:]:
+        if info.bin_count >= 1000000000:
+            print(f"[{info.model} | {info.types} | {info.filter}] Removing (bin_count >= 1 billion)")
+            infos.remove(info)
     
 # ====================================
 
