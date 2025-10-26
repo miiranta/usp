@@ -70,6 +70,9 @@ def main():
     
     # ===========
     
+    appended_benchmarks_df_only_filter20 = appended_benchmarks_df[appended_benchmarks_df['filter'] == 20]
+    print(f"Filtered dataframe to only filter 20, resulting in {len(appended_benchmarks_df_only_filter20)} rows.")
+
     # (5) FOR EACH BENCHMARK, FILTER and TYPE - COMPLEXITY vs BENCHMARK
     # 5.1 Para cada benchmark, regressao livre e linear entre complexidade e benchmark
     # 5.2 Plot das correlações lineares
@@ -77,7 +80,7 @@ def main():
     # 5.4 Plot dos R2 das regressões lineares
     # 5.5 Plot dos R2 das regressões livres
     if True:
-        aux.analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER)
+        aux.analyze_benchmarks_vs_complexity(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
     
     # ===========
     
@@ -88,13 +91,13 @@ def main():
     # 6.4 Plot dos R2 das regressões lineares
     # 6.5 Plot dos R2 das regressões livres
     if True:
-        aux.analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER)
+        aux.analyze_param_count_vs_benchmarks(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
     
     # ===========
     
     # (7) MAGICAL VARIABLE EXPLORE
     if True:
-        aux.equation_exploration(appended_benchmarks_df, OUTPUT_FOLDER)
+        aux.equation_exploration(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
         
     if True:
         aux.analyze_equation_exploration(OUTPUT_FOLDER)
@@ -104,7 +107,7 @@ def main():
         
     # (8) FOR EACH BENCHMARK - MAGICAL VARIABLE vs BENCHMARK
     if True:
-        aux.analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER)
+        aux.analyze_magical_var_vs_benchmarks(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
          
 if __name__ == "__main__":
     main()
