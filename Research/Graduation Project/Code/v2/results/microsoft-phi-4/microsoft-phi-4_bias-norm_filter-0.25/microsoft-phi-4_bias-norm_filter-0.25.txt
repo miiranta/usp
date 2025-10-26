@@ -1,0 +1,18 @@
+Model: microsoft/phi-4
+Types: bias, norm
+Filter: 0.25 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 106318
+ > Min: 0.333984375
+ > Max: 0.44921875
+ > Mean: 0.39117130477670764
+ > Standard Deviation: 0.032524050371292614
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 52
+ > Shannon Entropy: 3.8919386863708496
+ > Desequilibrium: 0.00258005503565073
+ > Complexity: 0.010041416006214998

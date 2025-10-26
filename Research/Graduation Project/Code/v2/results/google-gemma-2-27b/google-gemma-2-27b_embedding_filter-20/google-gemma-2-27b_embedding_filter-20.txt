@@ -1,0 +1,18 @@
+Model: google/gemma-2-27b
+Types: embedding
+Filter: 20 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 1179645243
+ > Min: -0.2943424582481384
+ > Max: 0.29357990622520447
+ > Mean: -1.8345792917125338e-05
+ > Standard Deviation: 0.014693962590551217
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 16694
+ > Shannon Entropy: 7.445272445678711
+ > Desequilibrium: 0.0006435289978981018
+ > Complexity: 0.0047912487160459705

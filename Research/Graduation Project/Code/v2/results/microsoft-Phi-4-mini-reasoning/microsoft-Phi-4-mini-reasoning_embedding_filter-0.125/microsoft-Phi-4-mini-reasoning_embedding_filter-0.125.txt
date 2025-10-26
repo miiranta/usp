@@ -1,0 +1,18 @@
+Model: microsoft/Phi-4-mini-reasoning
+Types: embedding
+Filter: 0.125 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 141084138
+ > Min: -0.01422119140625
+ > Max: 0.0137939453125
+ > Mean: -0.00021064814053104255
+ > Standard Deviation: 0.00796305387744882
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 534
+ > Shannon Entropy: 6.203032493591309
+ > Desequilibrium: 0.00017146268510259688
+ > Complexity: 0.0010635886071298228

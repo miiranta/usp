@@ -1,0 +1,18 @@
+Model: openai-community/gpt2-xl
+Types: other
+Filter: 5 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 1556373504
+ > Min: -0.2045501470565796
+ > Max: 0.2045784890651703
+ > Mean: 1.3287868053533978e-05
+ > Standard Deviation: 0.04073447844851844
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 4491
+ > Shannon Entropy: 7.518899917602539
+ > Desequilibrium: 0.0004254617670085281
+ > Complexity: 0.0031990044449034527

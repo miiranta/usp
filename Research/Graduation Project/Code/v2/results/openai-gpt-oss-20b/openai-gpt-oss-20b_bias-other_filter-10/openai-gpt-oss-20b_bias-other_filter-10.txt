@@ -1,0 +1,18 @@
+Model: openai/gpt-oss-20b
+Types: bias, other
+Filter: 10 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 19742372677
+ > Min: -17.75
+ > Max: 17.75
+ > Mean: 3.181380492074763e-05
+ > Standard Deviation: 1.6302297281735267
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 1535141
+ > Shannon Entropy: 4.261359214782715
+ > Desequilibrium: 0.021680079400539398
+ > Complexity: 0.09238660613070948

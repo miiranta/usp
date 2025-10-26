@@ -1,0 +1,18 @@
+Model: google/gemma-3-12b-pt
+Types: norm, embedding
+Filter: 10 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 1012945925
+ > Min: -21.5
+ > Max: 21.625
+ > Mean: 0.003181659833427291
+ > Standard Deviation: 0.19570908481912183
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 1046602
+ > Shannon Entropy: 6.851296901702881
+ > Desequilibrium: 0.0011597818229347467
+ > Complexity: 0.00794600961012415

@@ -1,0 +1,18 @@
+Model: openai-community/openai-gpt
+Types: bias, embedding, other
+Filter: 0.25 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 32133627
+ > Min: -0.01779002696275711
+ > Max: 0.019374974071979523
+ > Mean: 0.0007852900584670333
+ > Standard Deviation: 0.010538773081109414
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 330
+ > Shannon Entropy: 5.79827880859375
+ > Desequilibrium: 4.918796093988931e-06
+ > Complexity: 2.852055115556973e-05

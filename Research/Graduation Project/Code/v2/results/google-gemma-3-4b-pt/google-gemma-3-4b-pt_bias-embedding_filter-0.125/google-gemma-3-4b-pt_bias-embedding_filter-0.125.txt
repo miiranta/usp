@@ -1,0 +1,18 @@
+Model: google/gemma-3-4b-pt
+Types: bias, embedding
+Filter: 0.125 sigma
+
+=== DATA STATS ===
+Data Stats:
+ > Count: 229027227
+ > Min: -0.0084228515625
+ > Max: 0.0078125
+ > Mean: -0.00027169508371986233
+ > Standard Deviation: 0.00463574635795196
+
+=== HISTOGRAM STATS ===
+Histogram Stats:
+ > Bin Count: 629
+ > Shannon Entropy: 6.300333023071289
+ > Desequilibrium: 0.0003097165026701987
+ > Complexity: 0.0019513171095631998
