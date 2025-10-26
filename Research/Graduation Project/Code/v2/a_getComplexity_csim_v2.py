@@ -650,13 +650,13 @@ MODELS_TO_TEST = [
     #'microsoft/phi-1',
     
     # OPENAI
-    'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
+    #'openai/gpt-oss-120b',
+    #'openai/gpt-oss-20b',
     
-    'openai-community/gpt2-xl',
-    'openai-community/gpt2-large',
-    'openai-community/gpt2-medium',
-    'openai-community/gpt2',
+    #'openai-community/gpt2-xl',
+    #'openai-community/gpt2-large',
+    #'openai-community/gpt2-medium',
+    #'openai-community/gpt2',
     
     'openai-community/openai-gpt',
 ]
