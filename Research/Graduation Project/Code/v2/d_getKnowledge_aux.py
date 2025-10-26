@@ -4,6 +4,8 @@ import pandas as pd
 import warnings
 from pysr import PySRRegressor
 import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_theme(style='whitegrid')
 from scipy.optimize import curve_fit
 
 # ================================================================================
@@ -141,38 +143,38 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
     if not os.path.exists(filter_complexity_folder):
         os.makedirs(filter_complexity_folder)
 
-    # Plot scatter with regression lines
-    fig = plt.figure(figsize=(12, 9))
-    # Filter out filter = 0 from the scatter plot
-  
-    plt.scatter(appended_benchmarks_df['filter'], appended_benchmarks_df['complexity'], alpha=0.6, label='Data')
-    plt.plot(x_line, y_line, 'r-', linewidth=2, label=f'Best fit all data ({best_name})')
-    plt.scatter(x_max, y_max, color='green', s=100, alpha=0.8, marker='D', label='Maximum values', zorder=5)
-    plt.plot(x_line_max, y_line_max, 'g--', linewidth=2, label=f'Best fit max ({best_name_max})')
-    plt.xlabel('Filter')
-    plt.ylabel('Complexity')
-    plt.title('Filter vs Complexity')
-    plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.19), ncol=2, frameon=True, fancybox=True, shadow=True)
-    plt.subplots_adjust(bottom=0.28)
-    plt.figtext(0.5, 0.14, f'All data: {best_equation}     R² = {best_r2:.16f}', 
-                ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-    plt.figtext(0.5, 0.11, f'Max values: {best_equation_max}     R² = {best_r2_max:.16f}', 
-                ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8))
-    plt.savefig(os.path.join(filter_complexity_folder, 'regression.png'))
-    plt.close()
+    # Plot scatter with regression lines using seaborn
+    fig, ax = plt.subplots(figsize=(12, 9))
+    sns.scatterplot(x=appended_benchmarks_df['filter'], y=appended_benchmarks_df['complexity'],
+                    alpha=0.6, label='Data', ax=ax)
+    # Regression lines
+    sns.lineplot(x=x_line, y=y_line, color='red', linewidth=2, linestyle='-',
+                 label=f'Best fit all data ({best_name})\n{best_equation}\nR² = {best_r2:.6f}', ax=ax)
+    sns.scatterplot(x=x_max, y=y_max, color='green', s=100, alpha=0.8, marker='D',
+                    label='Maximum values', zorder=5, ax=ax)
+    sns.lineplot(x=x_line_max, y=y_line_max, color='green', linewidth=2, linestyle='--',
+                 label=f'Best fit max ({best_name_max})\n{best_equation_max}\nR² = {best_r2_max:.6f}', ax=ax)
+    ax.set_xlabel('Filter')
+    ax.set_ylabel('Complexity')
+    ax.set_title('Filter vs Complexity')
+    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+    
+    fig.savefig(os.path.join(filter_complexity_folder, 'regression.png'), dpi=100, bbox_inches='tight')
+    plt.close(fig)
 
     # Get average complexity for each filter (excluding filter = 0)
     avg_complexity_by_filter = appended_benchmarks_df.groupby('filter')['complexity'].mean().reset_index()
     x_avg = avg_complexity_by_filter['filter'].values
     y_avg = avg_complexity_by_filter['complexity'].values
 
-    # Plot bar graph for average complexity
-    fig = plt.figure(figsize=(12, 9))
-    plt.bar(x_avg, y_avg, color='steelblue', alpha=0.7, edgecolor='black')
-    plt.xlabel('Filter')
-    plt.ylabel('Average Complexity')
-    plt.title('Average Complexity by Filter Value')
-    plt.grid(axis='y', alpha=0.3)
+    # Plot bar graph for average complexity using seaborn
+    fig, ax = plt.subplots(figsize=(12, 9))
+    avg_df = pd.DataFrame({'filter': x_avg, 'avg_complexity': y_avg})
+    sns.barplot(data=avg_df, x='filter', y='avg_complexity', color='steelblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+    ax.set_xlabel('Filter')
+    ax.set_ylabel('Average Complexity')
+    ax.set_title('Average Complexity by Filter Value')
+    ax.grid(axis='y', alpha=0.3)
     # Add value labels on top of bars (slightly above each bar to avoid overlap)
     if len(y_avg) > 0:
         y_range = y_avg.max() - y_avg.min()
@@ -182,18 +184,26 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
             offset = y_range * 0.02
     else:
         offset = 0.01
-    for i, (x, y) in enumerate(zip(x_avg, y_avg)):
-        plt.text(x, y + offset, f'{y:.4f}', ha='center', va='bottom', fontsize=9, rotation=90)
-    plt.savefig(os.path.join(filter_complexity_folder, 'average_complexity_bar.png'))
-    plt.close()
+    # Annotate bars using patch positions so labels align with seaborn's categorical positioning
+    for p in ax.patches:
+        height = p.get_height()
+        x = p.get_x() + p.get_width() / 2
+        ax.text(x, height + offset, f"{height:.4f}", ha='center', va='bottom', fontsize=8, rotation=90)
+    # Adjust y-axis limits to accommodate rotated text labels
+    y_max_val = ax.get_ylim()[1]
+    ax.set_ylim(0, y_max_val * 1.15)
+    fig.tight_layout()
+    fig.savefig(os.path.join(filter_complexity_folder, 'average_complexity_bar.png'), bbox_inches='tight')
+    plt.close(fig)
 
-    # Plot bar graph for maximum complexity
-    fig = plt.figure(figsize=(12, 9))
-    plt.bar(x_max, y_max, color='darkgreen', alpha=0.7, edgecolor='black')
-    plt.xlabel('Filter')
-    plt.ylabel('Maximum Complexity')
-    plt.title('Maximum Complexity by Filter Value')
-    plt.grid(axis='y', alpha=0.3)
+    # Plot bar graph for maximum complexity using seaborn
+    fig, ax = plt.subplots(figsize=(12, 9))
+    max_df = pd.DataFrame({'filter': x_max, 'max_complexity': y_max})
+    sns.barplot(data=max_df, x='filter', y='max_complexity', color='darkgreen', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+    ax.set_xlabel('Filter')
+    ax.set_ylabel('Maximum Complexity')
+    ax.set_title('Maximum Complexity by Filter Value')
+    ax.grid(axis='y', alpha=0.3)
     # Add value labels on top of bars (slightly above each bar to avoid overlap)
     if len(y_max) > 0:
         y_range_max = y_max.max() - y_max.min()
@@ -203,10 +213,16 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
             offset_max = y_range_max * 0.02
     else:
         offset_max = 0.01
-    for i, (x, y) in enumerate(zip(x_max, y_max)):
-        plt.text(x, y + offset_max, f'{y:.4f}', ha='center', va='bottom', fontsize=9, rotation=90)
-    plt.savefig(os.path.join(filter_complexity_folder, 'maximum_complexity_bar.png'))
-    plt.close()
+    for p in ax.patches:
+        height = p.get_height()
+        x = p.get_x() + p.get_width() / 2
+        ax.text(x, height + offset_max, f"{height:.4f}", ha='center', va='bottom', fontsize=8, rotation=90)
+    # Adjust y-axis limits to accommodate rotated text labels
+    y_max_val = ax.get_ylim()[1]
+    ax.set_ylim(0, y_max_val * 1.15)
+    fig.tight_layout()
+    fig.savefig(os.path.join(filter_complexity_folder, 'maximum_complexity_bar.png'), bbox_inches='tight')
+    plt.close(fig)
 
     # Save regression information to text file
     with open(os.path.join(filter_complexity_folder, 'regression_info.txt'), 'w', encoding='utf-8') as f:
@@ -351,35 +367,33 @@ def plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER):
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-    # Plot scatter with regression lines
-    fig = plt.figure(figsize=(12, 9))
-    plt.scatter(appended_benchmarks_df['filter'], appended_benchmarks_df['bin_count'], alpha=0.6, label='Data')
-    plt.plot(x_line, y_line, 'r-', linewidth=2, label=f'Best fit all data ({best_name})')
-    plt.scatter(x_max, y_max, color='green', s=100, alpha=0.8, marker='D', label='Maximum values', zorder=5)
-    plt.plot(x_line_max, y_line_max, 'g--', linewidth=2, label=f'Best fit max ({best_name_max})')
-    plt.xlabel('Filter')
-    plt.ylabel('Number of Bins')
-    plt.title('Filter vs Number of Bins')
-    plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.19), ncol=2, frameon=True, fancybox=True, shadow=True)
-    plt.subplots_adjust(bottom=0.28)
-    plt.figtext(0.5, 0.14, f'All data: {best_equation}     R² = {best_r2:.16f}', 
-                ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-    plt.figtext(0.5, 0.11, f'Max values: {best_equation_max}     R² = {best_r2_max:.16f}', 
-                ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8))
-    plt.savefig(os.path.join(folder, 'regression.png'))
-    plt.close()
+    # Plot scatter with regression lines using seaborn
+    fig, ax = plt.subplots(figsize=(12, 9))
+    sns.scatterplot(x=appended_benchmarks_df['filter'], y=appended_benchmarks_df['bin_count'], alpha=0.6, label='Data', ax=ax)
+    sns.lineplot(x=x_line, y=y_line, color='red', linewidth=2, linestyle='-', label=f'Best fit all data ({best_name})\n{best_equation}\nR² = {best_r2:.6f}', ax=ax)
+    sns.scatterplot(x=x_max, y=y_max, color='green', s=100, alpha=0.8, marker='D', label='Maximum values', zorder=5, ax=ax)
+    sns.lineplot(x=x_line_max, y=y_line_max, color='green', linewidth=2, linestyle='--', label=f'Best fit max ({best_name_max})\n{best_equation_max}\nR² = {best_r2_max:.6f}', ax=ax)
+    ax.set_xlabel('Filter')
+    ax.set_ylabel('Number of Bins')
+    ax.set_title('Filter vs Number of Bins')
+    
+    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+    
+    fig.savefig(os.path.join(folder, 'regression.png'), dpi=100, bbox_inches='tight')
+    plt.close(fig)
 
     # Average bin_count by filter
     avg_bins_by_filter = appended_benchmarks_df.groupby('filter')['bin_count'].mean().reset_index()
     x_avg = avg_bins_by_filter['filter'].values
     y_avg = avg_bins_by_filter['bin_count'].values
 
-    fig = plt.figure(figsize=(12, 9))
-    plt.bar(x_avg, y_avg, color='steelblue', alpha=0.7, edgecolor='black')
-    plt.xlabel('Filter')
-    plt.ylabel('Average Number of Bins')
-    plt.title('Average Number of Bins by Filter Value')
-    plt.grid(axis='y', alpha=0.3)
+    fig, ax = plt.subplots(figsize=(12, 9))
+    avg_df = pd.DataFrame({'filter': x_avg, 'avg_bins': y_avg})
+    sns.barplot(data=avg_df, x='filter', y='avg_bins', color='steelblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+    ax.set_xlabel('Filter')
+    ax.set_ylabel('Average Number of Bins')
+    ax.set_title('Average Number of Bins by Filter Value')
+    ax.grid(axis='y', alpha=0.3)
     # Add value labels on top of bars (slightly above each bar to avoid overlap)
     if len(y_avg) > 0:
         y_range = y_avg.max() - y_avg.min()
@@ -389,18 +403,26 @@ def plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER):
             offset = y_range * 0.02
     else:
         offset = 0.01
-    for i, (x, y) in enumerate(zip(x_avg, y_avg)):
-        plt.text(x, y + offset, f'{y:.4f}', ha='center', va='bottom', fontsize=9, rotation=90)
-    plt.savefig(os.path.join(folder, 'average_bins_bar.png'))
-    plt.close()
+    # Use bar patch positions for annotations so labels align with plotted bars
+    for p in ax.patches:
+        height = p.get_height()
+        x = p.get_x() + p.get_width() / 2
+        ax.text(x, height + offset, f"{height:.4f}", ha='center', va='bottom', fontsize=8, rotation=90)
+    # Adjust y-axis limits to accommodate rotated text labels
+    y_max_val = ax.get_ylim()[1]
+    ax.set_ylim(0, y_max_val * 1.15)
+    fig.tight_layout()
+    fig.savefig(os.path.join(folder, 'average_bins_bar.png'), bbox_inches='tight')
+    plt.close(fig)
 
     # Maximum bin_count bar
-    fig = plt.figure(figsize=(12, 9))
-    plt.bar(x_max, y_max, color='darkgreen', alpha=0.7, edgecolor='black')
-    plt.xlabel('Filter')
-    plt.ylabel('Maximum Number of Bins')
-    plt.title('Maximum Number of Bins by Filter Value')
-    plt.grid(axis='y', alpha=0.3)
+    fig, ax = plt.subplots(figsize=(12, 9))
+    max_df = pd.DataFrame({'filter': x_max, 'max_bins': y_max})
+    sns.barplot(data=max_df, x='filter', y='max_bins', color='darkgreen', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+    ax.set_xlabel('Filter')
+    ax.set_ylabel('Maximum Number of Bins')
+    ax.set_title('Maximum Number of Bins by Filter Value')
+    ax.grid(axis='y', alpha=0.3)
     # Add value labels on top of bars (slightly above each bar to avoid overlap)
     if len(y_max) > 0:
         y_range_max = y_max.max() - y_max.min()
@@ -410,10 +432,16 @@ def plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER):
             offset_max = y_range_max * 0.02
     else:
         offset_max = 0.01
-    for i, (x, y) in enumerate(zip(x_max, y_max)):
-        plt.text(x, y + offset_max, f'{y:.4f}', ha='center', va='bottom', fontsize=9, rotation=90)
-    plt.savefig(os.path.join(folder, 'maximum_bins_bar.png'))
-    plt.close()
+    for p in ax.patches:
+        height = p.get_height()
+        x = p.get_x() + p.get_width() / 2
+        ax.text(x, height + offset_max, f"{height:.4f}", ha='center', va='bottom', fontsize=8, rotation=90)
+    # Adjust y-axis limits to accommodate rotated text labels
+    y_max_val = ax.get_ylim()[1]
+    ax.set_ylim(0, y_max_val * 1.15)
+    fig.tight_layout()
+    fig.savefig(os.path.join(folder, 'maximum_bins_bar.png'), bbox_inches='tight')
+    plt.close(fig)
 
     # Save regression info
     with open(os.path.join(folder, 'regression_info.txt'), 'w', encoding='utf-8') as f:
@@ -461,35 +489,43 @@ def plot_complexity_vs_types(appended_benchmarks_df, OUTPUT_FOLDER):
     if not os.path.exists(types_complexity_folder):
         os.makedirs(types_complexity_folder)
 
-    # Plot bar graph for average complexity by types
-    fig = plt.figure(figsize=(14, 10))
-    plt.barh(range(len(x_types_avg)), y_types_avg, color='steelblue', alpha=0.7, edgecolor='black')
-    plt.yticks(range(len(x_types_avg)), x_types_avg, fontsize=8)
-    plt.xlabel('Average Complexity')
-    plt.ylabel('Types')
-    plt.title('Average Complexity by Type Combination')
-    plt.grid(axis='x', alpha=0.3)
-    # Add value labels on bars
-    for i, (x, y) in enumerate(zip(x_types_avg, y_types_avg)):
-        plt.text(y, i, f' {y:.4f}', va='center', fontsize=7)
-    plt.tight_layout()
-    plt.savefig(os.path.join(types_complexity_folder, 'average_complexity_bar.png'), dpi=150, bbox_inches='tight')
-    plt.close()
+    # Plot bar graph for average complexity by types using seaborn
+    fig, ax = plt.subplots(figsize=(14, 10))
+    sns.barplot(x='complexity', y='types_str', data=avg_complexity_by_types, color='steelblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+    ax.set_xlabel('Average Complexity')
+    ax.set_ylabel('Types')
+    ax.set_title('Average Complexity by Type Combination')
+    ax.grid(axis='x', alpha=0.3)
+    # Add value labels on bars using patch positions (horizontal bars)
+    x_min, x_max_lim = ax.get_xlim()
+    x_range_lim = x_max_lim - x_min if (x_max_lim - x_min) != 0 else 1
+    x_offset = x_range_lim * 0.01
+    for p in ax.patches:
+        width = p.get_width()
+        y = p.get_y() + p.get_height() / 2
+        ax.text(width + x_offset, y, f' {width:.4f}', va='center', fontsize=7)
+    fig.tight_layout()
+    fig.savefig(os.path.join(types_complexity_folder, 'average_complexity_bar.png'), dpi=150, bbox_inches='tight')
+    plt.close(fig)
 
-    # Plot bar graph for maximum complexity by types
-    fig = plt.figure(figsize=(14, 10))
-    plt.barh(range(len(x_types_max)), y_types_max, color='darkgreen', alpha=0.7, edgecolor='black')
-    plt.yticks(range(len(x_types_max)), x_types_max, fontsize=8)
-    plt.xlabel('Maximum Complexity')
-    plt.ylabel('Types')
-    plt.title('Maximum Complexity by Type Combination')
-    plt.grid(axis='x', alpha=0.3)
-    # Add value labels on bars
-    for i, (x, y) in enumerate(zip(x_types_max, y_types_max)):
-        plt.text(y, i, f' {y:.4f}', va='center', fontsize=7)
-    plt.tight_layout()
-    plt.savefig(os.path.join(types_complexity_folder, 'maximum_complexity_bar.png'), dpi=150, bbox_inches='tight')
-    plt.close()
+    # Plot bar graph for maximum complexity by types using seaborn
+    fig, ax = plt.subplots(figsize=(14, 10))
+    sns.barplot(x='complexity', y='types_str', data=max_complexity_by_types, color='darkgreen', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+    ax.set_xlabel('Maximum Complexity')
+    ax.set_ylabel('Types')
+    ax.set_title('Maximum Complexity by Type Combination')
+    ax.grid(axis='x', alpha=0.3)
+    # Add value labels on bars using patch positions (horizontal bars)
+    x_min, x_max_lim = ax.get_xlim()
+    x_range_lim = x_max_lim - x_min if (x_max_lim - x_min) != 0 else 1
+    x_offset = x_range_lim * 0.01
+    for p in ax.patches:
+        width = p.get_width()
+        y = p.get_y() + p.get_height() / 2
+        ax.text(width + x_offset, y, f' {width:.4f}', va='center', fontsize=7)
+    fig.tight_layout()
+    fig.savefig(os.path.join(types_complexity_folder, 'maximum_complexity_bar.png'), dpi=150, bbox_inches='tight')
+    plt.close(fig)
 
     # Save average complexity data to text file
     with open(os.path.join(types_complexity_folder, 'average_complexity.txt'), 'w', encoding='utf-8') as f:
@@ -592,19 +628,17 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
     if not os.path.exists(params_complexity_folder):
         os.makedirs(params_complexity_folder)
 
-    # Plot scatter with regression line
-    fig = plt.figure(figsize=(12, 9))
-    plt.scatter(x_data_params, y_data_params, alpha=0.6, label='Data')
-    plt.plot(x_line_params, y_line_params, 'r-', linewidth=2, label=f'Best fit ({best_name_params})')
-    plt.xlabel('Number of Parameters')
-    plt.ylabel('Complexity')
-    plt.title('Number of Parameters vs Complexity')
-    plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
-    plt.subplots_adjust(bottom=0.35)
-    plt.figtext(0.5, 0.07, f'{best_equation_params}     R² = {best_r2_params:.16f}', 
-                ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-    plt.savefig(os.path.join(params_complexity_folder, 'regression.png'))
-    plt.close()
+    # Plot scatter with regression line using seaborn
+    fig, ax = plt.subplots(figsize=(12, 9))
+    sns.scatterplot(x=x_data_params, y=y_data_params, alpha=0.6, label='Data', ax=ax)
+    sns.lineplot(x=x_line_params, y=y_line_params, color='red', linewidth=2, linestyle='-', label=f'Best fit ({best_name_params})\n{best_equation_params}\nR² = {best_r2_params:.6f}', ax=ax)
+    ax.set_xlabel('Number of Parameters')
+    ax.set_ylabel('Complexity')
+    ax.set_title('Number of Parameters vs Complexity')
+    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+    
+    fig.savefig(os.path.join(params_complexity_folder, 'regression.png'), dpi=100, bbox_inches='tight')
+    plt.close(fig)
 
     # Calculate number of bins using Freedman-Diaconis rule for parameter count
     # bin_width = 2 * IQR / n^(1/3)
@@ -618,41 +652,68 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
     else:
         n_bins_fd = 30  # Default if calculation fails
 
-    # Create bins for parameter count and calculate average complexity for each bin
-    param_bins = np.linspace(x_data_params.min(), x_data_params.max(), n_bins_fd + 1)
+    # Create equal-width bins in log scale to avoid empty gaps
+    min_val = x_data_params.min()
+    max_val = x_data_params.max()
+    
+    # Use log scale for binning
+    log_min = np.log10(max(min_val, 1))
+    log_max = np.log10(max_val + 1)
+    
+    # Create bins in log space
+    n_log_bins = max(15, min(50, n_bins_fd // 2))  # Reasonable number of bins
+    log_bins = np.linspace(log_min, log_max, n_log_bins + 1)
+    param_bins = 10 ** log_bins
+    param_bins[0] = min_val  # Ensure exact min
+    param_bins[-1] = max_val  # Ensure exact max
+    
     bin_centers = []
+    bin_labels = []
     avg_complexity_per_bin = []
     bin_counts = []
 
-    for i in range(n_bins_fd):
+    for i in range(len(param_bins) - 1):
         mask_bin = (x_data_params >= param_bins[i]) & (x_data_params < param_bins[i + 1])
-        if i == n_bins_fd - 1:  # Include the last edge
+        if i == len(param_bins) - 2:  # Include the last edge
             mask_bin = (x_data_params >= param_bins[i]) & (x_data_params <= param_bins[i + 1])
         
         if mask_bin.any():
             bin_centers.append((param_bins[i] + param_bins[i + 1]) / 2)
+            # Format labels as order of magnitude - only show upper bound
+            upper_mag = np.log10(max(param_bins[i+1], 1))
+            bin_labels.append(f'10^{upper_mag:.1f}')
             avg_complexity_per_bin.append(y_data_params[mask_bin].mean())
             bin_counts.append(mask_bin.sum())
 
-    # Plot histogram: average complexity per parameter count interval
-    fig = plt.figure(figsize=(14, 9))
-    bars = plt.bar(bin_centers, avg_complexity_per_bin, width=(param_bins[1] - param_bins[0]) * 0.9, 
-                color='steelblue', alpha=0.7, edgecolor='none', linewidth=0, antialiased=False, clip_on=False)
-    plt.xlabel('Number of Parameters')
-    plt.ylabel('Average Complexity')
-    plt.title(f'Average Complexity by Parameter Count Range (Freedman-Diaconis: {n_bins_fd} bins)')
-    plt.grid(axis='y', alpha=0.3)
+    # Plot histogram: average complexity per parameter count interval using seaborn
+    fig, ax = plt.subplots(figsize=(16, 9))
+    hist_df = pd.DataFrame({'bin_range': bin_labels, 'avg_complexity': avg_complexity_per_bin})
+    sns.barplot(data=hist_df, x='bin_range', y='avg_complexity', color='steelblue', alpha=0.7, ax=ax, errorbar=None, order=bin_labels)
+    ax.set_xlabel('Number of Parameters', fontsize=12, labelpad=10)
+    ax.set_ylabel('Average Complexity', fontsize=12)
+    ax.set_title(f'Average Complexity by Parameter Count', fontsize=13, pad=20)
+    ax.grid(axis='y', alpha=0.3)
+    
+    # Set x-axis ticks to show only every N bars, with clean labels
+    n_bins = len(bin_labels)
+    step = max(1, n_bins // 8)  # Show approximately 8 labels max
+    tick_positions = range(0, n_bins, step)
+    tick_labels = [bin_labels[i] if i < len(bin_labels) else '' for i in tick_positions]
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, rotation=0, ha='center', fontsize=10, fontweight='bold')
+    # Remove tick marks but keep labels visible
+    ax.tick_params(axis='x', which='major', length=0)
 
     # Add overall statistics text
     overall_avg = np.average(avg_complexity_per_bin, weights=bin_counts)
     stats_text = f'Overall Avg: {overall_avg:.4f}\nTotal samples: {sum(bin_counts)}'
-    plt.text(0.98, 0.97, stats_text, transform=plt.gca().transAxes, 
-            verticalalignment='top', horizontalalignment='right',
-            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
+    ax.text(0.98, 0.97, stats_text, transform=ax.transAxes, verticalalignment='top', horizontalalignment='right',
+        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
 
-    plt.tight_layout()
-    plt.savefig(os.path.join(params_complexity_folder, 'average_complexity_histogram.png'))
-    plt.close()
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.15)
+    fig.savefig(os.path.join(params_complexity_folder, 'average_complexity_histogram.png'), bbox_inches='tight', dpi=100)
+    plt.close(fig)
 
     # Save regression information to text file
     with open(os.path.join(params_complexity_folder, 'regression_info.txt'), 'w', encoding='utf-8') as f:
@@ -784,19 +845,17 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
     if not os.path.exists(bins_complexity_folder):
         os.makedirs(bins_complexity_folder)
 
-    # Plot scatter with regression line
-    fig = plt.figure(figsize=(12, 9))
-    plt.scatter(x_data_bins, y_data_bins, alpha=0.6, label='Data')
-    plt.plot(x_line_bins, y_line_bins, 'r-', linewidth=2, label=f'Best fit ({best_name_bins})')
-    plt.xlabel('Number of Bins')
-    plt.ylabel('Complexity')
-    plt.title('Number of Bins vs Complexity')
-    plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
-    plt.subplots_adjust(bottom=0.22)
-    plt.figtext(0.5, 0.07, f'{best_equation_bins}     R² = {best_r2_bins:.16f}', 
-                ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-    plt.savefig(os.path.join(bins_complexity_folder, 'regression.png'))
-    plt.close()
+    # Plot scatter with regression line using seaborn
+    fig, ax = plt.subplots(figsize=(12, 9))
+    sns.scatterplot(x=x_data_bins, y=y_data_bins, alpha=0.6, label='Data', ax=ax)
+    sns.lineplot(x=x_line_bins, y=y_line_bins, color='red', linewidth=2, linestyle='-', label=f'Best fit ({best_name_bins})\n{best_equation_bins}\nR² = {best_r2_bins:.6f}', ax=ax)
+    ax.set_xlabel('Number of Bins')
+    ax.set_ylabel('Complexity')
+    ax.set_title('Number of Bins vs Complexity')
+    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+    
+    fig.savefig(os.path.join(bins_complexity_folder, 'regression.png'), dpi=100, bbox_inches='tight')
+    plt.close(fig)
 
     # Calculate number of bins using Freedman-Diaconis rule for bin count
     # bin_width = 2 * IQR / n^(1/3)
@@ -810,41 +869,68 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
     else:
         n_bins_fd_bins = 30  # Default if calculation fails
 
-    # Create bins for bin count and calculate average complexity for each bin
-    bin_bins = np.linspace(x_data_bins.min(), x_data_bins.max(), n_bins_fd_bins + 1)
+    # Create equal-width bins in log scale to avoid empty gaps
+    min_val_bins = x_data_bins.min()
+    max_val_bins = x_data_bins.max()
+    
+    # Use log scale for binning
+    log_min_bins = np.log10(max(min_val_bins, 1))
+    log_max_bins = np.log10(max_val_bins + 1)
+    
+    # Create bins in log space
+    n_log_bins = max(15, min(50, n_bins_fd_bins // 2))  # Reasonable number of bins
+    log_bins_array = np.linspace(log_min_bins, log_max_bins, n_log_bins + 1)
+    bin_bins = 10 ** log_bins_array
+    bin_bins[0] = min_val_bins  # Ensure exact min
+    bin_bins[-1] = max_val_bins  # Ensure exact max
+    
     bin_centers_bins = []
+    bin_labels_bins = []
     avg_complexity_per_bin_bins = []
     bin_counts_bins = []
 
-    for i in range(n_bins_fd_bins):
+    for i in range(len(bin_bins) - 1):
         mask_bin = (x_data_bins >= bin_bins[i]) & (x_data_bins < bin_bins[i + 1])
-        if i == n_bins_fd_bins - 1:  # Include the last edge
+        if i == len(bin_bins) - 2:  # Include the last edge
             mask_bin = (x_data_bins >= bin_bins[i]) & (x_data_bins <= bin_bins[i + 1])
         
         if mask_bin.any():
             bin_centers_bins.append((bin_bins[i] + bin_bins[i + 1]) / 2)
+            # Format labels as order of magnitude - only show upper bound
+            upper_mag = np.log10(max(bin_bins[i+1], 1))
+            bin_labels_bins.append(f'10^{upper_mag:.1f}')
             avg_complexity_per_bin_bins.append(y_data_bins[mask_bin].mean())
             bin_counts_bins.append(mask_bin.sum())
 
-    # Plot histogram: average complexity per bin count interval
-    fig = plt.figure(figsize=(14, 9))
-    bars = plt.bar(bin_centers_bins, avg_complexity_per_bin_bins, width=(bin_bins[1] - bin_bins[0]) * 0.9, 
-                color='steelblue', alpha=0.7, edgecolor='none', linewidth=0, antialiased=False, clip_on=False)
-    plt.xlabel('Number of Bins')
-    plt.ylabel('Average Complexity')
-    plt.title(f'Average Complexity by Bin Count Range (Freedman-Diaconis: {n_bins_fd_bins} bins)')
-    plt.grid(axis='y', alpha=0.3)
+    # Plot histogram: average complexity per bin count interval using seaborn
+    fig, ax = plt.subplots(figsize=(16, 9))
+    hist_df = pd.DataFrame({'bin_range': bin_labels_bins, 'avg_complexity': avg_complexity_per_bin_bins})
+    sns.barplot(data=hist_df, x='bin_range', y='avg_complexity', color='steelblue', alpha=0.7, ax=ax, errorbar=None, order=bin_labels_bins)
+    ax.set_xlabel('Number of Bins', fontsize=12, labelpad=10)
+    ax.set_ylabel('Average Complexity', fontsize=12)
+    ax.set_title(f'Average Complexity by Bin Count', fontsize=13, pad=20)
+    ax.grid(axis='y', alpha=0.3)
+    
+    # Set x-axis ticks to show only every N bars, with clean labels
+    n_bins = len(bin_labels_bins)
+    step = max(1, n_bins // 8)  # Show approximately 8 labels max
+    tick_positions = range(0, n_bins, step)
+    tick_labels = [bin_labels_bins[i] if i < len(bin_labels_bins) else '' for i in tick_positions]
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, rotation=0, ha='center', fontsize=10, fontweight='bold')
+    # Remove tick marks but keep labels visible
+    ax.tick_params(axis='x', which='major', length=0)
 
     # Add overall statistics text
     overall_avg_bins = np.average(avg_complexity_per_bin_bins, weights=bin_counts_bins)
     stats_text = f'Overall Avg: {overall_avg_bins:.4f}\nTotal samples: {sum(bin_counts_bins)}'
-    plt.text(0.98, 0.97, stats_text, transform=plt.gca().transAxes, 
-            verticalalignment='top', horizontalalignment='right',
-            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
+    ax.text(0.98, 0.97, stats_text, transform=ax.transAxes, verticalalignment='top', horizontalalignment='right',
+        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
 
-    plt.tight_layout()
-    plt.savefig(os.path.join(bins_complexity_folder, 'average_complexity_histogram.png'))
-    plt.close()
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.15)
+    fig.savefig(os.path.join(bins_complexity_folder, 'average_complexity_histogram.png'), bbox_inches='tight', dpi=100)
+    plt.close(fig)
 
     # Save regression information to text file
     with open(os.path.join(bins_complexity_folder, 'regression_info.txt'), 'w', encoding='utf-8') as f:
@@ -1013,23 +1099,16 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         # Plot scatter with both regression lines
         fig, ax = plt.subplots(figsize=(12, 10))
         ax.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
-        ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Free regression ({best_name_bench})')
-        ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=2, label='Linear regression')
+        ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Free regression ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
+        ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation}\nR² = {r2_linear:.6f}')
         ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
         ax.set_ylabel('Complexity')
         ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity')
-        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
         ax.grid(True, alpha=0.3)
         
-        # Add equations and statistics below the plot
-        stats_text = (f'Free: {best_equation_bench}\n'
-                     f'Linear: {linear_equation}\n'
-                     f'Free R² = {best_r2_bench:.6f} | Linear R² = {r2_linear:.6f}')
-        plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8,
-                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
-        
-        plt.tight_layout(rect=[0, 0.08, 1, 1])
-        plt.savefig(os.path.join(bench_folder, 'regression.png'), bbox_inches='tight')
+        plt.tight_layout()
+        plt.savefig(os.path.join(bench_folder, 'regression.png'))
         plt.close()
         
         # Calculate Pearson correlation coefficient
@@ -1178,23 +1257,16 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
             # Plot scatter with both regression lines
             fig, ax = plt.subplots(figsize=(12, 10))
             ax.scatter(all_x_data, all_y_data, alpha=0.6, label='Data')
-            ax.plot(x_line_all, y_line_all, 'r-', linewidth=2, label=f'Free regression ({best_name_all})')
-            ax.plot(x_line_all, y_line_linear, 'b--', linewidth=2, label='Linear regression')
+            ax.plot(x_line_all, y_line_all, 'r-', linewidth=2, label=f'Free regression ({best_name_all})\n{best_equation_all}\nR² = {best_r2_all:.6f}')
+            ax.plot(x_line_all, y_line_linear, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation_all}\nR² = {r2_linear_all:.6f}')
             ax.set_xlabel('Benchmark Score (All Benchmarks)')
             ax.set_ylabel('Complexity')
             ax.set_title('All Benchmarks vs Complexity')
-            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
             ax.grid(True, alpha=0.3)
             
-            # Add equations and statistics below the plot
-            stats_text = (f'Free: {best_equation_all}\n'
-                         f'Linear: {linear_equation_all}\n'
-                         f'Free R² = {best_r2_all:.6f} | Linear R² = {r2_linear_all:.6f}')
-            plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8,
-                       bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
-            
-            plt.tight_layout(rect=[0, 0.08, 1, 1])
-            plt.savefig(os.path.join(all_folder, 'regression.png'), bbox_inches='tight')
+            plt.tight_layout()
+            plt.savefig(os.path.join(all_folder, 'regression.png'))
             plt.close()
             
             # Calculate Pearson correlation coefficient
@@ -1300,60 +1372,65 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         bench_names_short = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in combined_items]
         r2_scores = [results['r2_score'] for _, results in combined_items]
         
-        plt.barh(range(len(bench_names_short)), r2_scores, color='steelblue', alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
-        plt.xlabel('R² Score')
-        plt.ylabel('Benchmark')
-        plt.title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Complexity')
-        plt.grid(axis='x', alpha=0.3)
-        
-        # Add value labels on bars (rotated vertically)
-        for i, (name, score) in enumerate(zip(bench_names_short, r2_scores)):
-            plt.text(score, i, f' {score:.4f}', va='center', fontsize=8, rotation=90, ha='center')
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(benchmarks_complexity_folder, 'r2_comparison.png'), dpi=150, bbox_inches='tight')
-        plt.close()
+        fig, ax = plt.subplots(figsize=(14, 8))
+        sns.barplot(x=r2_scores, y=bench_names_short, color='steelblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+        ax.set_yticklabels(bench_names_short, fontsize=9)
+        ax.set_xlabel('R² Score')
+        ax.set_ylabel('Benchmark')
+        ax.set_title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Complexity')
+        ax.grid(axis='x', alpha=0.3)
+        # Add value labels on bars
+        for i, (bar, score) in enumerate(zip(ax.patches, r2_scores)):
+            width = bar.get_width()
+            y = bar.get_y() + bar.get_height() / 2
+            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=8, ha='left')
+        fig.tight_layout()
+        fig.savefig(os.path.join(benchmarks_complexity_folder, 'r2_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.close(fig)
         
         # Create comparison plot: R² scores for LINEAR regression
-        fig = plt.figure(figsize=(14, 8))
+        fig, ax = plt.subplots(figsize=(14, 8))
         r2_linear_scores = [results['r2_linear'] for _, results in combined_items]
-        
-        plt.barh(range(len(bench_names_short)), r2_linear_scores, color='cornflowerblue', alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
-        plt.xlabel('R² Score')
-        plt.ylabel('Benchmark')
-        plt.title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Complexity')
-        plt.grid(axis='x', alpha=0.3)
-        
-        # Add value labels on bars (rotated vertically)
-        for i, (name, score) in enumerate(zip(bench_names_short, r2_linear_scores)):
-            plt.text(score, i, f' {score:.4f}', va='center', fontsize=8, rotation=90, ha='center')
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(benchmarks_complexity_folder, 'r2_linear_comparison.png'), dpi=150, bbox_inches='tight')
-        plt.close()
+        sns.barplot(x=r2_linear_scores, y=bench_names_short, color='cornflowerblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+        ax.set_yticklabels(bench_names_short, fontsize=9)
+        ax.set_xlabel('R² Score')
+        ax.set_ylabel('Benchmark')
+        ax.set_title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Complexity')
+        ax.grid(axis='x', alpha=0.3)
+        for i, (bar, score) in enumerate(zip(ax.patches, r2_linear_scores)):
+            width = bar.get_width()
+            y = bar.get_y() + bar.get_height() / 2
+            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=8, ha='left')
+        fig.tight_layout()
+        fig.savefig(os.path.join(benchmarks_complexity_folder, 'r2_linear_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.close(fig)
         
         # Create comparison plot: Correlation coefficients for all benchmarks
-        fig = plt.figure(figsize=(14, 8))
+        fig, ax = plt.subplots(figsize=(14, 10))
         correlations = [results['correlation'] for _, results in combined_items]
-        
         colors = ['green' if c > 0 else 'red' for c in correlations]
-        plt.barh(range(len(bench_names_short)), correlations, color=colors, alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
-        plt.xlabel('Pearson Correlation Coefficient')
-        plt.ylabel('Benchmark')
-        plt.title('Correlation: Benchmark Score vs Complexity')
-        plt.grid(axis='x', alpha=0.3)
-        plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
+        sns.barplot(x=correlations, y=bench_names_short, palette=colors, alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+        ax.set_yticklabels(bench_names_short, fontsize=9)
+        ax.set_xlabel('Pearson Correlation Coefficient', fontsize=11)
+        ax.set_ylabel('Benchmark', fontsize=11)
+        ax.set_title('Correlation: Benchmark Score vs Complexity', fontsize=12, pad=15)
+        ax.grid(axis='x', alpha=0.3)
+        ax.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
         
-        # Add value labels on bars (rotated vertically)
-        for i, (name, corr) in enumerate(zip(bench_names_short, correlations)):
-            plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=8, rotation=90, ha='center')
+        # Add correlation values as text outside bars
+        for i, (bar, corr) in enumerate(zip(ax.patches, correlations)):
+            width = bar.get_width()
+            y = bar.get_y() + bar.get_height() / 2
+            # Place text outside the bar end
+            x_offset = 0.005 if width > 0 else -0.005
+            x_pos = width + x_offset
+            ha_align = 'left' if width > 0 else 'right'
+            ax.text(x_pos, y, f'{width:.4f}', va='center', ha=ha_align, fontsize=9, fontweight='bold')
         
-        plt.tight_layout()
-        plt.savefig(os.path.join(benchmarks_complexity_folder, 'correlation_comparison.png'), dpi=150, bbox_inches='tight')
-        plt.close()
+        fig.tight_layout()
+        fig.subplots_adjust(right=0.95, left=0.1)
+        fig.savefig(os.path.join(benchmarks_complexity_folder, 'correlation_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.close(fig)
 
     print(f"\nCompleted benchmark analysis. Processed {len(all_benchmark_results)} benchmarks.")
 
@@ -1494,35 +1571,28 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                 linear_equation_combo = f'y = {linear_params_combo[0]:.16f}x + {linear_params_combo[1]:.16f}'
                 
                 # Create filename for this filter
-                filter_clean_name = f"filter_{int(filter_val)}"
+                filter_clean_name = f"filter_{float(filter_val)}"
                 
                 # Plot scatter with both regression lines
                 fig, ax = plt.subplots(figsize=(12, 10))
                 ax.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
-                ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Free regression ({best_name_combo})')
-                ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=2, label='Linear regression')
+                ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Free regression ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
+                ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=2, label=f'Linear regression\nR² = {r2_linear_combo:.6f}\nN = {len(x_data_combo)}')
                 ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
                 ax.set_ylabel('Complexity')
-                ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity\nType: {type_str}, Filter: {int(filter_val)} sigma')
-                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+                ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity\nType: {type_str}, Filter: {float(filter_val)} sigma')
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
                 ax.grid(True, alpha=0.3)
                 
-                # Add equation and statistics below the plot
-                stats_text = (f'Free Regression: {best_equation_combo}\n'
-                            f'Free R² = {best_r2_combo:.6f} | Linear R² = {r2_linear_combo:.6f}\n'
-                            f'Pearson Correlation = {correlation_combo:.6f} | N = {len(x_data_combo)}')
-                plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8, 
-                           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
-                
-                plt.tight_layout(rect=[0, 0.08, 1, 1])
-                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'), bbox_inches='tight')
+                plt.tight_layout()
+                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'))
                 plt.close()
                 
                 # Save statistics to text file
                 with open(os.path.join(type_folder, f'{filter_clean_name}_stats.txt'), 'w', encoding='utf-8') as f:
                     f.write(f"{bench_name} VS COMPLEXITY\n")
                     f.write(f"Type: {type_str}\n")
-                    f.write(f"Filter: {int(filter_val)} sigma\n")
+                    f.write(f"Filter: {float(filter_val)} sigma\n")
                     f.write("=" * 70 + "\n\n")
                     
                     f.write("REGRESSION:\n")
@@ -1545,7 +1615,7 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                 all_detailed_results.append({
                     'benchmark': bench_name,
                     'type': type_str,
-                    'filter': int(filter_val),
+                    'filter': float(filter_val),
                     'best_function': best_name_combo,
                     'r2_score': best_r2_combo,
                     'r2_linear': r2_linear_combo,
@@ -1619,9 +1689,11 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
             plt.grid(axis='x', alpha=0.3)
             plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
             
-            # Add value labels on bars (rotated vertically)
+            # Add value labels on bars
             for i, corr in enumerate(correlations):
-                plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=8, rotation=90, ha='center')
+                x_offset = 0.003 if corr > 0 else -0.003
+                ha_align = 'left' if corr > 0 else 'right'
+                plt.text(corr + x_offset, i, f'{corr:.4f}', va='center', fontsize=8, ha=ha_align)
             
             plt.tight_layout()
             plt.savefig(os.path.join(bench_main_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
@@ -1707,9 +1779,11 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         plt.grid(axis='x', alpha=0.3)
         plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
         
-        # Add value labels on bars (rotated vertically)
+        # Add value labels on bars
         for i, corr in enumerate(correlations):
-            plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=7, rotation=90, ha='center')
+            x_offset = 0.003 if corr > 0 else -0.003
+            ha_align = 'left' if corr > 0 else 'right'
+            plt.text(corr + x_offset, i, f'{corr:.4f}', va='center', fontsize=7, ha=ha_align)
         
         plt.tight_layout()
         plt.savefig(os.path.join(detailed_benchmarks_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
@@ -1837,23 +1911,16 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         # Plot scatter with both regression lines
         fig, ax = plt.subplots(figsize=(12, 10))
         ax.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
-        ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Free regression ({best_name_bench})')
-        ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=2, label='Linear regression')
+        ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Free regression ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
+        ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation}\nR² = {r2_linear:.6f}')
         ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
         ax.set_ylabel('Parameter Count')
         ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count')
-        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
         ax.grid(True, alpha=0.3)
         
-        # Add equations and statistics below the plot
-        stats_text = (f'Free: {best_equation_bench}\n'
-                     f'Linear: {linear_equation}\n'
-                     f'Free R² = {best_r2_bench:.6f} | Linear R² = {r2_linear:.6f}')
-        plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8,
-                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
-        
-        plt.tight_layout(rect=[0, 0.08, 1, 1])
-        plt.savefig(os.path.join(bench_folder, 'regression.png'), bbox_inches='tight')
+        plt.tight_layout()
+        plt.savefig(os.path.join(bench_folder, 'regression.png'))
         plt.close()
         
         # Calculate Pearson correlation coefficient
@@ -2004,23 +2071,16 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
             # Plot scatter with both regression lines
             fig, ax = plt.subplots(figsize=(12, 10))
             ax.scatter(all_x_data_param, all_y_data_param, alpha=0.6, label='Data')
-            ax.plot(x_line_all_param, y_line_all_param, 'r-', linewidth=2, label=f'Free regression ({best_name_all_param})')
-            ax.plot(x_line_all_param, y_line_linear_param, 'b--', linewidth=2, label='Linear regression')
+            ax.plot(x_line_all_param, y_line_all_param, 'r-', linewidth=2, label=f'Free regression ({best_name_all_param})\n{best_equation_all_param}\nR² = {best_r2_all_param:.6f}')
+            ax.plot(x_line_all_param, y_line_linear_param, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation_all_param}\nR² = {r2_linear_all_param:.6f}')
             ax.set_xlabel('Benchmark Score (All Benchmarks)')
             ax.set_ylabel('Parameter Count')
             ax.set_title('All Benchmarks vs Parameter Count')
-            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
             ax.grid(True, alpha=0.3)
             
-            # Add equations and statistics below the plot
-            stats_text = (f'Free: {best_equation_all_param}\n'
-                         f'Linear: {linear_equation_all_param}\n'
-                         f'Free R² = {best_r2_all_param:.6f} | Linear R² = {r2_linear_all_param:.6f}')
-            plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8,
-                       bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
-            
-            plt.tight_layout(rect=[0, 0.08, 1, 1])
-            plt.savefig(os.path.join(all_folder_param, 'regression.png'), bbox_inches='tight')
+            plt.tight_layout()
+            plt.savefig(os.path.join(all_folder_param, 'regression.png'))
             plt.close()
             
             # Calculate Pearson correlation coefficient
@@ -2321,35 +2381,28 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 linear_equation_combo = f'y = {linear_params_combo[0]:.16f}x + {linear_params_combo[1]:.16f}'
                 
                 # Create filename for this filter
-                filter_clean_name = f"filter_{int(filter_val)}"
+                filter_clean_name = f"filter_{float(filter_val)}"
                 
                 # Plot scatter with both regression lines
                 fig, ax = plt.subplots(figsize=(12, 10))
                 ax.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
-                ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Free regression ({best_name_combo})')
-                ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=2, label='Linear regression')
+                ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Free regression ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
+                ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=2, label=f'Linear regression\nR² = {r2_linear_combo:.6f}\nN = {len(x_data_combo)}')
                 ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
                 ax.set_ylabel('Parameter Count')
-                ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count\nType: {type_str}, Filter: {int(filter_val)} sigma')
-                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+                ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count\nType: {type_str}, Filter: {float(filter_val)} sigma')
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
                 ax.grid(True, alpha=0.3)
                 
-                # Add equation and statistics below the plot
-                stats_text = (f'Free Regression: {best_equation_combo}\n'
-                            f'Free R² = {best_r2_combo:.6f} | Linear R² = {r2_linear_combo:.6f}\n'
-                            f'Pearson Correlation = {correlation_combo:.6f} | N = {len(x_data_combo)}')
-                plt.figtext(0.5, 0.02, stats_text, ha='center', fontsize=8, 
-                           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), wrap=True)
-                
-                plt.tight_layout(rect=[0, 0.08, 1, 1])
-                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'), bbox_inches='tight')
+                plt.tight_layout()
+                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'))
                 plt.close()
                 
                 # Save statistics to text file
                 with open(os.path.join(type_folder, f'{filter_clean_name}_stats.txt'), 'w', encoding='utf-8') as f:
                     f.write(f"{bench_name} VS PARAMETER COUNT\n")
                     f.write(f"Type: {type_str}\n")
-                    f.write(f"Filter: {int(filter_val)} sigma\n")
+                    f.write(f"Filter: {float(filter_val)} sigma\n")
                     f.write("=" * 70 + "\n\n")
                     
                     f.write("REGRESSION:\n")
@@ -2372,7 +2425,7 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 all_detailed_param_results.append({
                     'benchmark': bench_name,
                     'type': type_str,
-                    'filter': int(filter_val),
+                    'filter': float(filter_val),
                     'best_function': best_name_combo,
                     'r2_score': best_r2_combo,
                     'r2_linear': r2_linear_combo,
@@ -2879,8 +2932,8 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                 ax.grid(True, alpha=0.3, linestyle='--')
                 
                 # Add legend with smaller font and multiple columns
-                ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=8, 
-                         ncol=1, frameon=True, fancybox=True, shadow=True)
+                ax.legend(loc='best', bbox_to_anchor=(1, 0.5), fontsize=8, 
+                         ncol=1, frameon=True, fancybox=True, shadow=True, framealpha=0.5)
                 
                 # Create the plot filename
                 plot_filename = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}.png"
@@ -2940,8 +2993,8 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                 ax.grid(True, alpha=0.3, linestyle='--')
                 
                 # Add legend with smaller font and multiple columns
-                ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=8, 
-                         ncol=1, frameon=True, fancybox=True, shadow=True)
+                ax.legend(loc='best', bbox_to_anchor=(1, 0.5), fontsize=8, 
+                         ncol=1, frameon=True, fancybox=True, shadow=True, framealpha=0.5)
                 
                 # Create the plot filename for linear version
                 plot_filename_linear = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}_linear.png"
@@ -2987,7 +3040,7 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                 ax.set_title(f'Filter {filter_val}, {benchmark} [Count Only]\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
                             fontsize=11, pad=15)
                 ax.grid(True, alpha=0.3, linestyle='--')
-                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.8)
                 
                 # Create the plot filename
                 plot_filename = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}.png"
@@ -3023,7 +3076,7 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                 ax.set_title(f'Filter {filter_val}, {benchmark} [Count Only] (Linear Scale: 1-1000)\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
                             fontsize=11, pad=15)
                 ax.grid(True, alpha=0.3, linestyle='--')
-                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5)
                 
                 plot_filename_linear = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}_linear.png"
                 plot_path_linear = os.path.join(current_plot_folder, plot_filename_linear)
@@ -3069,7 +3122,7 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                 ax.set_title(f'Filter {filter_val}, {benchmark} [Complexity Only]\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
                             fontsize=11, pad=15)
                 ax.grid(True, alpha=0.3, linestyle='--')
-                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.8)
                 
                 # Create the plot filename
                 plot_filename = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}.png"
@@ -3174,28 +3227,24 @@ def create_equation_rankings(OUTPUT_FOLDER):
         
         # Create the heatmap (increased height to accommodate two-line labels)
         fig, ax = plt.subplots(figsize=(14, max(10, top_n * 0.6)))
-        
-        # Create heatmap using imshow
-        im = ax.imshow(error_data, aspect='auto', cmap='YlOrRd', interpolation='nearest')
-        
+
+        # Use seaborn heatmap for better styling and annotations
+        sns.heatmap(
+            error_data,
+            ax=ax,
+            cmap='YlOrRd',
+            annot=True,
+            fmt='.4f',
+            cbar_kws={'label': 'Error Value'},
+            linewidths=0.5,
+            linecolor='white'
+        )
+
         # Set ticks and labels
-        ax.set_xticks(np.arange(len(error_columns)))
-        ax.set_yticks(np.arange(len(labels)))
+        ax.set_xticks(np.arange(len(error_columns)) + 0.5)
         ax.set_xticklabels([col.upper() for col in error_columns], fontsize=11, fontweight='bold')
+        ax.set_yticks(np.arange(len(labels)) + 0.5)
         ax.set_yticklabels(labels, fontsize=8, linespacing=1.2)
-        
-        # Rotate the x-axis labels if needed
-        plt.setp(ax.get_xticklabels(), rotation=0, ha="center")
-        
-        # Add colorbar
-        cbar = plt.colorbar(im, ax=ax)
-        cbar.set_label('Error Value', rotation=270, labelpad=20, fontsize=10)
-        
-        # Add values in cells
-        for i in range(len(labels)):
-            for j in range(len(error_columns)):
-                text = ax.text(j, i, f'{error_data[i, j]:.4f}',
-                             ha="center", va="center", color="black", fontsize=7)
         
         # Set title
         ax.set_title(f'Top {top_n} Functions by Average Error - Group: {group.replace("_", " ").title()}\n'
@@ -3400,14 +3449,12 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         # Plot scatter with regression line
         fig = plt.figure(figsize=(12, 9))
         plt.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
-        plt.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Best fit ({best_name_bench})')
+        plt.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Best fit ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
         plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
         plt.ylabel('Magical Variable (Complexity × Param Count)')
         plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Magical Variable')
-        plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
-        plt.subplots_adjust(bottom=0.22)
-        plt.figtext(0.5, 0.07, f'{best_equation_bench}     R² = {best_r2_bench:.16f}', 
-                    ha='center', fontsize=9, bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        plt.legend(loc='best', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True, fontsize=8)
+        
         plt.savefig(os.path.join(bench_folder, 'regression.png'))
         plt.close()
         
@@ -3668,22 +3715,16 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 y_line_combo = best_func_combo(x_line_combo, *best_params_combo)
                 
                 # Create filename for this filter
-                filter_clean_name = f"filter_{int(filter_val)}"
+                filter_clean_name = f"filter_{float(filter_val)}"
                 
                 # Plot scatter with regression line
                 fig = plt.figure(figsize=(12, 9))
                 plt.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
-                plt.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Best fit ({best_name_combo})')
+                plt.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Best fit ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
                 plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
                 plt.ylabel('Magical Variable (Complexity × Param Count)')
-                plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Magical Variable\nType: {type_str}, Filter: {int(filter_val)} sigma')
-                plt.legend(loc='lower center', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True)
-                plt.subplots_adjust(bottom=0.28)
-                
-                # Add equation and statistics
-                stats_text = f'{best_equation_combo}\nR² = {best_r2_combo:.16f}\nCorrelation = {correlation_combo:.16f}\nN = {len(x_data_combo)}'
-                plt.figtext(0.5, 0.07, stats_text, ha='center', fontsize=8, 
-                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+                plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Magical Variable\nType: {type_str}, Filter: {float(filter_val)} sigma')
+                plt.legend(loc='best', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True, fontsize=8)
                 
                 plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'))
                 plt.close()
@@ -3692,7 +3733,7 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 with open(os.path.join(type_folder, f'{filter_clean_name}_stats.txt'), 'w', encoding='utf-8') as f:
                     f.write(f"{bench_name} VS MAGICAL VARIABLE\n")
                     f.write(f"Type: {type_str}\n")
-                    f.write(f"Filter: {int(filter_val)} sigma\n")
+                    f.write(f"Filter: {float(filter_val)} sigma\n")
                     f.write("=" * 70 + "\n\n")
                     
                     f.write("REGRESSION:\n")
@@ -3715,7 +3756,7 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 all_detailed_magical_results.append({
                     'benchmark': bench_name,
                     'type': type_str,
-                    'filter': int(filter_val),
+                    'filter': float(filter_val),
                     'best_function': best_name_combo,
                     'r2_score': best_r2_combo,
                     'pearson_correlation': correlation_combo,

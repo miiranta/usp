@@ -103,6 +103,12 @@ def filter_rows(infos):
         if info.bin_count >= 1000000000:
             print(f"[{info.model} | {info.types} | {info.filter}] Removing (bin_count >= 1 billion)")
             infos.remove(info)
+            
+    # Remove gemma 3N models - too much trouble to process, not made to be used without finetunning
+    for info in infos[:]:
+        if 'gemma-3n' in info.model.lower():
+            print(f"[{info.model} | {info.types} | {info.filter}] Removing (gemma 3N model)")
+            infos.remove(info)
     
 # ====================================
 
