@@ -1,0 +1,82 @@
+\section{Methodology}
+
+\subsection{Computational Environment}
+
+\subsection{Model Selection}
+
+\subsection{LMC Complexity}
+
+    According to [https://arxiv.org/abs/1009.1498], LMC Statistical Complexity is the product of two other measures: Disequilibrium and Shannon entropy. It captures both the structured and unstructured aspects of the distribution:
+    \[ C_{LMC} = H \times D \]
+
+    Disequilibrium measures how far a probability distribution is from being uniform, quantifying the "order" or structure in the data. It is calculated as:
+    \[ D = \sum_{i=1}^{n} \left(p_i - \frac{1}{n}\right)^2 \]
+
+    Shannon entropy measures the amount of uncertainty or randomness in a probability distribution. The normalized Shannon entropy is given by:
+    \[ H = -K \sum_{i=1}^{n} p_i \log p_i \]
+
+    The values \( p_i \) represent the probabilities associated with each state \( i \) in the distribution, and \( n \) is the total number of states. K is a positive constant and, in our case, is set to 1 for simplicity. K can be changed later since \( C_{LMC} = (-K \sum_{i=1}^{n} p_i \log p_i)  \times D \) is equivalent to \( C_{LMC} = K \times (- \sum_{i=1}^{n} p_i \log p_i)  \times D \).
+
+    \subsubsection{Data Discretization}
+
+        To compute the LMC complexity of a finite array of floating-point numbers, we first construct a histogram to discretize the data into a probability distribution. That's justified as the chance of finding two exact numbers is extremely low and, as a consequence, it is hard to determine the probability of each value. 
+        
+        We will call the set of all data points as \( S \), the total amount of data points as \( N \) and the number of bins they will be distributed into as \( n \). The probabilities \( p_i \) are then calculated as \( p_i = \frac{f_i}{N} \) where \( f_i \) is the frequency count of data points in bin \( i \).
+
+        As expected, this approach revisits a classic issue in histogram-based analysis: the choice of the number of bins \( n \) will impact the resulting probability distribution, which is specially problematic to the LMC complexity measure; variations in \( n \) can cause significant fluctuations in the final result. Selecting an inappropriate amount may produce misleading values, either by oversimplifying the distribution (too few bins) or by introducing noise (too many bins). 
+
+        There are a variety of methods to determine \( n \) in a histogram, most of them with their own advantages and disadvantages. Commonly used methods such as \textbf{Sturges' formula} [\url{https://www.jstor.org/stable/2965501}] and \textbf{Rice Rule} [\url{https://www.scirp.org/pdf/ojs_2024022914191399.pdf}] rely only on the number of data points, while others like \textbf{Scott's normal reference rule} and \textbf{Freedman-Diaconis' choice} also take into account the data distribution by using standard deviation and interquartile range, respectively [\url{https://arxiv.org/abs/physics/0605197}].   
+
+        We chose to use the \textbf{Freedman-Diaconis' choice} as it adapts better to our needs. This is justified since \( N \) often consists of billions of numbers, and the distribution, although mostly concentrated between -1 and 1, can become sparse due to outliers and, as a consequence, require a larger number of bins to capture its characteristics accurately. The Freedman-Diaconis rule helps mitigate the influence of outliers by using the interquartile range \( IQR \) to determine bin width \( h \). The rule is defined as follows [https://link.springer.com/content/pdf/10.1007/BF01025868.pdf]:
+
+        \[ h = \frac{2 \times IQR}{N^{1/3}} \]
+
+        where IQR is the interquartile range of the data which is calculated as \( Q3 - Q1 \), \( Q3 \) and \( Q1 \) are the values at the 75th and 25th percentiles in the data, respectively. Since \( N \) is very large, the percentiles are computed based on a random sample of 100000 data points to reduce computational cost. The sample size was determined empirically to be large enough to provide stable estimates of the percentiles, the final number of bins showed no variance between tests.
+
+        Finally, the number of bins \( n \) can then be calculated as:
+
+        \[ n = \frac{max(S) - min(S)}{h} \]
+
+    \subsubsection{Extracting the Complexity Measure}
+
+\subsection{Inference Capability}
+
+    Often called model performance, inference capability refers to how well a trained neural network performs on unseen data. This is typically measured using various metrics depending on the specific task the model is designed for. 
+    
+    In the previously cited research paper by OpenAI [https://arxiv.org/abs/2001.08361], performance was associated with test cross-entropy loss. This metric quantifies the difference between the predicted probability distribution output by the model and the true distribution of the target labels. Lower cross-entropy loss values indicate better model performance, as they reflect a closer alignment between predictions and actual outcomes.
+
+    Unfortunately, not all models we intend to analyze have publicly available training and test data. It's also not possible to run models in a training setting due to performance limitations of the computational environment available. Therefore, we will have to rely on imperfect proxies for performance such as \textbf{benchmarks}.
+
+    \subsubsection{Benchmark Selection}
+
+        Benchmarks are standardized tests designed to evaluate the performance of machine learning models across various tasks. They provide a common ground for comparison by measuring how well different models perform on the same datasets using predefined metrics. 
+        
+        According to [https://arxiv.org/abs/2401.04757], benchmarks such as the famous MMLU, correlate fairly well with the predicted test loss determined by scaling laws, making them suitable proxies.
+
+        They are, however, not perfect. Some benchmarks may fail to capture all aspects of a model's capabilities, leading to an incomplete assessment of performance. Other problems such as Data Contamination [https://arxiv.org/abs/2203.08242] can influence the validity of results and makes it hard to fairly compare models made in different times. It is also hard to find benchmarks that are widely reported for all models we intend to analyze.
+
+        A nice proposal for future research to avoid the problems cited above would be training a model from scratch twice: optimizing it initially for minimal loss and then for minimal loss + maximum LMC complexity, then comparing the results. This is however out of the scope of this work.
+
+        The benchmark selection followed three main heuristics:
+        \begin{itemize}
+            \item \textbf{Relevance}: The benchmark should be widely recognized and accepted in the machine learning community, e.g., used in major research papers.
+            \item \textbf{Generality}: It should cover a range of tasks and data types to provide an assessment of model performance across different scenarios, that is, not being specialized in one task.
+            \item \textbf{Availability}: The benchmark results should be publicly available. Benchmarks that cover more of the selected models were preferred.
+        \end{itemize}
+
+        Based on those heuristics, the benchmarks selected were:
+        \begin{itemize}
+            \item \textbf{MMLU (5-shot)}: Massive Multitask Language Understanding, a benchmark that tests models across 57 tasks spanning various subjects and difficulty levels. Widely used to evaluate LLMs [https://arxiv.org/abs/2009.03300].
+
+            \item \textbf{MMLU-Pro (5-shot)}: An enhanced version of MMLU that includes additional tasks and updated datasets to provide a better evaluation. It was created to address some limitations of the original MMLU [\url{https://proceedings.neurips.cc/paper_files/paper/2024/file/ad236edc564f3e3156e1b2feafb99a24-Paper-Datasets_and_Benchmarks_Track.pdf}].
+            
+            \item \textbf{OpenLLM (Average)}: A benchmark suite that evaluates models on a variety of tasks, including language understanding, generation, and reasoning. It aggregates results from multiple datasets to provide an overall performance score [https://arxiv.org/abs/2406.07545].
+            
+            \item \textbf{LMArena (Score)}: An online platform where users can submit questions and receive responses from two anonymous large language models (LLMs), then vote on which answer they prefer, helping to crowdsource human preferences for evaluating and ranking LLMs. Its evaluation works by collecting thousands of pairwise comparisons users, using  the Bradley-Terry system to estimate win rates and compute rankings/scores. [https://arxiv.org/abs/2403.04132].
+        \end{itemize}
+
+    \subsubsection{Extracting the Inference Capability Measure}
+
+\subsection{Comparing LMC Complexity and Inference Capability}
+
+

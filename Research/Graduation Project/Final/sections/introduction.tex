@@ -1,0 +1,28 @@
+\section{Introduction}
+
+Since the creation of Transformers in 2017 [https://arxiv.org/abs/1706.03762] and the subsequent usage of this new technique in the training of Large Language Models (LLMs) , there has been a gold rush within the machine learning world. GPT-3.5, the original ChatGPT model, rapidly gained widespread adoption becoming the fastest-growing consumer application in history after its launch in 2022 [https://www.learntechlib.org/p/222408] sparking further interest in researchers, investors and the general public for more powerful and cost-efficient models. 
+
+Since then multiple new models have been developed by the biggest technology companies in the world such as Google, Microsoft, NVidia, Amazon and amazingly also by some smaller ones such as DeepSeek. As better models in almost every metric emerged, it also became increasingly obvious that all this improvement wasn’t for free: billions were spent in larger datacenters, predictions that we soon wouldn’t have enough data on the internet to keep building bigger models, increasingly expensive for marginal performance gains. But why?
+
+In 2020, before the launch of the original ChatGPT, Researchers at openAI [https://arxiv.org/abs/2001.08361] have found that “performance improves smoothly as we increase the model size N (the number of parameters excluding embeddings), dataset size D, and amount of compute C” and that “performance depends strongly on scale and weakly on model shape, such as depth vs. width”. Secondly, it was also observed that different architectures could impact training performance, e.g. Transformers would have lower test loss than LSTMs. Those statements become the basis for the scaling “laws” we currently accept.
+
+It is evident that the most straightforward way to get a better model, at least considering performance in terms of lower test loss, is to increase the scale (N, C and D sizes), however, there’s a huge drawback: the scaling laws described in this case are power laws, meaning we would need an exponential amount of resources to achieve a constant gain in performance. The second approach would be creating better architectures or improving the existing ones, which demands research and it’s generally not as simple as increasing a number.
+
+The first approach, being the easiest, was explored by the companies creating the new models, pushing those three variables to ludicrous amounts. The GPT family, mentioned above, serves as a good example: the original GPT had 117 million parameters, GPT-2 had 1.5 billion (a 12x increase from GPT) and GPT-3 had 175 billion (a 117x increase from GPT-2) [https://arxiv.org/pdf/2005.14165] [https://huggingface.co/openai-community/gpt2-xl] [https://huggingface.co/openai-community/openai-gpt]. It is noticeable that, just a few years later, the industry is already showing signs of exhaustion: new models do not exhibit performance improvements as dramatic as those observed in the recent past, although investment in training infrastructure has never been higher.
+
+The second approach is what we intend to contribute in this work: an improvement in the architecture itself. Of course, before creating a new revolutionary architecture it would be useful to understand how machines learn. In a typical analysis setting, knowing how the process works is a requirement to engineer a better version of it. In Machine Learning, however, the process of learning, which is somehow connected to the well-known process of training, is still far from being fully understood.
+
+Discussing the understanding of the learning process is out of the scope of this work, yet we are going to analyze what may be a piece of the puzzle: the LMC statistical complexity [https://arxiv.org/abs/1009.1498], a metric that appears to be related to the model’s performance and might help understanding the behaviour of such by proving insights about the weights distribution.
+
+\subsection{Work thesis}
+
+    The main hypothesis of this work comes from Professor MURTA JUNIOR, Luiz Otavio study [Not published yet] and can be summarized as: \textbf{“There exists a relationship between model complexity and its inference capability”}.
+
+\subsection{Objective}
+
+    Validating the work thesis means we would have a new way of indirectly assessing a model's performance by just looking at the distribution of its weights, opening the gates for new optimization processes during training, potentially reducing the amount of compute necessary to reach the best performance or even finding new maximums. Also, having a validated weights distribution x performance comparison should improve the data richness when studying a model's learning process in future studies. Thus, we can escalate the following objectives for this work:
+    \begin{itemize}
+        \item Validate the existence of a meaningful relationship between complexity of neural network weights and their inference performance.
+        \item If possible, find the mathematical relation between those measures.
+        \item Explore other dimensions of the problem that can affect complexity and performance measures such as parameter count.
+    \end{itemize}
