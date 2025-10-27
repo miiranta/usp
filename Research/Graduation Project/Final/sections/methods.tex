@@ -1,12 +1,12 @@
 \section{Methodology}
 
-\subsection{Computational Environment}
+\subsection{Testing Environment}
 
 \subsection{Model Selection}
 
-Due to the wide availability of open models combined with the ease of accessing them through its Transformers library [https://arxiv.org/abs/1910.03771], \textbf{HuggingFace} was chosen as the source for model selection in this study.
+Due to the wide availability of open models combined with the ease of accessing them through its Transformers library [https://arxiv.org/abs/1910.03771], \textbf{Hugging Face} was chosen as the source for model selection in this study.
 
-HuggingFace is a platform that hosts a wide variety of machine learning models, datasets, and tools. It is widely used in the AI research community for sharing and collaborating on machine learning projects. [\url{https://www.researchgate.net/profile/Tejashree-Moharekar/publication/383497950_Hugging_Face_Revolutionizing_AI_and_NLP/links/66d036f8f84dd1716c702445/Hugging-Face-Revolutionizing-AI-and-NLP.pdf}] [https://huggingface.co/] Other platforms such as Ollama were considered, but ultimately not chosen due to the limited number of models and lack of company diversity. 
+Hugging Face is a platform that hosts a variety of machine learning models, datasets, and tools. It is widely used in the AI research community for sharing and collaborating on machine learning projects. [\url{https://www.researchgate.net/profile/Tejashree-Moharekar/publication/383497950_Hugging_Face_Revolutionizing_AI_and_NLP/links/66d036f8f84dd1716c702445/Hugging-Face-Revolutionizing-AI-and-NLP.pdf}] [https://huggingface.co/] Other platforms such as Ollama were considered, but ultimately not chosen due to the limited number of models and lack of company diversity. 
 
 Model selection proceeded in two stages:
 
@@ -15,7 +15,7 @@ Model selection proceeded in two stages:
     \item Second, for each company we compiled a candidate set consisting of every model that satisfied the following criteria:
     
         \begin{itemize}
-            \item Must be available on the HuggingFace platform.
+            \item Must be available on the Hugging Face platform on the official company account.
             \item The model is a transformer-based language model.
             \item Model weights are publicly accessible (open weights), including models released behind
             gated access.
@@ -23,7 +23,7 @@ Model selection proceeded in two stages:
             \item The model is an original base model rather than a task-specific fine-tuned variant.
             \item The total parameter count is below 150 billion. This upper bound was imposed due to
             hardware and inference limitations in the computational environment used for our experiments.
-            \item The model is supported by the HuggingFace Transformers library [https://arxiv.org/abs/1910.03771] (i.e., it can be
+            \item The model is supported by the Hugging Face Transformers library [https://arxiv.org/abs/1910.03771] (i.e., it can be
             instantiated via the AutoModel/AutoTokenizer utilities), which ensures consistent loading and
             preprocessing across the candidate set.
             \item There's at least one publicly available benchmark result for the model among the selected benchmarks (section \ref{sec:benchmark_selection}).
@@ -54,6 +54,58 @@ Model selection proceeded in two stages:
             \label{tab:selected_models}
         \end{table}
     
+        [https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E]
+
+        [https://huggingface.co/meta-llama/Llama-3.2-3B]
+        [https://huggingface.co/meta-llama/Llama-3.2-1B]
+
+        [https://huggingface.co/meta-llama/Llama-3.1-70B]
+        [https://huggingface.co/meta-llama/Llama-3.1-8B]
+
+        [https://huggingface.co/meta-llama/Meta-Llama-3-70B]
+        [https://huggingface.co/meta-llama/Meta-Llama-3-8B]
+
+        [https://huggingface.co/meta-llama/Llama-2-70b-hf]
+        [https://huggingface.co/meta-llama/Llama-2-13b-hf]
+        [https://huggingface.co/meta-llama/Llama-2-7b-hf]
+
+
+        [https://huggingface.co/google/gemma-3-27b-pt]
+        [https://huggingface.co/google/gemma-3-12b-pt]
+        [https://huggingface.co/google/gemma-3-4b-pt]
+        [https://huggingface.co/google/gemma-3-1b-pt]
+
+        [https://huggingface.co/google/gemma-2-27b]
+        [https://huggingface.co/google/gemma-2-9b]
+        [https://huggingface.co/google/gemma-2-2b]
+
+        [https://huggingface.co/google/gemma-7b]
+        [https://huggingface.co/google/gemma-2b]
+
+        [https://huggingface.co/google/recurrentgemma-9b]
+        [https://huggingface.co/google/recurrentgemma-2b]
+
+
+        [https://huggingface.co/microsoft/Phi-4-mini-reasoning]
+        [https://huggingface.co/microsoft/Phi-4-reasoning]
+        [https://huggingface.co/microsoft/Phi-4-reasoning-plus]
+        [https://huggingface.co/microsoft/phi-4]
+
+        [https://huggingface.co/microsoft/phi-2]
+
+        [\url{https://huggingface.co/microsoft/phi-1_5}]
+
+        [https://huggingface.co/microsoft/phi-1]
+
+
+        [https://huggingface.co/openai/gpt-oss-120b]
+        [https://huggingface.co/openai/gpt-oss-20b]
+
+        [https://huggingface.co/openai-community/gpt2-xl]
+        [https://huggingface.co/openai-community/gpt2-large]
+        [https://huggingface.co/openai-community/gpt2-medium]
+        [https://huggingface.co/openai-community/gpt2]
+
 
 \end{enumerate}
 
@@ -133,7 +185,7 @@ Model selection proceeded in two stages:
 
     \subsubsection{Benchmark Measure Extraction}
 
-        Benchmark values were manually collected from multiple sources, from higher priority to lower priority: (1) official \textit{huggingface} model pages, (2) original research papers, (3) official websites, (4) third-party websites. If more than one source was available for the same model and benchmark, the one with higher priority was chosen.
+        Benchmark values were manually collected from multiple sources, from higher priority to lower priority: (1) official \textit{Hugging Face} model pages, (2) original research papers, (3) official websites, (4) third-party websites. If more than one source was available for the same model and benchmark, the one with higher priority was chosen.
 
         [https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E]
 
