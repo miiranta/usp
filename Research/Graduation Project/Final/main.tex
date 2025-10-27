@@ -2,12 +2,14 @@
 \usepackage{a4wide}
 \usepackage[english]{babel}
 \usepackage[utf8]{inputenc}
-\usepackage[alf]{abntex2cite}
+\usepackage[style=ieee,backend=biber,citestyle=numeric]{biblatex}
+\addbibresource{refs.bib}
 \usepackage{amsmath}
 \usepackage{enumitem}
 \usepackage{geometry} 
 \usepackage{graphicx}
 \usepackage{float}
+\usepackage{tcolorbox}
 
 \title{
     {\small 
@@ -53,6 +55,6 @@
     \input{sections/results}
 
     \newpage
-    \bibliography{refs}
+    \printbibliography
 
 \end{document}

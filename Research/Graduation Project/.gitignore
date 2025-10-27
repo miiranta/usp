@@ -6,6 +6,8 @@
 *.toc
 *.blg
 *.bbl
+*.run.xml
+*.bcf
 
 papers-and-books
 examples
