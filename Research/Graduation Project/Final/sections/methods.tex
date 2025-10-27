@@ -4,6 +4,61 @@
 
 \subsection{Model Selection}
 
+Due to the wide availability of open models combined with the ease of accessing them through its Transformers library [https://arxiv.org/abs/1910.03771], \textbf{HuggingFace} was chosen as the source for model selection in this study.
+
+HuggingFace is a platform that hosts a wide variety of machine learning models, datasets, and tools. It is widely used in the AI research community for sharing and collaborating on machine learning projects. [\url{https://www.researchgate.net/profile/Tejashree-Moharekar/publication/383497950_Hugging_Face_Revolutionizing_AI_and_NLP/links/66d036f8f84dd1716c702445/Hugging-Face-Revolutionizing-AI-and-NLP.pdf}] [https://huggingface.co/] Other platforms such as Ollama were considered, but ultimately not chosen due to the limited number of models and lack of company diversity. 
+
+Model selection proceeded in two stages:
+
+\begin{enumerate}
+    \item First, we identified major technology companies by market capitalization that publish openly released language models. The companies considered were \textbf{OpenAI}, \textbf{Google}, \textbf{Meta} and \textbf{Microsoft}.
+    \item Second, for each company we compiled a candidate set consisting of every model that satisfied the following criteria:
+    
+        \begin{itemize}
+            \item Must be available on the HuggingFace platform.
+            \item The model is a transformer-based language model.
+            \item Model weights are publicly accessible (open weights), including models released behind
+            gated access.
+            \item The model is text-only (no multimodal image/audio inputs), .
+            \item The model is an original base model rather than a task-specific fine-tuned variant.
+            \item The total parameter count is below 150 billion. This upper bound was imposed due to
+            hardware and inference limitations in the computational environment used for our experiments.
+            \item The model is supported by the HuggingFace Transformers library [https://arxiv.org/abs/1910.03771] (i.e., it can be
+            instantiated via the AutoModel/AutoTokenizer utilities), which ensures consistent loading and
+            preprocessing across the candidate set.
+            \item There's at least one publicly available benchmark result for the model among the selected benchmarks (section \ref{sec:benchmark_selection}).
+        \end{itemize}
+
+        The final selection of models used in this study is listed in Table \ref{tab:selected_models}.
+
+        \begin{table}[H]
+            \begin{tabular}{p{0.24\linewidth} p{0.24\linewidth} p{0.24\linewidth} p{0.24\linewidth}}
+                \hline
+                Meta & Google & Microsoft & OpenAI \\
+                \hline
+                meta-llama/Llama-4-Scout-17B-16E & google/gemma-3-27b-pt & microsoft/Phi-4-mini-reasoning & openai/gpt-oss-120b \\
+                meta-llama/Llama-3.2-3B & google/gemma-3-12b-pt & microsoft/Phi-4-reasoning & openai/gpt-oss-20b \\
+                meta-llama/Llama-3.2-1B & google/gemma-3-4b-pt & microsoft/Phi-4-reasoning-plus & openai-community/gpt2-xl \\
+                meta-llama/Llama-3.1-70B & google/gemma-3-1b-pt & microsoft/phi-4 & openai-community/gpt2-large \\
+                meta-llama/Llama-3.1-8B & google/gemma-3-270m & microsoft/phi-2 & openai-community/gpt2-medium \\
+                meta-llama/Meta-Llama-3-70B & google/gemma-2-27b & microsoft/phi-1\_5 & openai-community/gpt2 \\
+                meta-llama/Meta-Llama-3-8B & google/gemma-2-9b & microsoft/phi-1 & \\
+                meta-llama/Llama-2-70b-hf & google/gemma-2-2b &  & \\
+                meta-llama/Llama-2-13b-hf & google/gemma-7b &  & \\
+                meta-llama/Llama-2-7b-hf & google/gemma-2b &  & \\
+                 & google/recurrentgemma-9b &  & \\
+                 & google/recurrentgemma-2b &  & \\
+                \hline
+            \end{tabular}
+            \caption{Selected language models included in this study.}
+            \label{tab:selected_models}
+        \end{table}
+    
+
+\end{enumerate}
+
+
+
 \subsection{LMC Complexity}
 
     According to [https://arxiv.org/abs/1009.1498], LMC Statistical Complexity is the product of two other measures: Disequilibrium and Shannon entropy. It captures both the structured and unstructured aspects of the distribution:
@@ -35,9 +90,9 @@
 
         Finally, the number of bins \( n \) can then be calculated as:
 
-        \[ n = \frac{max(S) - min(S)}{h} \]
+        \[ n = \frac{\max(S) - \min(S)}{h} \]
 
-    \subsubsection{Extracting the Complexity Measure}
+    \subsubsection{Complexity Measure Extraction}
 
 \subsection{Inference Capability}
 
@@ -48,6 +103,7 @@
     Unfortunately, not all models we intend to analyze have publicly available training and test data. It's also not possible to run models in a training setting due to performance limitations of the computational environment available. Therefore, we will have to rely on imperfect proxies for performance such as \textbf{benchmarks}.
 
     \subsubsection{Benchmark Selection}
+    \label{sec:benchmark_selection}
 
         Benchmarks are standardized tests designed to evaluate the performance of machine learning models across various tasks. They provide a common ground for comparison by measuring how well different models perform on the same datasets using predefined metrics. 
         
@@ -75,7 +131,83 @@
             \item \textbf{LMArena (Score)}: An online platform where users can submit questions and receive responses from two anonymous large language models (LLMs), then vote on which answer they prefer, helping to crowdsource human preferences for evaluating and ranking LLMs. Its evaluation works by collecting thousands of pairwise comparisons users, using  the Bradley-Terry system to estimate win rates and compute rankings/scores. [https://arxiv.org/abs/2403.04132].
         \end{itemize}
 
-    \subsubsection{Extracting the Inference Capability Measure}
+    \subsubsection{Benchmark Measure Extraction}
+
+        Benchmark values were manually collected from multiple sources, from higher priority to lower priority: (1) official \textit{huggingface} model pages, (2) original research papers, (3) official websites, (4) third-party websites. If more than one source was available for the same model and benchmark, the one with higher priority was chosen.
+
+        [https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E]
+
+        [https://huggingface.co/meta-llama/Llama-3.2-3B]
+        [https://huggingface.co/meta-llama/Llama-3.2-1B]
+
+        [https://huggingface.co/meta-llama/Llama-3.1-70B]
+        [https://huggingface.co/meta-llama/Llama-3.1-8B]
+
+        [https://huggingface.co/meta-llama/Meta-Llama-3-70B]
+        [https://huggingface.co/meta-llama/Meta-Llama-3-8B]
+
+        [https://huggingface.co/meta-llama/Llama-2-70b-hf]
+        [https://huggingface.co/meta-llama/Llama-2-13b-hf]
+        [https://huggingface.co/meta-llama/Llama-2-7b-hf]
+
+
+        [https://huggingface.co/google/gemma-3-27b-pt]
+        [https://huggingface.co/google/gemma-3-12b-pt]
+        [https://huggingface.co/google/gemma-3-4b-pt]
+        [https://huggingface.co/google/gemma-3-1b-pt]
+
+        [https://huggingface.co/google/gemma-2-27b]
+        [https://huggingface.co/google/gemma-2-9b]
+        [https://huggingface.co/google/gemma-2-2b]
+
+        [https://huggingface.co/google/gemma-7b]
+        [https://huggingface.co/google/gemma-2b]
+
+        [https://huggingface.co/google/recurrentgemma-9b]
+        [https://huggingface.co/google/recurrentgemma-2b]
+
+
+        [https://huggingface.co/microsoft/Phi-4-mini-reasoning]
+        [https://huggingface.co/microsoft/Phi-4-reasoning]
+        [https://huggingface.co/microsoft/Phi-4-reasoning-plus]
+        [https://huggingface.co/microsoft/phi-4]
+
+        [https://huggingface.co/microsoft/phi-2]
+
+        [\url{https://huggingface.co/microsoft/phi-1_5}]
+
+        [https://huggingface.co/microsoft/phi-1]
+
+
+        [https://huggingface.co/openai/gpt-oss-120b]
+        [https://huggingface.co/openai/gpt-oss-20b]
+
+        [https://huggingface.co/openai-community/gpt2-xl]
+        [https://huggingface.co/openai-community/gpt2-large]
+        [https://huggingface.co/openai-community/gpt2-medium]
+        [https://huggingface.co/openai-community/gpt2]
+
+
+        [https://arxiv.org/pdf/2309.05463]
+
+        [https://www.microsoft.com/en-us/research/blog/phi-2-the-surprising-power-of-small-language-models/]
+
+        [https://openai.com/open-models/]
+
+        [\url{https://llm-explorer.com/model/microsoft%2Fphi-1,5G0M2rf0KGFsyYoAdFxelw}]
+
+        [\url{https://ollama.com/library/gemma3%3A1b}]
+
+        [https://rankedagi.com/]
+
+
+        Even with all those sources, not all models had results available for all benchmarks. Figure \ref{fig:benchmark_availability} shows the availability matrix.
+
+        \begin{figure}[H]
+            \includegraphics[width=\linewidth]{img/benchmark_availability.png}
+            \caption{Availability of benchmark results for the selected models.}
+            \label{fig:benchmark_availability}
+        \end{figure}
 
 \subsection{Comparing LMC Complexity and Inference Capability}
 
