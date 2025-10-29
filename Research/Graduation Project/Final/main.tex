@@ -3,13 +3,25 @@
 \usepackage[english]{babel}
 \usepackage[utf8]{inputenc}
 \usepackage[style=ieee,backend=biber,citestyle=numeric]{biblatex}
-\addbibresource{refs.bib}
 \usepackage{amsmath}
 \usepackage{enumitem}
 \usepackage{geometry} 
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{tcolorbox}
+
+\addbibresource{refs.bib}
+
+\setcounter{secnumdepth}{4}
+\setcounter{tocdepth}{4}
+
+\newcommand{\subsubsubsection}[1]{%
+    \refstepcounter{paragraph}%
+    \addcontentsline{toc}{paragraph}{\theparagraph\quad #1}
+    \vspace{0.6em}%
+    \noindent\textbf{\theparagraph\quad #1}\par
+    \vspace{0.2em}%
+}
 
 \title{
     {\small 
