@@ -1363,8 +1363,8 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         bench_items = [(name, results) for name, results in all_benchmark_results.items() if name != 'ALL']
         all_item = [(name, results) for name, results in all_benchmark_results.items() if name == 'ALL']
         
-        # Sort other benchmarks by R² score
-        bench_items_sorted = sorted(bench_items, key=lambda x: x[1]['r2_score'], reverse=True)
+        # Sort other benchmarks by absolute R² score (highest to lowest)
+        bench_items_sorted = sorted(bench_items, key=lambda x: abs(x[1]['r2_score']), reverse=True)
         
         # Combine: sorted benchmarks + ALL at the end
         combined_items = bench_items_sorted + all_item
@@ -1389,10 +1389,18 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         plt.close(fig)
         
         # Create comparison plot: R² scores for LINEAR regression
+        # Re-sort by absolute r2_linear (highest to lowest), with ALL at bottom
+        r2_linear_combined = [(name, results) for name, results in all_benchmark_results.items() if name != 'ALL']
+        r2_linear_all = [(name, results) for name, results in all_benchmark_results.items() if name == 'ALL']
+        r2_linear_sorted = sorted(r2_linear_combined, key=lambda x: abs(x[1]['r2_linear']), reverse=True)
+        r2_linear_combined_items = r2_linear_sorted + r2_linear_all
+        
+        bench_names_short_r2lin = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in r2_linear_combined_items]
+        
         fig, ax = plt.subplots(figsize=(14, 8))
-        r2_linear_scores = [results['r2_linear'] for _, results in combined_items]
-        sns.barplot(x=r2_linear_scores, y=bench_names_short, color='cornflowerblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-        ax.set_yticklabels(bench_names_short, fontsize=9)
+        r2_linear_scores = [results['r2_linear'] for _, results in r2_linear_combined_items]
+        sns.barplot(x=r2_linear_scores, y=bench_names_short_r2lin, color='cornflowerblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+        ax.set_yticklabels(bench_names_short_r2lin, fontsize=9)
         ax.set_xlabel('R² Score')
         ax.set_ylabel('Benchmark')
         ax.set_title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Complexity')
@@ -1406,11 +1414,19 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         plt.close(fig)
         
         # Create comparison plot: Correlation coefficients for all benchmarks
+        # Re-sort by absolute correlation (highest to lowest), with ALL at bottom
+        corr_combined = [(name, results) for name, results in all_benchmark_results.items() if name != 'ALL']
+        corr_all = [(name, results) for name, results in all_benchmark_results.items() if name == 'ALL']
+        corr_sorted = sorted(corr_combined, key=lambda x: abs(x[1]['correlation']), reverse=True)
+        corr_combined_items = corr_sorted + corr_all
+        
+        bench_names_short_corr = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in corr_combined_items]
+        
         fig, ax = plt.subplots(figsize=(14, 10))
-        correlations = [results['correlation'] for _, results in combined_items]
+        correlations = [results['correlation'] for _, results in corr_combined_items]
         colors = ['green' if c > 0 else 'red' for c in correlations]
-        sns.barplot(x=correlations, y=bench_names_short, palette=colors, alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-        ax.set_yticklabels(bench_names_short, fontsize=9)
+        sns.barplot(x=correlations, y=bench_names_short_corr, palette=colors, alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+        ax.set_yticklabels(bench_names_short_corr, fontsize=9)
         ax.set_xlabel('Pearson Correlation Coefficient', fontsize=11)
         ax.set_ylabel('Benchmark', fontsize=11)
         ax.set_title('Correlation: Benchmark Score vs Complexity', fontsize=12, pad=15)
@@ -1672,12 +1688,15 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         
         # Create top 20 visualization for this benchmark
         if len(top_results) > 0:
+            # Sort by absolute pearson correlation (ascending so highest abs appears on top in barh)
+            top_results_sorted_viz = top_results.sort_values('abs_correlation', ascending=True)
+            
             fig = plt.figure(figsize=(14, max(8, top_n * 0.4)))
             
             # Create labels
             labels = [f"{row['type'][:25]}, Filter={int(row['filter'])}" 
-                    for _, row in top_results.iterrows()]
-            correlations = top_results['pearson_correlation'].values
+                    for _, row in top_results_sorted_viz.iterrows()]
+            correlations = top_results_sorted_viz['pearson_correlation'].values
             
             colors = ['green' if c > 0 else 'red' for c in correlations]
             
@@ -1764,10 +1783,14 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         fig = plt.figure(figsize=(16, 10))
         top_20_plot = results_df_sorted.head(20).copy()
         
+        # Sort by absolute value (descending so highest appears on top)
+        # For barh, we need to sort in reverse order so highest index has highest value on top
+        top_20_plot_sorted = top_20_plot.sort_values('abs_correlation', ascending=True)
+        
         # Create labels
         labels = [f"{row['benchmark'].replace('BENCH-', '')[:20]}\n{row['type'][:15]}, F={int(row['filter'])}" 
-                for _, row in top_20_plot.iterrows()]
-        correlations = top_20_plot['pearson_correlation'].values
+                for _, row in top_20_plot_sorted.iterrows()]
+        correlations = top_20_plot_sorted['pearson_correlation'].values
         
         colors = ['green' if c > 0 else 'red' for c in correlations]
         
@@ -2177,8 +2200,8 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         bench_items_param = [(name, results) for name, results in all_param_benchmark_results.items() if name != 'ALL']
         all_item_param = [(name, results) for name, results in all_param_benchmark_results.items() if name == 'ALL']
         
-        # Sort other benchmarks by R² score
-        bench_items_param_sorted = sorted(bench_items_param, key=lambda x: x[1]['r2_score'], reverse=True)
+        # Sort other benchmarks by absolute R² score (highest to lowest)
+        bench_items_param_sorted = sorted(bench_items_param, key=lambda x: abs(x[1]['r2_score']), reverse=True)
         
         # Combine: sorted benchmarks + ALL at the end
         combined_items_param = bench_items_param_sorted + all_item_param
@@ -2186,61 +2209,81 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         bench_names_short = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in combined_items_param]
         r2_scores = [results['r2_score'] for _, results in combined_items_param]
         
-        plt.barh(range(len(bench_names_short)), r2_scores, color='steelblue', alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
-        plt.xlabel('R² Score')
-        plt.ylabel('Benchmark')
-        plt.title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Parameter Count')
-        plt.grid(axis='x', alpha=0.3)
-        
+        fig, ax = plt.subplots(figsize=(14, 8))
+        sns.barplot(x=r2_scores, y=bench_names_short, color='steelblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+        ax.set_yticklabels(bench_names_short, fontsize=9)
+        ax.set_xlabel('R² Score')
+        ax.set_ylabel('Benchmark')
+        ax.set_title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Parameter Count')
+        ax.grid(axis='x', alpha=0.3)
         # Add value labels on bars
-        for i, (name, score) in enumerate(zip(bench_names_short, r2_scores)):
-            plt.text(score, i, f' {score:.4f}', va='center', fontsize=8)
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(param_benchmarks_folder, 'r2_comparison.png'), dpi=150, bbox_inches='tight')
-        plt.close()
+        for i, (bar, score) in enumerate(zip(ax.patches, r2_scores)):
+            width = bar.get_width()
+            y = bar.get_y() + bar.get_height() / 2
+            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=8, ha='left')
+        fig.tight_layout()
+        fig.savefig(os.path.join(param_benchmarks_folder, 'r2_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.close(fig)
         
         # Create comparison plot: R² scores for LINEAR regression
-        fig = plt.figure(figsize=(14, 8))
-        r2_linear_scores = [results['r2_linear'] for _, results in combined_items_param]
+        # Re-sort by absolute r2_linear (highest to lowest), with ALL at bottom
+        r2_linear_param_combined = [(name, results) for name, results in all_param_benchmark_results.items() if name != 'ALL']
+        r2_linear_param_all = [(name, results) for name, results in all_param_benchmark_results.items() if name == 'ALL']
+        r2_linear_param_sorted = sorted(r2_linear_param_combined, key=lambda x: abs(x[1]['r2_linear']), reverse=True)
+        r2_linear_param_combined_items = r2_linear_param_sorted + r2_linear_param_all
         
-        plt.barh(range(len(bench_names_short)), r2_linear_scores, color='cornflowerblue', alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
-        plt.xlabel('R² Score')
-        plt.ylabel('Benchmark')
-        plt.title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Parameter Count')
-        plt.grid(axis='x', alpha=0.3)
+        bench_names_short_r2lin_param = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in r2_linear_param_combined_items]
         
-        # Add value labels on bars
-        for i, (name, score) in enumerate(zip(bench_names_short, r2_linear_scores)):
-            plt.text(score, i, f' {score:.4f}', va='center', fontsize=8)
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(param_benchmarks_folder, 'r2_linear_comparison.png'), dpi=150, bbox_inches='tight')
-        plt.close()
+        fig, ax = plt.subplots(figsize=(14, 8))
+        r2_linear_scores = [results['r2_linear'] for _, results in r2_linear_param_combined_items]
+        sns.barplot(x=r2_linear_scores, y=bench_names_short_r2lin_param, color='cornflowerblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+        ax.set_yticklabels(bench_names_short_r2lin_param, fontsize=9)
+        ax.set_xlabel('R² Score')
+        ax.set_ylabel('Benchmark')
+        ax.set_title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Parameter Count')
+        ax.grid(axis='x', alpha=0.3)
+        for i, (bar, score) in enumerate(zip(ax.patches, r2_linear_scores)):
+            width = bar.get_width()
+            y = bar.get_y() + bar.get_height() / 2
+            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=8, ha='left')
+        fig.tight_layout()
+        fig.savefig(os.path.join(param_benchmarks_folder, 'r2_linear_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.close(fig)
         
         # Create comparison plot: Correlation coefficients for all benchmarks
-        fig = plt.figure(figsize=(14, 8))
-        correlations = [results['correlation'] for _, results in combined_items_param]
+        # Re-sort by absolute correlation (highest to lowest), with ALL at bottom
+        corr_param_combined = [(name, results) for name, results in all_param_benchmark_results.items() if name != 'ALL']
+        corr_param_all = [(name, results) for name, results in all_param_benchmark_results.items() if name == 'ALL']
+        corr_param_sorted = sorted(corr_param_combined, key=lambda x: abs(x[1]['correlation']), reverse=True)
+        corr_param_combined_items = corr_param_sorted + corr_param_all
         
+        bench_names_short_corr_param = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in corr_param_combined_items]
+        
+        fig, ax = plt.subplots(figsize=(14, 10))
+        correlations = [results['correlation'] for _, results in corr_param_combined_items]
         colors = ['green' if c > 0 else 'red' for c in correlations]
-        plt.barh(range(len(bench_names_short)), correlations, color=colors, alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
-        plt.xlabel('Pearson Correlation Coefficient')
-        plt.ylabel('Benchmark')
-        plt.title('Correlation: Benchmark Score vs Parameter Count')
-        plt.grid(axis='x', alpha=0.3)
-        plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
+        sns.barplot(x=correlations, y=bench_names_short_corr_param, palette=colors, alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
+        ax.set_yticklabels(bench_names_short_corr_param, fontsize=9)
+        ax.set_xlabel('Pearson Correlation Coefficient', fontsize=11)
+        ax.set_ylabel('Benchmark', fontsize=11)
+        ax.set_title('Correlation: Benchmark Score vs Parameter Count', fontsize=12, pad=15)
+        ax.grid(axis='x', alpha=0.3)
+        ax.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
         
-        # Add value labels on bars
-        for i, (name, corr) in enumerate(zip(bench_names_short, correlations)):
-            plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=8, 
-                    ha='left' if corr > 0 else 'right')
+        # Add correlation values as text outside bars
+        for i, (bar, corr) in enumerate(zip(ax.patches, correlations)):
+            width = bar.get_width()
+            y = bar.get_y() + bar.get_height() / 2
+            # Place text outside the bar end
+            x_offset = 0.005 if width > 0 else -0.005
+            x_pos = width + x_offset
+            ha_align = 'left' if width > 0 else 'right'
+            ax.text(x_pos, y, f'{width:.4f}', va='center', ha=ha_align, fontsize=9, fontweight='bold')
         
-        plt.tight_layout()
-        plt.savefig(os.path.join(param_benchmarks_folder, 'correlation_comparison.png'), dpi=150, bbox_inches='tight')
-        plt.close()
+        fig.tight_layout()
+        fig.subplots_adjust(right=0.95, left=0.1)
+        fig.savefig(os.path.join(param_benchmarks_folder, 'correlation_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.close(fig)
 
     print(f"\nCompleted parameter count analysis. Processed {len(all_param_benchmark_results)} benchmarks.")
 
@@ -2482,12 +2525,15 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         
         # Create top 20 visualization for this benchmark
         if len(top_results) > 0:
+            # Sort by absolute pearson correlation (ascending so highest abs appears on top in barh)
+            top_results_sorted_viz = top_results.sort_values('abs_correlation', ascending=True)
+            
             fig = plt.figure(figsize=(14, max(8, top_n * 0.4)))
             
             # Create labels
             labels = [f"{row['type'][:25]}, Filter={int(row['filter'])}" 
-                    for _, row in top_results.iterrows()]
-            correlations = top_results['pearson_correlation'].values
+                    for _, row in top_results_sorted_viz.iterrows()]
+            correlations = top_results_sorted_viz['pearson_correlation'].values
             
             colors = ['green' if c > 0 else 'red' for c in correlations]
             
@@ -2501,8 +2547,9 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
             
             # Add value labels on bars
             for i, corr in enumerate(correlations):
-                plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=8, 
-                        ha='left' if corr > 0 else 'right')
+                x_offset = 0.003 if corr > 0 else -0.003
+                ha_align = 'left' if corr > 0 else 'right'
+                plt.text(corr + x_offset, i, f'{corr:.4f}', va='center', fontsize=8, ha=ha_align)
             
             plt.tight_layout()
             plt.savefig(os.path.join(bench_main_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
@@ -2573,10 +2620,13 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         fig = plt.figure(figsize=(16, 10))
         top_20_plot = param_results_df_sorted.head(20).copy()
         
+        # Sort by absolute value (ascending so highest abs appears on top in barh)
+        top_20_plot_sorted = top_20_plot.sort_values('abs_correlation', ascending=True)
+        
         # Create labels
         labels = [f"{row['benchmark'].replace('BENCH-', '')[:20]}\n{row['type'][:15]}, F={int(row['filter'])}" 
-                for _, row in top_20_plot.iterrows()]
-        correlations = top_20_plot['pearson_correlation'].values
+                for _, row in top_20_plot_sorted.iterrows()]
+        correlations = top_20_plot_sorted['pearson_correlation'].values
         
         colors = ['green' if c > 0 else 'red' for c in correlations]
         
@@ -2590,8 +2640,9 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         
         # Add value labels on bars
         for i, corr in enumerate(correlations):
-            plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=7, 
-                    ha='left' if corr > 0 else 'right')
+            x_offset = 0.003 if corr > 0 else -0.003
+            ha_align = 'left' if corr > 0 else 'right'
+            plt.text(corr + x_offset, i, f'{corr:.4f}', va='center', fontsize=7, ha=ha_align)
         
         plt.tight_layout()
         plt.savefig(os.path.join(detailed_param_benchmarks_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')

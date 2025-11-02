@@ -21,7 +21,7 @@ We used the following tools and libraries:
     \item Numpy 2.2.6
     \item Pandas 2.3.2
     \item Pysr 1.5.9
-    \item SciPy 1.16.1
+    \item SciPy 1.16.1 \cite{SciPy2020}
     \item Matplotlib 3.10.6
     \item Seaborn 0.13.2 \cite{Waskom2021}
     \item CUDA Toolkit 12.6
@@ -141,6 +141,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     The values \( p_i \) represent the probabilities associated with each state \( i \) in the distribution, and \( n \) is the total number of states. K is a positive constant and, in our case, is set to 1 for simplicity. K can be changed later since \( C_{LMC} = (-K \sum_{i=1}^{n} p_i \log p_i)  \times D \) is equivalent to \( C_{LMC} = K \times (- \sum_{i=1}^{n} p_i \log p_i)  \times D \).
 
     \subsubsection{Reading Model Weights}
+    \label{sec:reading_model_weights}
 
         Model weights are fetched using the Hugging Face Hub library \cite{HuggingFaceHub} and loaded using the Transformers library \cite{Wolf2019}. For each selected model, we instantiate the model using the \textbf{AutoModel} utility, which automatically handles model architecture loading and weight initialization. 
 
@@ -163,6 +164,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         The choice of also analyzing by weight type is motivated by the fact that different weight types may exhibit different statistical properties and, as a consequence, different complexity characteristics. Studies such as the already cited OpenAI's \cite{Kaplan2020} take into account different weight types when analyzing scaling laws.
 
     \subsubsection{Filtering}
+    \label{sec:filtering}
 
         Casting different encoding formats to float32 may introduce rounding errors that manifest as extreme outliers in the weight distribution. This is rare (approximately 10 to 30 values in 100 billion) but can be problematic for our next step: histogram construction (section \ref{sec:data_discretization}), since the number of bins will be affected by the range of values in the data. The reasons for those rounding errors could not be fully investigated within the scope of this work, but they are likely related to floating point rounding errors.
 
@@ -246,6 +248,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         \end{itemize}
 
     \subsubsection{Benchmark Collection Procedure}
+    \label{sec:benchmark_collection_procedure}
 
         Benchmark values were manually collected from multiple sources, in the following order of priority:
         \begin{enumerate}
@@ -317,5 +320,122 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         \end{figure}
 
 \subsection{Comparing LMC Complexity and Inference Capability}
+
+    \subsubsection{Building the testing dataset}
+
+        We will build a dataset by creating tuples that encode all dimensions of our analysis: model information, weight-type combination, filtering setting, the resulting LMC complexity value, the number of histogram bins used, and the available benchmark results for the model.
+
+        The dataset construction follows a nested loop structure:
+
+        \begin{enumerate}
+            \item \textbf{For each model} in our selected set (e.g., Llama-4-Scout-17B-16E, gpt-oss-120b, etc.), we generate all non-empty subsets of the four \textbf{weight-type categories} defined in section \ref{sec:reading_model_weights} using the power set \cite{Cantor1895}. This produces 15 unique weight-type combinations per model:
+            \begin{itemize}
+                \item Single types: \{bias\}, \{norm\}, \{embedding\}, \{other\}
+                \item Dual combinations: \{bias, norm\}, \{bias, embedding\}, \{bias, other\}, \{norm, embedding\}, \{norm, other\}, \{embedding, other\}
+                \item Triple combinations: \{bias, norm, embedding\}, \{bias, norm, other\}, \{bias, embedding, other\}, \{norm, embedding, other\}
+                \item All four: \{bias, norm, embedding, other\}
+            \end{itemize}
+
+            \item \textbf{For each weight-type combination}, we apply every value of \( \sigma_{\text{filter}} \) defined in section \ref{sec:filtering}. The filtering values tested are: 0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 10, 20, plus one unfiltered configuration, totaling 11 configurations per combination.
+
+            \item \textbf{For each configuration}, we compute the LMC complexity following the procedure outlined in section \ref{sec:lmc_complexity}. We also record the number of histogram bins used in the calculation for further analysis. Lastly, we append the available benchmark results for the model from section \ref{sec:benchmark_collection_procedure}.
+            
+        \end{enumerate}
+
+        At the end we will have 35 models \(\times\) 15 weight-type combinations \(\times\)  11 filtering settings (including unfiltered) = 5775  datapoints. The resulting dataset \( \mathbf{R} \) consists of tuples structured as follows:
+        \begin{enumerate}
+            \item Model name
+            \item Number of parameters
+            \item Weight-type combination
+            \item Filtering setting
+            \item LMC complexity value
+            \item Number of histogram bins
+            \item Available benchmark results
+        \end{enumerate}
+
+        e.g. a hypothetical tuple in the dataset:
+        \begin{itemize}
+            \item \texttt{(Llama-4-Scout-17B-16E, 17B params, \{bias\}, 0.125, 0.324, 8592, [MMLU: 71.2, MMLU-Pro: 68.5, ...])}
+        \end{itemize}
+
+    \subsubsection{Regression procedures}
+    \label{sec:regression_procedures}
+            
+        We will also using two important concepts defined as follows:
+
+        \begin{itemize}
+            \item \textbf{Linear regression}: a conventional statistical method used to model the relationship between a dependent variable and one or more independent variables by fitting a linear equation \cite{Freedman2007}. The data may not follow a linear trend, but linear regression can still be used to identify overall correlations and make it easier to compare results.
+            \begin{itemize}
+                \item Linear: \( y = ax + b \)
+            \end{itemize}
+
+            For comparisions, we will use the \textbf{Pearson correlation} \cite{Freedman2007} (linear correlation coeficient). This can be computed as:
+            \[ r = \frac{\text{cov}(x,y)}{SD(x) \times SD(y)} \]
+            where $\text{cov}(x,y) = (\text{average of products } xy) - (\text{average of } x) \times (\text{average of } y)$.
+
+            Or alternatively, using the linear regression slope \( a \) \cite{Wonnacott1990}:
+            \[ r = a \cdot \frac{SD(x)}{SD(y)} \]
+
+            \item \textbf{Free regression}: a curve fitting method with greater flexibility but less comparability than linear regression. It was configured to test for the following functions:
+            \begin{itemize}
+                \item Linear: \( y = ax + b \)
+                \item Quadratic: \( y = ax^2 + bx + c \)
+                \item Exponential: \( y = a \cdot e^{bx} + c \)
+                \item Logarithmic: \( y = a \cdot \ln(x+1) + b x + c \)
+                \item Power: \( y = a \cdot (x+1)^b + c \)
+            \end{itemize}
+            The best fit was chosen based on the highest \( R^2 \) value. 
+            
+            For both regressions, the tests were made using \texttt{curve\_fit} from SciPy~\cite{SciPy2020}.
+
+        \end{itemize}
+
+    \subsubsection{Best filtering setting}
+    \label{sec:best_filtering_setting}
+
+        In more detail, the criteria defined in section \ref{sec:filtering} to choose the best filtering setting works as follows:
+        \begin{enumerate}
+            \item We will group \( R \) in relation to each value of \( \sigma_{\text{filter}} \). Then, calculate the \textbf{average} and the \textbf{maximum} \textbf{histogram bin count} for each group, and plot them as a bar chart. 
+            
+            \item We will group \( R \) in relation to each value of \( \sigma_{\text{filter}} \). Then, calculate the \textbf{average} and the \textbf{maximum} \textbf{complexity} for each group, and plot them as a bar chart.
+
+            \item Since steps 1 and 2 represent the two criteria defined in section \ref{sec:filtering}, we will first filter the groups obtained in 1 to keep only the ones that have a lower average bin count than the unfiltered data. Then, among those groups, we will choose the one with the closest complexity value to the unfiltered data (least amount of filtering).
+        \end{enumerate}
+
+        The filtering dimension will be used to determine the best general filtering setting following the criteria defined in section \ref{sec:filtering}. After defining the best filtering setting, we will discart all the runs where \( \sigma_{\text{filter}} \) is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{best}}$. There will be a total of: \( 35 \text{ models } \times 15 \text{ weight-type combinations } \times 1 \text{ filtering setting } = 525 \text{ datapoints} \).
+
+        We will also make a free regression for the data obtained in step 1 and 2 to analyze how filtering strength affects histogram bin count and complexity, respectively.
+
+    \subsubsection{Influence of weight types}
+
+        After defining the best filtering setting, we will analyze how the choice of weight types influences the final complexity results.  This will help us understand if certain weight types contribute more significantly to the overall complexity measure.
+
+        This will be done by grouping \( R_{best} \) in relation to each weight-type combination and calculating the \textbf{average} and the \textbf{maximum} \textbf{complexity} for each group, then, plotting a bar chart for each metric.  
+        
+        Since we are using combinations simetrically (each weight type appears the same amount of times in \( R_{best} \)), it is not necessary to select a best weight-type combination, like it is done in \ref{sec:best_filtering_setting}, because it won't add any bias to the analysis.
+
+    \subsubsection{Complexity vs Number of parameters}   
+    \label{sec:complexity_vs_num_params}
+
+        We will analyze how LMC complexity varies with the number of model parameters. This will be done by calculating the \textbf{average complexity} for each range of number of parameters, being plotted as a histogram. The number of bins of this plot will be defined using the Freedman-Diaconis rule \cite{FreedmanDiaconis1981} to adapt to the distribution.
+
+        We will look for trends or patterns that may indicate a relationship between model size and complexity.
+
+    \subsubsection{Complexity vs Number of bins}
+
+        Similarly to \ref{sec:complexity_vs_num_params} , we will analyze how LMC complexity varies with the number of histogram bins used in its calculation. This will be done by calculating the \textbf{average complexity} for each range of number of bins, being plotted as a histogram. The number of bins of this plot will be defined using the Freedman-Diaconis rule \cite{FreedmanDiaconis1981} to adapt to the distribution.
+
+        We will look for trends or patterns that may indicate a relationship between histogram granularity and complexity.
+
+    \subsubsection{Complexity vs Benchmark performance}
+
+
+            
+
+
+
+
+
+
 
 

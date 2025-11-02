@@ -51,28 +51,28 @@ def main():
     if True:
         aux.plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER)
     
+    appended_benchmarks_df_only_filter20 = appended_benchmarks_df[appended_benchmarks_df['filter'] == 20]
+    print(f"Filtered dataframe to only filter 20, resulting in {len(appended_benchmarks_df_only_filter20)} rows.")
+    
     # (2) COMPLEXITY vs TYPES
     # 2.1 Para cada tipo, calcular a complexidade média e máxima
     if True:
-        aux.plot_complexity_vs_types(appended_benchmarks_df, OUTPUT_FOLDER)
+        aux.plot_complexity_vs_types(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
     
     # (3) COMPLEXITY vs NUMBER OF PARAMS
     # 3.1 Para cada número de parâmetros, calcular a complexidade média, com histograma
     # 3.2 Regressao livre entre número de parâmetros e complexidade
     if True:
-        aux.plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER)
+        aux.plot_complexity_vs_num_params(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
     
     # (4) COMPLEXITY vs NUMBER OF BINS
     # 4.1 Para cada número de bins, calcular a complexidade média, com histograma
     # 4.2 Regressao livre entre número de bins e complexidade
     if True:
-        aux.plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER)
+        aux.plot_complexity_vs_num_bins(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
     
     # ===========
     
-    appended_benchmarks_df_only_filter20 = appended_benchmarks_df[appended_benchmarks_df['filter'] == 20]
-    print(f"Filtered dataframe to only filter 20, resulting in {len(appended_benchmarks_df_only_filter20)} rows.")
-
     # (5) FOR EACH BENCHMARK, FILTER and TYPE - COMPLEXITY vs BENCHMARK
     # 5.1 Para cada benchmark, regressao livre e linear entre complexidade e benchmark
     # 5.2 Plot das correlações lineares
