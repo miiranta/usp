@@ -32,7 +32,7 @@ The choice of versions was motivated by compatibility with our computational env
 
 Due to the wide availability of open models combined with the ease of accessing them through the Transformers library \cite{Wolf2019} and Hub library \cite{HuggingFaceHub}, \textbf{Hugging Face} was chosen as the source for model selection in this study.
 
-Hugging Face is a platform that hosts a variety of machine learning models, datasets, and tools. It is widely used in the AI research community for sharing and collaborating on machine learning projects \cite{HuggingFaceResearchGate, HuggingFaceMain}. Other platforms such as Ollama \cite{Ollama} were considered, but ultimately not chosen due to the limited number of models and lack of company diversity. 
+Hugging Face is a platform that hosts a variety of machine learning models, datasets, and tools. It is widely used in the AI research community for sharing and collaborating on machine learning projects \cite{HuggingFaceResearchGate, HuggingFaceMain}. Other platforms such as Ollama \cite{Ollama} were considered, but ultimately not chosen due to the limited number of models available and fewer contributing companies. 
 
 Model selection proceeded in two stages:
 
@@ -186,11 +186,11 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     \subsubsection{Data Discretization and Histogram}
     \label{sec:data_discretization}
 
-        To compute the LMC complexity of a finite array of floating-point numbers, we first construct a histogram to discretize the data into a probability distribution. That's justified as the chance of finding two exact numbers is extremely low and, as a consequence, it is hard to determine the probability of each value. 
+        To compute the LMC complexity of a finite array of floating-point numbers, we first construct a histogram to discretize the data into a probability distribution. This is justified as the chance of finding two exact numbers is extremely low and, as a consequence, it is hard to determine the probability of each value. 
         
         We will call the set of all data points as \( S \), the total amount of data points as \( N \) and the number of bins they will be distributed into as \( n \). The probabilities \( p_i \) are then calculated as \( p_i = \frac{f_i}{N} \) where \( f_i \) is the frequency count of data points in bin \( i \).
 
-        As expected, this approach revisits a classic issue in histogram-based analysis: the choice of the number of bins \( n \) will impact the resulting probability distribution, which is specially problematic to the LMC complexity measure; variations in \( n \) can cause significant fluctuations in the final result. Selecting an inappropriate amount may produce misleading values, either by oversimplifying the distribution (too few bins) or by introducing noise (too many bins). 
+        As expected, this approach revisits a classic issue in histogram-based analysis: the choice of the number of bins \( n \) will impact the resulting probability distribution, which is particularly problematic for the LMC complexity measure; variations in \( n \) can cause significant fluctuations in the final result. Selecting an inappropriate amount may produce misleading values, either by oversimplifying the distribution (too few bins) or by introducing noise (too many bins). 
 
         There are a variety of methods to determine \( n \) in a histogram, most of them with their own advantages and disadvantages. Commonly used methods such as \textbf{Sturges' formula} \cite{Sturges1926} and \textbf{Rice Rule} \cite{RiceRule} rely only on the number of data points, while others like \textbf{Scott's normal reference rule} and \textbf{Freedman-Diaconis' choice} also take into account the data distribution by using standard deviation and interquartile range, respectively \cite{Knuth2006}.   
 
@@ -225,7 +225,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         
         According to \cite{Owen2024}, benchmarks such as the famous MMLU, correlate fairly well with the predicted test loss determined by scaling laws, making them suitable proxies.
 
-        They are, however, not perfect. Some benchmarks may fail to capture all aspects of a model's capabilities, leading to an incomplete assessment of performance. Other problems such as Data Contamination \cite{Magar2022} can influence the validity of results and make it hard to fairly compare models made in different times. It is also hard to find benchmarks that are widely reported for all models we intend to analyze.
+        They are, however, not perfect. Some benchmarks may fail to capture all aspects of a model's capabilities, leading to an incomplete assessment of performance. Other problems such as Data Contamination \cite{Magar2022} can influence the validity of results and make it difficult to fairly compare models created at different times. It is also hard to find benchmarks that are widely reported for all models we intend to analyze.
 
         A nice proposal for future research to avoid the problems cited above would involve training a model from scratch twice: optimizing it initially for minimal loss and then for minimal loss + maximum LMC complexity, then comparing the results. This is however out of the scope of this work.
 
@@ -361,7 +361,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     \subsubsection{Regression procedures}
     \label{sec:regression_procedures}
             
-        We will also using two important concepts defined as follows:
+        We will also use two important concepts defined as follows:
 
         \begin{itemize}
             \item \textbf{Linear regression}: a conventional statistical method used to model the relationship between a dependent variable and one or more independent variables by fitting a linear equation \cite{Freedman2007}. The data may not follow a linear trend, but linear regression can still be used to identify overall correlations and make it easier to compare results.
@@ -369,7 +369,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
                 \item Linear: \( y = ax + b \)
             \end{itemize}
 
-            For comparisions, we will use the \textbf{Pearson correlation} \cite{Freedman2007} (linear correlation coeficient). This can be computed as:
+            For comparisons, we will use the \textbf{Pearson correlation} \cite{Freedman2007} (linear correlation coefficient). This can be computed as:
             \[ r = \frac{\text{cov}(x,y)}{SD(x) \times SD(y)} \]
             where $\text{cov}(x,y) = (\text{average of products } xy) - (\text{average of } x) \times (\text{average of } y)$.
 
@@ -402,7 +402,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             \item Since steps 1 and 2 represent the two criteria defined in section \ref{sec:filtering}, we will first filter the groups obtained in 1 to keep only the ones that have a lower average bin count than the unfiltered data. Then, among those groups, we will choose the one with the closest complexity value to the unfiltered data (least amount of filtering).
         \end{enumerate}
 
-        The filtering dimension will be used to determine the best general filtering setting following the criteria defined in section \ref{sec:filtering}. After defining the best filtering setting, we will discart all the runs where \( \sigma_{\text{filter}} \) is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{best}}$. There will be a total of: \( 35 \text{ models } \times 15 \text{ weight-type combinations } \times 1 \text{ filtering setting } = 525 \text{ datapoints} \).
+        The filtering dimension will be used to determine the best general filtering setting following the criteria defined in section \ref{sec:filtering}. After defining the best filtering setting, we will discard all the runs where \( \sigma_{\text{filter}} \) is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{best}}$. There will be a total of: \( 35 \text{ models } \times 15 \text{ weight-type combinations } \times 1 \text{ filtering setting } = 525 \text{ datapoints} \).
 
         We will also make a free regression on a scatter plot for the data obtained in step 1 and 2 to analyze how filtering strength affects histogram bin count and complexity, respectively.
 
@@ -412,7 +412,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         This will be done by grouping \( R_{best} \) in relation to each weight-type combination and calculating the \textbf{average} and the \textbf{maximum} \textbf{complexity} for each group, then, plotting a bar chart for each metric.  
         
-        Since we are using combinations simetrically (each weight type appears the same amount of times in \( R_{best} \)), it is not necessary to select a best weight-type combination, like it is done in \ref{sec:best_filtering_setting}, because it won't add any bias to the analysis.
+        Since we are using combinations symmetrically (each weight type appears the same amount of times in \( R_{best} \)), it is not necessary to select a best weight-type combination, like it is done in \ref{sec:best_filtering_setting}, because it won't add any bias to the analysis.
 
     \subsubsection{Complexity vs Number of parameters}   
     \label{sec:complexity_vs_num_params}
