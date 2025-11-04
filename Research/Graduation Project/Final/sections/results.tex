@@ -1,2 +1,99 @@
 \section{Results}
 
+\subsection{The extraction process}
+
+    The dataset in section \ref{sec:building_testing_dataset} was built successfully through the process described. 
+
+    A model with 10 billion parameters took approximately 3.5 hours to process all weight-type combinations and filtering settings using the workstation described in section \ref{sec:experimental_setup}. The total parameter count of all models is \textbf{652.802.782.352}, taking around \textbf{228 hours} (9.5 days) of computation time in total.
+
+    The resulting dataset contains \textbf{5676 rows}, each representing a unique combination of model, weight-type combination, filtering setting, LMC complexity value, number of histogram bins, and available benchmark results. That was 99 rows short of the expected 5775 rows due to:
+    \begin{itemize}
+        \item Some unfiltered data models exceeded the maximum number of bins (set to 1 billion) during histogram creation, leading to their exclusion. Increasing the maximum bin count is not possible due to memory contraints and keeping the rows in the dataset capped at 1 billion bins would have introduced bias to the analysis.
+        \item Some numerical values such as count, min, max, mean, std, bin\_count, shannon\_entropy, desequilibrium, and complexity were reported as NaN or infinite values in certain model and weight-type combinations, which required their exclusion from the dataset. The reasons are unknown, but the main suspects are floating-point precision errors and divisions by zero in some edge cases.
+    \end{itemize}
+
+\subsection{The filter}
+
+    Following the methodology described in section \ref{sec:best_filtering_setting}, we obtained the plots for average and maximum number of histogram bins per filtering setting across all models and weight-type combinations:
+    
+    \begin{tcolorbox}[colback=gray!10, colframe=black, boxrule=1pt, rounded corners]
+        For visualization purposes, unfiltered data is represented as a \textbf{40 $\sigma$} filtering setting in the plots.
+    \end{tcolorbox}
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/filterbins_average_bins_bar.png}
+        \caption{Average number of histogram bins per filtering setting.}
+        \label{fig:average_bins_per_filtering}
+    \end{figure}
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/filterbins_maximum_bins_bar.png}
+        \caption{Maximum number of histogram bins per filtering setting.}
+        \label{fig:maximum_bins_per_filtering}
+    \end{figure}
+
+    It is clear that both plots are pretty similar in shape and proportions. There is a big jump downwards from the unfiltered setting (40 $\sigma$) to the first filtered one (20 $\sigma$), then a slow and gradual decrease in the number of bins as the filtering becomes more aggressive.
+
+    We can understand this behavior more clearly by looking at the regression lines:
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/filterbins_regression.png}
+        \caption{Free regression lines for average and maximum number of histogram bins per filtering setting.}
+        \label{fig:regression_bins_per_filtering}
+    \end{figure}
+
+    The average bins show a weak fit with $R^2 = 0.044$, indicating high variability. In contrast, the maximum bins demonstrate an exceptional fit with $R^2 = 0.999$. This is expected, as the maximum bins are only one data point per filtering setting, making it easier to fit a curve through them. The fact that both curves follow an \textbf{exponential trend}, however, is noteworthy.
+
+    The maximum bins (green dashed line) explodes much faster than the average bins (red line) as the filtering becomes less aggressive, meaning that a worst case scenario grows much more rapidly than the average case.
+
+    We can also analyze the filtering setting using our second criterion: complexity values. We obtained the following plots for average and maximum LMC complexity values per filtering setting across all models and weight-type combinations:
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/filtercomplexity_average_complexity_bar.png}
+        \caption{Average number of complexity per filtering setting.}
+    \end{figure}
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/filtercomplexity_maximum_complexity_bar.png}
+        \caption{Maximum number of complexity per filtering setting.}
+    \end{figure}
+
+    We can see that the shape of the plots are similar to each other but follow a different trend compared to the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering}, more similar to a \textbf{logarithmic trend}.
+    
+    Overall, the maximum values tend to be a bit more flat and unstable, while the average values show a smoother curve. The shapes are not as simple as the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering}, since it does not follow a monotonous downward trend, we can observe an upward trend from 0.25 to 0.125 $\sigma$. For reasons unknown, the 0.25 $\sigma$ bar is a global minimum while we have a spike at 0.125 $\sigma$.
+
+    Complexity values in 10 and 20 $\sigma$ are almost identical to the unfiltered setting (40 $\sigma$), followed by a gradual decrease as the filtering becomes more aggressive until reaching the global minimum at 0.25 $\sigma$.
+
+    We can take a look at the regression lines to understand this behavior better:
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/filtercomplexity_regression.png}
+        \caption{Free regression lines for average and maximum number of complexity per filtering setting.}
+    \end{figure}
+
+    As expected, both average (red line) and maximum (green dashed line) complexity values follow a \textbf{logarithmic trend}, with $R^2 = 0.014$ and $R^2 = 0.659$ respectively. The maximum fit is much better than the average fit due to the same reasons as explained in figure \ref{fig:regression_bins_per_filtering}, it is, however, much worse than the maximum fit in figure \ref{fig:regression_bins_per_filtering}, probably due to the unusual spike at 0.125 $\sigma$.
+
+    Both curves show a downward trend as the filtering becomes more aggressive that accelerates the more we approach 0 $\sigma$, where all the values are removed. This acceleration is faster in the maximum complexity fit.
+
+    Analyzing both criteria together, we can conclude that the best filtering setting is \textbf{20 $\sigma$}, as it provides a significant reduction in the number of histogram bins while maintaining an almost identical complexity value compared to the unfiltered data. 
+    
+    It looks like that using even less agressive filtering settings (such as 30 $\sigma$) could be a better choice, but concluding this would require further experiments with more filtering settings between 20 $\sigma$ and the unfiltered data. More experiments could also be done to understand the intriguing spike in complexity at 0.125 $\sigma$ and how is the behaviour between it and totally filtered data (0 $\sigma$). However, both of those points are left as future work.
+
+\subsection{The weight-type dimension}
+
+
+
+
+
+
+
+
+
+
+

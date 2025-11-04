@@ -1,6 +1,7 @@
 \section{Methodology}
 
 \subsection{Testing Environment}
+\label{sec:experimental_setup}
 
 We used the following computational environment for our experiments:
 \begin{itemize}
@@ -314,6 +315,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         If more than one source was available for the same model and benchmark, the one with higher priority was chosen. Not all models had results available for all benchmarks. Figure \ref{fig:benchmark_availability} shows the availability matrix.
 
         \begin{figure}[H]
+            \centering
             \includegraphics[width=\linewidth]{img/benchmark_availability.png}
             \caption{Availability of benchmark results for the selected models.}
             \label{fig:benchmark_availability}
@@ -322,6 +324,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 \subsection{Comparing LMC Complexity and Inference Capability}
 
     \subsubsection{Building the testing dataset}
+    \label{sec:building_testing_dataset}
 
         We will build a dataset by creating tuples that encode all dimensions of our analysis: model information, weight-type combination, filtering setting, the resulting LMC complexity value, the number of histogram bins used, and the available benchmark results for the model.
 
