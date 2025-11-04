@@ -1,6 +1,6 @@
 \section{Results}
 
-\subsection{The extraction process}
+\subsection{Extraction process}
 
     The dataset in section \ref{sec:building_testing_dataset} was built successfully through the process described. 
 
@@ -12,7 +12,7 @@
         \item Some numerical values such as count, min, max, mean, std, bin\_count, shannon\_entropy, desequilibrium, and complexity were reported as NaN or infinite values in certain model and weight-type combinations, which required their exclusion from the dataset. The reasons are unknown, but the main suspects are floating-point precision errors and divisions by zero in some edge cases.
     \end{itemize}
 
-\subsection{The filter}
+\subsection{Filter dimension}
 
     Following the methodology described in section \ref{sec:best_filtering_setting}, we obtained the plots for average and maximum number of histogram bins per filtering setting across all models and weight-type combinations:
     
@@ -85,8 +85,60 @@
     
     It looks like that using even less agressive filtering settings (such as 30 $\sigma$) could be a better choice, but concluding this would require further experiments with more filtering settings between 20 $\sigma$ and the unfiltered data. More experiments could also be done to understand the intriguing spike in complexity at 0.125 $\sigma$ and how is the behaviour between it and totally filtered data (0 $\sigma$). However, both of those points are left as future work.
 
-\subsection{The weight-type dimension}
+\subsection{Weight-type dimension}
 
+    Following the methodology described in section \ref{sec:weight_type_analysis}, we obtained the plots for average and maximum LMC complexity values per weight-type combination across all models using the best filtering setting (20 $\sigma$):
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/weight_average_complexity_bar.png}
+        \caption{Average complexity per weight-type combination.}
+    \end{figure}
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/weight_maximum_complexity_bar.png}
+        \caption{Maximum complexity per weight-type combination.}
+    \end{figure}
+
+    Again, looking at both plots, we can see that the shapes are similar to each other. In this case we have some variation between the rankings of multiple weight classes (e.g. bias-embedding), which is expected since maximum values can be dominated by outliers. The ranking for single weight types (e.g. bias) is the same across both plots.
+
+    Analyzing the multiple weight classes, we can't find a consistent pattern. It is obvious that classes with \textbf{other} have similar values since \textbf{other} weights are the majority of parameters in a model. It is also interesting to see that \textbf{norm} and \textbf{bias} individually have higher average complexity values than when combined with each other.
+
+    Analyzing the single weight types it is possible to observe that \textbf{norm} weights have the highest complexity values, followed by \textbf{bias} weights, then \textbf{other}, then \textbf{embedding}. While norm is responsible for the highest complexity values, embedding are close to zero.
+
+    It is unclear why this ranking occurs. It appears to indicate that removing embeddings from a model, like it was done in the scaling laws study \cite{Kaplan2020} won't significantly change its complexity value. 
+
+    It would be interesting to further investigate if training a model while optimizing the complexity value of certain weight types (e.g. norm) could lead to better performance or generalization. However, this is also left as future work.
+
+\subsection{Complexity vs Number of parameters}
+\label{sec:complexity_vs_num_params_results}
+
+    Following the methodology described in section \ref{sec:complexity_vs_num_params}, we obtained the following plot for average and maximum LMC complexity values against the number of parameters across all weight-type combinations using the best filtering setting (20 $\sigma$):
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=1\linewidth]{img/param_average_complexity_histogram.png}
+        \caption{Average complexity vs number of parameters.}
+    \end{figure}
+
+    A clear trend emerges from the histogram: as the number of parameters increases, the average complexity tends to decrease, with a sudden spike at the end (around $10^{10.9}$ parameters). This indicates that larger models generally exhibit lower complexity values. The spike at the end is, however, unexpected and its causes are unknown.
+
+\subsection{Complexity vs Number of bins}
+
+    Following the methodology described in section \ref{sec:complexity_vs_num_bins}, we obtained the following plot for average LMC complexity values against the number of histogram bins across all weight-type combinations using the best filtering setting (20 $\sigma$):
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=1\linewidth]{img/bin_average_complexity_histogram.png}
+        \caption{Average complexity vs number of histogram bins.}   
+    \end{figure}
+
+    Again, a clear trend emerges, almost identical to the previous section (\ref{sec:complexity_vs_num_params_results}). That indicates that there may be a strong correlation between the number of parameters and the number of histogram bins. A possible explanation is that larger models tend to have a wider range of weight values, leading to more histogram bins when using the Freedman-Diaconis choice \cite{FreedmanDiaconis1981}.
+
+\subsection{Complexity vs Benchmarks}
+
+   
 
 
 

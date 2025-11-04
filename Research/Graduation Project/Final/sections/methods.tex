@@ -410,6 +410,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         We will also make a free regression on a scatter plot for the data obtained in step 1 and 2 to analyze how filtering strength affects histogram bin count and complexity, respectively.
 
     \subsubsection{Influence of weight types}
+    \label{sec:weight_type_analysis}
 
         After defining the best filtering setting, we will analyze how the choice of weight types influences the final complexity results.  This will help us understand if certain weight types contribute more significantly to the overall complexity measure.
 
@@ -425,12 +426,14 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         We will look for trends or patterns that may indicate a relationship between model size and complexity.
 
     \subsubsection{Complexity vs Number of bins}
+    \label{sec:complexity_vs_num_bins}
 
         Similarly to \ref{sec:complexity_vs_num_params} , we will analyze how LMC complexity varies with the number of histogram bins used in its calculation. This will be done by calculating the \textbf{average complexity} for each range of number of bins, being plotted as a histogram. The number of bins of this plot will be defined using the Freedman-Diaconis rule \cite{FreedmanDiaconis1981} to adapt to the distribution.
 
         We will look for trends or patterns that may indicate a relationship between histogram granularity and complexity.
 
     \subsubsection{Complexity vs Benchmark performance}
+    \label{sec:complexity_vs_benchmark_performance}
 
         Finally, we will analyze the relationship between LMC complexity and benchmark performance. For each benchmark available in \( R_{best} \), we will create scatter plots with benchmark scores on the x-axis and complexity on the y-axis.
 
