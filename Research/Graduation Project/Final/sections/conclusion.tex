@@ -1,0 +1,11 @@
+\section{Conclusion}
+
+In this work, we investigated the relationship between the LMC statistical complexity of neural network weights and their inference performance across various benchmarks. Our analysis revealed that, for the amount of data we had available, there was \textbf{no consistent and significant general correlation} between LMC complexity and benchmark performance. In order to validade or falsify the initial hypothesis, a new study with a larger dataset would be necessary.
+
+Individually, some benchmarks such as \textbf{LMArena} and \textbf{MMLU} showed a significant positive correlation with LMC complexity, while others like \textbf{MMLU-Pro} exhibited a significant negative correlation. These and other facts such as the inconsistency in the best fits between the four benchmarks analyzed indicate that LMC complexity alone, even if we were able to validade a significant small correlation, might not a reliable predictor of neural network inference capability.
+
+Another intriguing observation was that in section \ref{sec:complexity_vs_num_params_results} it was possible to see a general trend of decreasing LMC complexity with increasing number of parameters. The number of parameters has a known relationship with model performance: the more parameters, the better the performance. As a consequence, it was expected that LMC complexity would correlate negatively with performance, but in reality it showed a small non-significant bias to positive correlation.
+
+A hypothesis that could be investigated in future works is whether complexity measures how close we are to the performance ceiling given by the scalling laws, instead of measuring the performance itself. Based on the observations made in this work, it is still possible that this true and it might provide a reduction in the amount of compute needed for training by provinding a good early stopping criterion.
+
+Overall, while our findings appear to not support the initial hypothesis, they open avenues for further research into the nuanced relationship between complexity measures and neural network performance.
