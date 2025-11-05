@@ -178,6 +178,31 @@
 
     The \textbf{all} correlation between control and complexity plots is about 5 times smaller (0.10 vs 0.02), indicating that complexity is a much weaker predictor of benchmark performance compared to parameter count. $R^2$ values are also much smaller in the complexity plot, further confirming the non-linearity of the relationship.
 
+    We also found the the statistical significance of the correlations found using  t-tests \cite{Fisher1921}:
+    
+    \begin{table}[H]
+        \centering
+        \begin{tabular}{|c|c|c|c|c|c|}
+            \hline
+            \textbf{Benchmark} & \textbf{r} & \textbf{n} & \textbf{t} & \textbf{p-value} & \textbf{Significance} \\
+            \hline
+            LMArena & 0.2535 & 300 & 4.52 & 0.000006 & Yes \\
+            \hline
+            MMLU & 0.1741 & 374 & 3.40 & 0.000674 & Yes \\
+            \hline
+            MMLU-Pro & -0.1704 & 214 & -2.51 & 0.012073 & Yes \\
+            \hline
+            OpenLLM & -0.0806 & 341 & -1.48 & 0.138873 & No \\
+            \hline
+            all & 0.0238 & 1229 & 0.83 & 0.406539 & No \\
+            \hline
+        \end{tabular}
+        \caption{Statistical significance of Pearson correlations between complexity and benchmark performance.}
+        \label{tab:statistical_significance}
+    \end{table}
+
+    Interestingly, only LMArena, MMLU and MMLU-Pro correlations are statistically significant at a 0.05 significance level. The most important correlation, however, the \textbf{all} correlation, is not statistically significant by a wide margin, meaning more data would be required to confirm or deny the existence of a general correlation between complexity and benchmark performance.
+
     To better understand the shape of the relationship, we can look at the free and linear regression lines for the complexity plots:
 
     \begin{figure}[H] 
@@ -208,24 +233,10 @@
 
     This further confirms that LMC complexity is not a reliable predictor of benchmark performance, as different benchmarks show conflicting relationships with complexity values.
 
-    As a bonus, we made a bar plot ranking the top 20 configurations (model + weight-type combination) sorted by highest correlation between LMC complexity and benchmark performance (all benchmarks aggregated):
+    As a bonus, for the sake of completeness, we made a bar plot ranking the top 20 configurations (model + weight-type combination) sorted by highest correlation between LMC complexity and benchmark performance (all benchmarks aggregated):
 
     \begin{figure}[H] 
         \centering
         \includegraphics[width=0.8\linewidth]{img/top_20_correlations.png}
         \caption{Top 20 configurations by Pearson correlation.}
     \end{figure}
-
-
-
-   
-
-
-
-
-
-
-
-
-
-

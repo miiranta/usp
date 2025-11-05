@@ -443,7 +443,19 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         We will provide a bar chart summarizing the Pearson correlation coefficient for each benchmark analyzed for both LMC complexity vs benchmark performance and number of parameters vs benchmark performance, so that they can be easily compared. In addition, for each of these plots we will check the result of the concatenation of all benchmarks available to see if a stronger correlation arises from the larger dataset, presented as another bar in the chart.
 
-        We will also provide a top 20 list sorted by the absolute value of Pearson correlation coefficients found in the analysis, indicating which benchmark/model/weight-type combinations produced the strongest correlations.
+        Using the complexity's Pearson correlation results, we will check for the statistical significance of the correlations found using a t-test \cite{Fisher1921}. The t-statistic can be computed as:
+
+        \[ t = r \cdot \sqrt{\frac{n-2}{1-r^2}} \]
+
+        where \( r \) is the Pearson correlation coefficient and \( n \) is the number of datapoints used in the correlation. The p-value can then be obtained from the t-distribution with \( n-2 \) degrees of freedom. 
+
+        A significance level of 0.05 will be used to determine if the correlations are statistically significant. For large \( n \), p-values will be calculated as:
+        
+        \[ p \approx 2 \cdot (1 - \Phi(|t|)) \]
+
+        where \( \Phi \) is the cumulative distribution function of the standard normal distribution.
+
+        As a bonus, we will also provide a top 20 list sorted by the absolute value of Pearson correlation coefficients found in the analysis, indicating which benchmark/model/weight-type combinations produced the strongest correlations.
 
         This analysis aims to determine whether higher LMC complexity is associated with better model performance across different benchmarks, in order to validate or refute the hypothesis that complexity correlates with inference capability.
 
