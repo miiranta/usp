@@ -138,6 +138,86 @@
 
 \subsection{Complexity vs Benchmarks}
 
+    Following the methodology described in section \ref{sec:complexity_vs_benchmark_performance}, first, we made a control plot using a known correlation: parameter count vs benchmark performance. The results are as follows:
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/control_correlation_comparison.png}
+        \caption{Pearson correlation for parameter count vs benchmark performance.}
+        \label{fig:control_correlation_comparison}
+    \end{figure}
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/control_r2_linear_comparison.png}
+        \caption{Linear regression $R^2$ values for parameter count vs benchmark performance.}
+        \label{fig:control_r2_linear_comparison}
+    \end{figure}
+
+    As expected, all the benchmarks show a positive correlation with parameter count. The linear regression $R^2$ values are lower, indicating that the relationship is not strictly linear.
+
+    Now, we can analyze the actual relationship of interest: LMC complexity vs benchmark performance. The results are as follows:
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/complexity_correlation_comparison.png}
+        \caption{Pearson correlation for Complexity vs benchmark performance.}   
+        \label{fig:complexity_correlation_comparison}
+    \end{figure}
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/complexity_r2_linear_comparison.png}
+        \caption{Linear regression $R^2$ values for complexity vs benchmark performance.}
+        \label{fig:complexity_r2_linear_comparison}
+    \end{figure}
+
+    It is immidiately clear that results are inconsistent across benchmarks. While \textbf{LMArena} and \textbf{MMLU} show a positive correlation between complexity and performance, \textbf{MMLU-Pro} and \textbf{OpenLLM} show a negative correlation.
+
+    The negative correlations have a smaller absolute value compared to the positive correlations, indicating a bias towards positive correlation. The \textbf{all} correlation, formed by analyzing a regression aggregating all data points from all benchmarks, shows a small positive correlation of 0.02, confirming this bias.
+
+    The \textbf{all} correlation between control and complexity plots is about 5 times smaller (0.10 vs 0.02), indicating that complexity is a much weaker predictor of benchmark performance compared to parameter count. $R^2$ values are also much smaller in the complexity plot, further confirming the non-linearity of the relationship.
+
+    To better understand the shape of the relationship, we can look at the free and linear regression lines for the complexity plots:
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.7\linewidth]{img/comp_lmarena_regression.png}
+        \caption{Regression lines for LMC complexity vs LMArena benchmark.}
+    \end{figure}
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.7\linewidth]{img/comp_mmlu_regression.png}
+        \caption{Regression lines for LMC complexity vs MMLU benchmark.}
+    \end{figure}
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.7\linewidth]{img/comp_mmlupro_regression.png}
+        \caption{Regression lines for LMC complexity vs MMLU-Pro benchmark.}
+    \end{figure}
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.7\linewidth]{img/comp_openllm_regression.png}
+        \caption{Regression lines for LMC complexity vs OpenLLM benchmark.}
+    \end{figure}
+
+    We can see that the free regressions can't agree on a common trend since there are \textbf{logarithmic}, \textbf{exponential} and \textbf{quadratic} best fits across the different benchmarks. The benchmarks with negative correlation (MMLU-Pro and OpenLLM) at least agree on having a \textbf{logarithmic} trend, but the first one is increasing (+ln(x)) while the second one is decreasing (-ln(x)).
+
+    This further confirms that LMC complexity is not a reliable predictor of benchmark performance, as different benchmarks show conflicting relationships with complexity values.
+
+    As a bonus, we made a bar plot ranking the top 20 configurations (model + weight-type combination) sorted by highest correlation between LMC complexity and benchmark performance (all benchmarks aggregated):
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.8\linewidth]{img/top_20_correlations.png}
+        \caption{Top 20 configurations by Pearson correlation.}
+    \end{figure}
+
+
+
    
 
 
