@@ -27,7 +27,7 @@ We used the following tools and libraries:
     \item Seaborn 0.13.2 \cite{Waskom2021}
     \item CUDA Toolkit 12.6
 \end{itemize}
-The choice of versions was motivated by compatibility with our computational environment GPU.
+The choice of versions was motivated by compatibility with our computational environment's GPU.
 
 \subsection{Model Selection}
 
@@ -152,7 +152,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         
         Once loaded, we extract all the parameters from the model using the \texttt{named\_parameter()} method provided by the Transformers library. This method returns an iterator over all model parameters, each parameter being represented as a tensor. 
 
-        We then flatten each tensor into a one-dimensional array and store it in a list. Each array is labeled in one of the following \textbf{weight-type categories}:
+        We then flatten each tensor into a one-dimensional array and store it in a list. Each array is labeled as one of the following \textbf{weight-type categories}:
         \begin{itemize}
             \item Bias: if 'bias' is in the parameter name
             \item Norm: if 'norm' is in the parameter name
@@ -167,18 +167,18 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     \subsubsection{Filtering}
     \label{sec:filtering}
 
-        Casting different encoding formats to float32 may introduce rounding errors that manifest as extreme outliers in the weight distribution. This is rare (approximately 10 to 30 values in 100 billion) but can be problematic for our next step: histogram construction (section \ref{sec:data_discretization}), since the number of bins will be affected by the range of values in the data. The reasons for those rounding errors could not be fully investigated within the scope of this work, but they are likely related to floating point rounding errors.
+        Casting different encoding formats to float32 may introduce rounding errors that manifest as extreme outliers in the weight distribution. This is rare (approximately 10 to 30 values in 100 billion) but can be problematic for our next step: histogram construction (section \ref{sec:data_discretization}), since the number of bins will be affected by the range of values in the data. The reasons for these rounding errors could not be fully investigated within the scope of this work, but they are likely related to floating point rounding errors.
 
-        To mitigate the impact of outliers, we will apply a value removal approach. This process filters the data to retain only values within a configurable range centered around the mean:
+        To mitigate the impact of outliers, we apply a value removal approach. This process filters the data to retain only values within a configurable range centered around the mean:
 
         \[ \text{lower bound} = \mu - \sigma_{\text{filter}} \cdot \sigma \]
         \[ \text{upper bound} = \mu + \sigma_{\text{filter}} \cdot \sigma \]
 
         where \( \mu \) is the data mean, \( \sigma \) is the data standard deviation, and \( \sigma_{\text{filter}} \) is a configurable parameter that controls the filtering strength. Values falling outside this range are excluded from further analysis. 
 
-        It is not trivial to choose the best value for \( \sigma_{\text{filter}} \). A very low value may remove important parts of the distribution, while a very high value may not effectively mitigate the outlier problem. For this reason, we will experiment with different values of \( \sigma_{\text{filter}} \) and analyze how they affect the final complexity results. As a consequence, this becomes yet another dimension of analysis in our study.
+        It is not trivial to choose the best value for \( \sigma_{\text{filter}} \). A very low value may remove important parts of the distribution, while a very high value may not effectively mitigate the outlier problem. For this reason, we experiment with different values of \( \sigma_{\text{filter}} \) and analyze how they affect the final complexity results. As a consequence, this becomes yet another dimension of analysis in our study.
 
-        The values of \( \sigma_{\text{filter}} \) tested will be: \textbf{0.125}, \textbf{0.25}, \textbf{0.5}, \textbf{1}, \textbf{2}, \textbf{3}, \textbf{4}, \textbf{5}, \textbf{10}, \textbf{20}. The choice of \( \sigma_{\text{filter}} \) that will be used as the data's filtering option for the next steps is the one that: 
+        The values of \( \sigma_{\text{filter}} \) tested will be: \textbf{0.125}, \textbf{0.25}, \textbf{0.5}, \textbf{1}, \textbf{2}, \textbf{3}, \textbf{4}, \textbf{5}, \textbf{10}, \textbf{20}. The choice of \( \sigma_{\text{filter}} \) that will be used as the filtering option for the next steps is the one that: 
         \begin{enumerate}
             \item most reduces the bin count compared to the unfiltered data; 
             \item has the least amount of filtering or, in other words, the highest value of \( \sigma_{\text{filter}} \) among the ones chosen in the first criterion.
@@ -187,19 +187,19 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     \subsubsection{Data Discretization and Histogram}
     \label{sec:data_discretization}
 
-        To compute the LMC complexity of a finite array of floating-point numbers, we first construct a histogram to discretize the data into a probability distribution. This is justified as the chance of finding two exact numbers is extremely low and, as a consequence, it is hard to determine the probability of each value. 
+        To compute the LMC complexity of a finite array of floating-point numbers, we first construct a histogram to discretize the data into a probability distribution. This is justified as the chance of finding two identical numbers is extremely low and, as a consequence, it is hard to determine the probability of each value. 
         
         We will call the set of all data points as \( S \), the total amount of data points as \( N \) and the number of bins they will be distributed into as \( n \). The probabilities \( p_i \) are then calculated as \( p_i = \frac{f_i}{N} \) where \( f_i \) is the frequency count of data points in bin \( i \).
 
-        As expected, this approach revisits a classic issue in histogram-based analysis: the choice of the number of bins \( n \) will impact the resulting probability distribution, which is particularly problematic for the LMC complexity measure; variations in \( n \) can cause significant fluctuations in the final result. Selecting an inappropriate amount may produce misleading values, either by oversimplifying the distribution (too few bins) or by introducing noise (too many bins). 
+        As expected, this approach revisits a classic issue in histogram-based analysis: the choice of the number of bins \( n \) will impact the resulting probability distribution, which is particularly problematic for the LMC complexity measure; variations in \( n \) can cause significant fluctuations in the final result. Selecting an inappropriate number of bins may produce misleading values, either by oversimplifying the distribution (too few bins) or by introducing noise (too many bins). 
 
-        There are a variety of methods to determine \( n \) in a histogram, most of them with their own advantages and disadvantages. Commonly used methods such as \textbf{Sturges' formula} \cite{Sturges1926} and \textbf{Rice Rule} \cite{RiceRule} rely only on the number of data points, while others like \textbf{Scott's normal reference rule} and \textbf{Freedman-Diaconis' choice} also take into account the data distribution by using standard deviation and interquartile range, respectively \cite{Knuth2006}.   
+        There are a variety of methods to determine \( n \) in a histogram, most of them with their own advantages and disadvantages. Commonly used methods such as \textbf{Sturges' formula} \cite{Sturges1926} and \textbf{Rice Rule} \cite{RiceRule} rely only on the number of data points, while others like \textbf{Scott's normal reference rule} and \textbf{Freedman-Diaconis' choice} also take into account the data distribution by using standard deviation and interquartile range, respectively \cite{Knuth2006}.
 
-        We chose to use the \textbf{Freedman-Diaconis' choice} as it adapts better to our needs. This is justified since \( N \) often consists of billions of numbers, and the distribution, although mostly concentrated between -1 and 1, can become sparse due to outliers and, as a consequence, require a larger number of bins to capture its characteristics accurately. The Freedman-Diaconis rule helps mitigate the influence of outliers by using the interquartile range \( IQR \) to determine bin width \( h \). The rule is defined as follows \cite{FreedmanDiaconis1981}:
+        We chose to use the \textbf{Freedman-Diaconis' choice} as it adapts better to our needs. This is justified since \( N \) often consists of billions of numbers, and the distribution, although mostly concentrated between -1 and 1, can become sparse due to outliers and, as a consequence, requires a larger number of bins to capture its characteristics accurately. The Freedman-Diaconis rule helps mitigate the influence of outliers by using the interquartile range \( IQR \) to determine bin width \( h \). The rule is defined as follows \cite{FreedmanDiaconis1981}:
 
         \[ h = \frac{2 \times IQR}{N^{1/3}} \]
 
-        where IQR is the interquartile range of the data which is calculated as \( Q3 - Q1 \), \( Q3 \) and \( Q1 \) are the values at the 75th and 25th percentiles in the data, respectively. Since \( N \) is very large, the percentiles are computed based on a random sample of 100000 data points to reduce computational cost. The sample size was determined empirically to be large enough to provide stable estimates of the percentiles, the final number of bins showed no variance between tests.
+        where IQR is the interquartile range of the data which is calculated as \( Q3 - Q1 \), \( Q3 \) and \( Q1 \) are the values at the 75th and 25th percentiles in the data, respectively. Since \( N \) is very large, the percentiles are computed based on a random sample of 100000 data points to reduce computational cost. The sample size was determined empirically to be large enough to provide stable estimates of the percentiles; the final number of bins showed no variance between tests.
 
         The number of bins \( n \) can then be calculated as:
 
@@ -217,18 +217,17 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     
     In the previously cited research paper by OpenAI \cite{Kaplan2020}, performance was associated with test cross-entropy loss. This metric quantifies the difference between the predicted probability distribution output by the model and the true distribution of the target labels. Lower cross-entropy loss values indicate better model performance, as they reflect a closer alignment between predictions and actual outcomes.
 
-    Unfortunately, not all models we intend to analyze have publicly available training and test data. It's also not possible to run models in a training setting due to performance limitations of the computational environment available. Therefore, we will have to rely on imperfect proxies for performance such as \textbf{benchmarks}.
-
+        Unfortunately, not all models we intend to analyze have publicly available training and test data. It is also not possible to run models in a training setting due to performance limitations of the computational environment available. Therefore, we have to rely on imperfect proxies for performance such as \textbf{benchmarks}.
     \subsubsection{Benchmark Selection}
     \label{sec:benchmark_selection}
 
         Benchmarks are standardized tests designed to evaluate the performance of machine learning models across various tasks. They provide a common ground for comparison by measuring how well different models perform on the same datasets using predefined metrics. 
         
-        According to \cite{Owen2024}, benchmarks such as the famous MMLU, correlate fairly well with the predicted test loss determined by scaling laws, making them suitable proxies.
+        According to \cite{Owen2024}, benchmarks such as the famous MMLU correlate fairly well with the predicted test loss determined by scaling laws, making them suitable proxies.
 
-        They are, however, not perfect. Some benchmarks may fail to capture all aspects of a model's capabilities, leading to an incomplete assessment of performance. Other problems such as Data Contamination \cite{Magar2022} can influence the validity of results and make it difficult to fairly compare models created at different times. It is also hard to find benchmarks that are widely reported for all models we intend to analyze.
+        They are, however, not perfect. Some benchmarks may fail to capture all aspects of a model's capabilities, leading to an incomplete assessment of performance. Other problems such as data contamination \cite{Magar2022} can influence the validity of results and make it difficult to fairly compare models created at different times. It is also hard to find benchmarks that are widely reported for all models we intend to analyze.
 
-        A nice proposal for future research to avoid the problems cited above would involve training a model from scratch twice: optimizing it initially for minimal loss and then for minimal loss + maximum LMC complexity, then comparing the results. This is however out of the scope of this work.
+        A nice proposal for future research to avoid the problems cited above would involve training a model from scratch twice: optimizing it initially for minimal loss and then for minimal loss plus maximum LMC complexity, then comparing the results. This is, however, out of the scope of this work.
 
         The benchmark selection followed three main heuristics:
         \begin{itemize}
@@ -245,7 +244,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             
             \item \textbf{OpenLLM (Average)}: A benchmark suite that evaluates models on a variety of tasks, including language understanding, generation, and reasoning. It aggregates results from multiple datasets to provide an overall performance score \cite{Myrzakhan2024}.
             
-            \item \textbf{LMArena (Score)}: An online platform where users can submit questions and receive responses from two anonymous large language models (LLMs), then vote on which answer they prefer, helping to crowdsource human preferences for evaluating and ranking LLMs. Its evaluation works by collecting thousands of pairwise comparisons from users, using the Bradley-Terry system to estimate win rates and compute rankings/scores. \cite{Chiang2024}.
+            \item \textbf{LMArena (Score)}: An online platform where users can submit questions and receive responses from two anonymous large language models (LLMs), then vote on which answer they prefer, helping to crowdsource human preferences for evaluating and ranking LLMs. Its evaluation works by collecting thousands of pairwise comparisons from users, using the Bradley-Terry system to estimate win rates and compute rankings/scores \cite{Chiang2024}.
         \end{itemize}
 
     \subsubsection{Benchmark Collection Procedure}
@@ -345,7 +344,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             
         \end{enumerate}
 
-        At the end we will have 35 models \(\times\) 15 weight-type combinations \(\times\)  11 filtering settings (including unfiltered) = 5775  datapoints. The resulting dataset \( \mathbf{R} \) consists of tuples structured as follows:
+        At the end, we will have 35 models \(\times\) 15 weight-type combinations \(\times\)  11 filtering settings (including unfiltered) = 5775 datapoints. The resulting dataset \( \mathbf{R} \) consists of tuples structured as follows:
         \begin{enumerate}
             \item Model name
             \item Number of parameters
@@ -396,7 +395,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     \subsubsection{Influence of filtering}
     \label{sec:best_filtering_setting}
 
-        In more detail, the criteria defined in section \ref{sec:filtering} to choose the best filtering setting works as follows:
+        In more detail, the criteria defined in section \ref{sec:filtering} to choose the best filtering setting work as follows:
         \begin{enumerate}
             \item We will group \( R \) in relation to each value of \( \sigma_{\text{filter}} \). Then, calculate the \textbf{average} and the \textbf{maximum} \textbf{histogram bin count} for each group, and plot them as a bar chart. 
             
@@ -405,30 +404,30 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             \item Since steps 1 and 2 represent the two criteria defined in section \ref{sec:filtering}, we will first filter the groups obtained in 1 to keep only the ones that have a lower average bin count than the unfiltered data. Then, among those groups, we will choose the one with the closest complexity value to the unfiltered data (least amount of filtering).
         \end{enumerate}
 
-        The filtering dimension will be used to determine the best general filtering setting following the criteria defined in section \ref{sec:filtering}. After defining the best filtering setting, we will discard all the runs where \( \sigma_{\text{filter}} \) is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{best}}$. There will be a total of: \( 35 \text{ models } \times 15 \text{ weight-type combinations } \times 1 \text{ filtering setting } = 525 \text{ datapoints} \).
+        The filtering dimension will be used to determine the best general filtering setting following the criteria defined in section \ref{sec:filtering}. After defining the best filtering setting, we will discard all the runs where \( \sigma_{\text{filter}} \) is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{best}}$. There will be a total of: \( 35 \text{ models } \times 15 \text{ weight-type combinations } \times 1 \text{ filtering setting } = 525 \text{ datapoints}\).
 
-        We will also make a free regression on a scatter plot for the data obtained in step 1 and 2 to analyze how filtering strength affects histogram bin count and complexity, respectively.
+        We will also make a free regression on a scatter plot for the data obtained in steps 1 and 2 to analyze how filtering strength affects histogram bin count and complexity, respectively.
 
     \subsubsection{Influence of weight types}
     \label{sec:weight_type_analysis}
 
-        After defining the best filtering setting, we will analyze how the choice of weight types influences the final complexity results.  This will help us understand if certain weight types contribute more significantly to the overall complexity measure.
+        After defining the best filtering setting, we will analyze how the choice of weight types influences the final complexity results. This will help us understand if certain weight types contribute more significantly to the overall complexity measure.
 
-        This will be done by grouping \( R_{best} \) in relation to each weight-type combination and calculating the \textbf{average} and the \textbf{maximum} \textbf{complexity} for each group, then, plotting a bar chart for each metric.  
+        This will be done by grouping \( R_{best} \) in relation to each weight-type combination and calculating the \textbf{average} and the \textbf{maximum} \textbf{complexity} for each group, then plotting a bar chart for each metric.  
         
         Since we are using combinations symmetrically (each weight type appears the same amount of times in \( R_{best} \)), it is not necessary to select a best weight-type combination, like it is done in \ref{sec:best_filtering_setting}, because it won't add any bias to the analysis.
 
     \subsubsection{Complexity vs Number of parameters}   
     \label{sec:complexity_vs_num_params}
 
-        We will analyze how LMC complexity varies with the number of model parameters. This will be done by calculating the \textbf{average complexity} for each range of number of parameters, being plotted as a histogram. The number of bins of this plot will be defined using the Freedman-Diaconis rule \cite{FreedmanDiaconis1981} to adapt to the distribution.
+        We will analyze how LMC complexity varies with the number of model parameters. This will be done by calculating the \textbf{average complexity} for each range of parameters and plotting it as a histogram. The number of bins of this plot will be defined using the Freedman-Diaconis rule \cite{FreedmanDiaconis1981} to adapt to the distribution.
 
         We will look for trends or patterns that may indicate a relationship between model size and complexity.
 
     \subsubsection{Complexity vs Number of bins}
     \label{sec:complexity_vs_num_bins}
 
-        Similarly to \ref{sec:complexity_vs_num_params} , we will analyze how LMC complexity varies with the number of histogram bins used in its calculation. This will be done by calculating the \textbf{average complexity} for each range of number of bins, being plotted as a histogram. The number of bins of this plot will be defined using the Freedman-Diaconis rule \cite{FreedmanDiaconis1981} to adapt to the distribution.
+        Similarly to \ref{sec:complexity_vs_num_params}, we will analyze how LMC complexity varies with the number of histogram bins used in its calculation. This will be done by calculating the \textbf{average complexity} for each range of bins and plotting it as a histogram. The number of bins of this plot will be defined using the Freedman-Diaconis rule \cite{FreedmanDiaconis1981} to adapt to the distribution.
 
         We will look for trends or patterns that may indicate a relationship between histogram granularity and complexity.
 

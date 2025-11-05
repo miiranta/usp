@@ -8,8 +8,8 @@
 
     The resulting dataset contains \textbf{5676 rows}, each representing a unique combination of model, weight-type combination, filtering setting, LMC complexity value, number of histogram bins, and available benchmark results. That was 99 rows short of the expected 5775 rows due to:
     \begin{itemize}
-        \item Some unfiltered data models exceeded the maximum number of bins (set to 1 billion) during histogram creation, leading to their exclusion. Increasing the maximum bin count is not possible due to memory contraints and keeping the rows in the dataset capped at 1 billion bins would have introduced bias to the analysis.
-        \item Some numerical values such as count, min, max, mean, std, bin\_count, shannon\_entropy, desequilibrium, and complexity were reported as NaN or infinite values in certain model and weight-type combinations, which required their exclusion from the dataset. The reasons are unknown, but the main suspects are floating-point precision errors and divisions by zero in some edge cases.
+        \item Some unfiltered data models exceeded the maximum number of bins (set to 1 billion) during histogram creation, leading to their exclusion. Increasing the maximum bin count is not possible due to memory constraints and keeping the rows in the dataset capped at 1 billion bins would have introduced bias to the analysis.
+        \item Some numerical values such as count, min, max, mean, std, bin\_count, shannon\_entropy, disequilibrium, and complexity were reported as NaN or infinite values in certain model and weight-type combinations, which required their exclusion from the dataset. The reasons are unknown, but the main suspects are floating-point precision errors and divisions by zero in some edge cases.
     \end{itemize}
 
 \subsection{Filter dimension}
@@ -54,18 +54,18 @@
     \begin{figure}[H]
         \centering
         \includegraphics[width=0.8\linewidth]{img/filtercomplexity_average_complexity_bar.png}
-        \caption{Average number of complexity per filtering setting.}
+        \caption{Average complexity per filtering setting.}
     \end{figure}
 
     \begin{figure}[H] 
         \centering
         \includegraphics[width=0.8\linewidth]{img/filtercomplexity_maximum_complexity_bar.png}
-        \caption{Maximum number of complexity per filtering setting.}
+        \caption{Maximum complexity per filtering setting.}
     \end{figure}
 
-    We can see that the shape of the plots are similar to each other but follow a different trend compared to the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering}, more similar to a \textbf{logarithmic trend}.
+    We can see that the shape of the plots is similar to each other but follows a different trend compared to the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering}, more similar to a \textbf{logarithmic trend}.
     
-    Overall, the maximum values tend to be a bit more flat and unstable, while the average values show a smoother curve. The shapes are not as simple as the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering}, since it does not follow a monotonous downward trend, we can observe an upward trend from 0.25 to 0.125 $\sigma$. For reasons unknown, the 0.25 $\sigma$ bar is a global minimum while we have a spike at 0.125 $\sigma$.
+    Overall, the maximum values tend to be a bit more flat and unstable, while the average values show a smoother curve. The shapes are not as simple as the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering}, since it does not follow a monotonic downward trend, we can observe an upward trend from 0.25 to 0.125 $\sigma$. For reasons unknown, the 0.25 $\sigma$ bar is a global minimum while we have a spike at 0.125 $\sigma$.
 
     Complexity values in 10 and 20 $\sigma$ are almost identical to the unfiltered setting (40 $\sigma$), followed by a gradual decrease as the filtering becomes more aggressive until reaching the global minimum at 0.25 $\sigma$.
 
@@ -83,7 +83,7 @@
 
     Analyzing both criteria together, we can conclude that the best filtering setting is \textbf{20 $\sigma$}, as it provides a significant reduction in the number of histogram bins while maintaining an almost identical complexity value compared to the unfiltered data. 
     
-    It looks like that using even less agressive filtering settings (such as 30 $\sigma$) could be a better choice, but concluding this would require further experiments with more filtering settings between 20 $\sigma$ and the unfiltered data. More experiments could also be done to understand the intriguing spike in complexity at 0.125 $\sigma$ and how is the behaviour between it and totally filtered data (0 $\sigma$). However, both of those points are left as future work.
+    It looks like using even less aggressive filtering settings (such as 30 $\sigma$) could be a better choice, but concluding this would require further experiments with more filtering settings between 20 $\sigma$ and the unfiltered data. More experiments could also be done to understand the intriguing spike in complexity at 0.125 $\sigma$ and the behavior between it and totally filtered data (0 $\sigma$). However, both of those points are left as future work.
 
 \subsection{Weight-type dimension}
 
@@ -105,7 +105,7 @@
 
     Analyzing the multiple weight classes, we can't find a consistent pattern. It is obvious that classes with \textbf{other} have similar values since \textbf{other} weights are the majority of parameters in a model. It is also interesting to see that \textbf{norm} and \textbf{bias} individually have higher average complexity values than when combined with each other.
 
-    Analyzing the single weight types it is possible to observe that \textbf{norm} weights have the highest complexity values, followed by \textbf{bias} weights, then \textbf{other}, then \textbf{embedding}. While norm is responsible for the highest complexity values, embedding are close to zero.
+    Analyzing the single weight types it is possible to observe that \textbf{norm} weights have the highest complexity values, followed by \textbf{bias} weights, then \textbf{other}, then \textbf{embedding}. While norm is responsible for the highest complexity values, embeddings are close to zero.
 
     It is unclear why this ranking occurs. It appears to indicate that removing embeddings from a model, like it was done in the scaling laws study \cite{Kaplan2020} won't significantly change its complexity value. 
 
@@ -172,13 +172,13 @@
         \label{fig:complexity_r2_linear_comparison}
     \end{figure}
 
-    It is immidiately clear that results are inconsistent across benchmarks. While \textbf{LMArena} and \textbf{MMLU} show a positive correlation between complexity and performance, \textbf{MMLU-Pro} and \textbf{OpenLLM} show a negative correlation.
+    It is immediately clear that results are inconsistent across benchmarks. While \textbf{LMArena} and \textbf{MMLU} show a positive correlation between complexity and performance, \textbf{MMLU-Pro} and \textbf{OpenLLM} show a negative correlation.
 
     The negative correlations have a smaller absolute value compared to the positive correlations, indicating a bias towards positive correlation. The \textbf{all} correlation, formed by analyzing a regression aggregating all data points from all benchmarks, shows a small positive correlation of 0.02, confirming this bias.
 
     The \textbf{all} correlation between control and complexity plots is about 5 times smaller (0.10 vs 0.02), indicating that complexity is a much weaker predictor of benchmark performance compared to parameter count. $R^2$ values are also much smaller in the complexity plot, further confirming the non-linearity of the relationship.
 
-    We also found the the statistical significance of the correlations found using  t-tests \cite{Fisher1921}:
+    We also found the statistical significance of the correlations found using t-tests \cite{Fisher1921}:
     
     \begin{table}[H]
         \centering
