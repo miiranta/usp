@@ -1,0 +1,69 @@
+RMSE
+
+    ABERTO
+
+        ARIMA
+
+            BASELINE: 0.3667
+
+            MELHOR SEM CORRECAO (UMA LLM): grok-4-fast - eq3 - 0.3595
+            MELHOR COM CORRECAO (UMA LLM): grok-4-fast - eq3 - 0.3568
+
+            MELHOR SEM CORRECAO (MULTIPLAS LLMS): llama-4-maverick | grok-4-fast - eq4 - 0.3587
+            MELHOR COM CORRECAO (MULTIPLAS LLMS): llama-4-maverick | grok-4-fast - eq4 - 0.3563
+
+        LSTM
+
+            BASELINE: 0.3676
+
+            MELHOR SEM CORRECAO (UMA LLM): gpt-5 - eq4 - 0.3702
+            MELHOR COM CORRECAO (UMA LLM): gpt-5 - eq4 - 0.3586
+
+            MELHOR SEM CORRECAO (MULTIPLAS LLMS): gemma-3-27b-it | gpt-5 | grok-4-fast - eq4 - 0.3704
+            MELHOR COM CORRECAO (MULTIPLAS LLMS): gemma-3-27b-it | gpt-5 | grok-4-fast - eq4 - 0.3568
+
+
+    CEZIO
+
+        ARIMA
+
+            BASELINE: 0.3667
+
+            MELHOR SEM CORRECAO (UMA LLM): grok-4-fast - eq3 - 0.3582
+            MELHOR COM CORRECAO (UMA LLM): grok-4-fast - eq3 - 0.3565
+
+            MELHOR SEM CORRECAO (MULTIPLAS LLMS): llama-4-maverick | grok-4-fast - eq1 - 0.3655
+            MELHOR COM CORRECAO (MULTIPLAS LLMS): llama-4-maverick | grok-4-fast - eq1 - 0.3570
+
+        LSTM
+
+            BASELINE: 0.3676
+
+            MELHOR SEM CORRECAO (UMA LLM): claude-sonnet-4 - eq4 - 0.3591
+            MELHOR COM CORRECAO (UMA LLM): claude-sonnet-4 - eq4 - 0.3704
+
+            MELHOR SEM CORRECAO (MULTIPLAS LLMS): deepseek-chat-v3.1 | grok-4-fast - eq4 - 0.3603
+            MELHOR COM CORRECAO (MULTIPLAS LLMS): deepseek-chat-v3.1 | grok-4-fast - eq4 - 0.3554
+
+
+    CONSOLIDADO
+
+        ARIMA
+
+            BASELINE: 0.3667
+
+            MELHOR SEM CORRECAO (UMA LLM): grok-4-fast - eq3 - 0.3616
+            MELHOR COM CORRECAO (UMA LLM): grok-4-fast - eq3 - 0.3594
+
+            MELHOR SEM CORRECAO (MULTIPLAS LLMS): gpt-5 | grok-4-fast - eq3 - 0.3616
+            MELHOR COM CORRECAO (MULTIPLAS LLMS): gpt-5 | grok-4-fast - eq3 - 0.3603
+
+        LSTM
+
+            BASELINE: 0.3676
+
+            MELHOR SEM CORRECAO (UMA LLM): gemma-3-27b-it - eq4 - 0.3685
+            MELHOR COM CORRECAO (UMA LLM): gemma-3-27b-it - eq4 - 0.3596
+
+            MELHOR SEM CORRECAO (MULTIPLAS LLMS): gemma-3-27b-it | grok-4-fast - eq4 - 0.3752 
+            MELHOR COM CORRECAO (MULTIPLAS LLMS): gemma-3-27b-it | grok-4-fast - eq4 - 0.3585

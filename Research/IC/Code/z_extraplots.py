@@ -512,9 +512,9 @@ def plot_average_and_confidence_interval_by_dataset(confidence=0.95):
     
     # Load human datasets
     dataset_files = {
-        'Specialist': os.path.join(DATASETS_FOLDER, 'human_cezio_350.csv'),
-        'Conciliated': os.path.join(DATASETS_FOLDER, 'human_conciliado_220.csv'),
-        'Open': os.path.join(DATASETS_FOLDER, 'human_open_278.csv')
+        'Human (Specialist)': os.path.join(DATASETS_FOLDER, 'human_cezio_350.csv'),
+        'Human (Conciliated)': os.path.join(DATASETS_FOLDER, 'human_conciliado_220.csv'),
+        'Human (Open)': os.path.join(DATASETS_FOLDER, 'human_open_278.csv')
     }
     
     datasets = {}
