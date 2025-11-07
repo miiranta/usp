@@ -404,7 +404,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             \item Since steps 1 and 2 represent the two criteria defined in section \ref{sec:filtering}, we will first filter the groups obtained in 1 to keep only the ones that have a lower average bin count than the unfiltered data. Then, among those groups, we will choose the one with the closest complexity value to the unfiltered data (least amount of filtering).
         \end{enumerate}
 
-        The filtering dimension will be used to determine the best general filtering setting following the criteria defined in section \ref{sec:filtering}. After defining the best filtering setting, we will discard all the runs where \( \sigma_{\text{filter}} \) is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{best}}$. There will be a total of: \( 35 \text{ models } \times 15 \text{ weight-type combinations } \times 1 \text{ filtering setting } = 525 \text{ datapoints}\).
+        The filtering dimension will be used to determine the best general filtering setting following the criteria defined in section \ref{sec:filtering}. After defining the best filtering setting, we will discard all the runs where \( \sigma_{\text{filter}} \) is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{f}}$. There will be a total of: \( 35 \text{ models } \times 15 \text{ weight-type combinations } \times 1 \text{ filtering setting } = 525 \text{ datapoints}\).
 
         We will also make a free regression on a scatter plot for the data obtained in steps 1 and 2 to analyze how filtering strength affects histogram bin count and complexity, respectively.
 
@@ -413,9 +413,14 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         After defining the best filtering setting, we will analyze how the choice of weight types influences the final complexity results. This will help us understand if certain weight types contribute more significantly to the overall complexity measure.
 
-        This will be done by grouping \( R_{best} \) in relation to each weight-type combination and calculating the \textbf{average} and the \textbf{maximum} \textbf{complexity} for each group, then plotting a bar chart for each metric.  
+        This will be done by grouping \( R_{f} \) in relation to each weight-type combination and calculating the \textbf{average} and the \textbf{maximum} \textbf{complexity} for each group, then plotting a bar chart for each metric.  
         
-        Since we are using combinations symmetrically (each weight type appears the same amount of times in \( R_{best} \)), it is not necessary to select a best weight-type combination, like it is done in \ref{sec:best_filtering_setting}, because it won't add any bias to the analysis.
+        It is necessary to select a best weight-type combination, like it is done in \ref{sec:best_filtering_setting}, because keeping all the different combinations will add bias to the analysis: a good way to visualize this problem is to think that a single benchmark value might be associated with 15 different complexity values for the same model, one for each weight-type combination. It also might wrongfully influence the the statistical significance by adding artificial datapoints.
+
+        We are heavily inclined to choose the combination that uses all weight types except for the \textbf{embedding} weights, since this approach is commonly used in research such as in the scaling laws one by OpenAI \cite{Kaplan2020}. However, the final decision will be made by removing weight types with the lowest average complexity, as they are likely to contribute less to the overall complexity measure.
+
+        After choosing the best weight-type combination, we will discard all the runs in \( R_{f} \) where the weight-type combination is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{best}}$. There will be a total of: \( 35 \text{ models } \times 1 \text{ weight-type combination } \times 1 \text{ filtering setting } = 35 \text{ datapoints}\).
+
 
     \subsubsection{Complexity vs Number of parameters}   
     \label{sec:complexity_vs_num_params}
@@ -434,7 +439,9 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     \subsubsection{Complexity vs Benchmark performance}
     \label{sec:complexity_vs_benchmark_performance}
 
-        Finally, we will analyze the relationship between LMC complexity and benchmark performance. For each benchmark available in \( R_{best} \), we will create scatter plots with benchmark scores on the x-axis and complexity on the y-axis.
+        Finally, we will analyze the relationship between LMC complexity and benchmark performance. This analysis aims to determine whether higher LMC complexity is associated with better model performance across different benchmarks, in order to validate or refute the hypothesis that complexity correlates with inference capability.
+        
+        For each benchmark available in \( R_{best} \), we will create scatter plots with benchmark scores on the x-axis and complexity on the y-axis.
 
         We will perform both linear and free regression analyses (section \ref{sec:regression_procedures}) to identify trends between complexity and performance. The strength and nature of these relationships will be assessed using Pearson correlation and \( R^2 \) values.
 
@@ -446,17 +453,13 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         \[ t = r \cdot \sqrt{\frac{n-2}{1-r^2}} \]
 
-        where \( r \) is the Pearson correlation coefficient and \( n \) is the number of datapoints used in the correlation. The p-value can then be obtained from the t-distribution with \( n-2 \) degrees of freedom. 
-
-        A significance level of 0.05 will be used to determine if the correlations are statistically significant. For large \( n \), p-values will be calculated as:
+        where \( r \) is the Pearson correlation coefficient and \( n \) is the number of datapoints used in the correlation.  The p-value can then be obtained from the cumulative distribution function of the $t$-distribution with $n-2$ degrees of freedom:
         
-        \[ p \approx 2 \cdot (1 - \Phi(|t|)) \]
+        \[ p = 2 \cdot (1 - F_t(|t|; n-2)) \]
 
-        where \( \Phi \) is the cumulative distribution function of the standard normal distribution.
+        where \( F_t \) is the cumulative distribution function of the $t$-distribution with $n-2$ degrees of freedom. A significance level of 0.05 will be used to determine if the correlations are statistically significant.
 
-        As a bonus, we will also provide a top 20 list sorted by the absolute value of Pearson correlation coefficients found in the analysis, indicating which benchmark/model/weight-type combinations produced the strongest correlations.
-
-        This analysis aims to determine whether higher LMC complexity is associated with better model performance across different benchmarks, in order to validate or refute the hypothesis that complexity correlates with inference capability.
+        As a bonus, we will also provide a top 20 list sorted by the absolute value of Pearson correlation coefficients found in the analysis, indicating which (benchmark, model, weight-type) combinations produced the strongest correlations.
 
         
 

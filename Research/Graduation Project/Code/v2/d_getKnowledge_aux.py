@@ -896,9 +896,10 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
         
         if mask_bin.any():
             bin_centers_bins.append((bin_bins[i] + bin_bins[i + 1]) / 2)
-            # Format labels as order of magnitude - only show upper bound
+            # Format labels as order of magnitude - show range
+            lower_mag = np.log10(max(bin_bins[i], 1))
             upper_mag = np.log10(max(bin_bins[i+1], 1))
-            bin_labels_bins.append(f'10^{upper_mag:.1f}')
+            bin_labels_bins.append(f'10^{lower_mag:.1f}-10^{upper_mag:.1f}')
             avg_complexity_per_bin_bins.append(y_data_bins[mask_bin].mean())
             bin_counts_bins.append(mask_bin.sum())
 

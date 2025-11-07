@@ -51,25 +51,35 @@ def main():
     if True:
         aux.plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER)
     
+    # -------
     appended_benchmarks_df_only_filter20 = appended_benchmarks_df[appended_benchmarks_df['filter'] == 20]
-    print(f"Filtered dataframe to only filter 20, resulting in {len(appended_benchmarks_df_only_filter20)} rows.")
+    # -------
     
     # (2) COMPLEXITY vs TYPES
     # 2.1 Para cada tipo, calcular a complexidade média e máxima
     if True:
         aux.plot_complexity_vs_types(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
     
+    # -------
+    appended_benchmarks_df_only_filter20_noembed = appended_benchmarks_df_only_filter20[
+        appended_benchmarks_df_only_filter20['types'].apply(
+            lambda x: isinstance(x, list) and set(x) == {'bias', 'norm', 'other'}
+        )
+    ]
+    # appended_benchmarks_df_only_filter20_noembed = appended_benchmarks_df_only_filter20
+    # -------
+    
     # (3) COMPLEXITY vs NUMBER OF PARAMS
     # 3.1 Para cada número de parâmetros, calcular a complexidade média, com histograma
     # 3.2 Regressao livre entre número de parâmetros e complexidade
     if True:
-        aux.plot_complexity_vs_num_params(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
+        aux.plot_complexity_vs_num_params(appended_benchmarks_df_only_filter20_noembed, OUTPUT_FOLDER)
     
     # (4) COMPLEXITY vs NUMBER OF BINS
     # 4.1 Para cada número de bins, calcular a complexidade média, com histograma
     # 4.2 Regressao livre entre número de bins e complexidade
     if True:
-        aux.plot_complexity_vs_num_bins(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
+        aux.plot_complexity_vs_num_bins(appended_benchmarks_df_only_filter20_noembed, OUTPUT_FOLDER)
     
     # ===========
     
@@ -80,7 +90,7 @@ def main():
     # 5.4 Plot dos R2 das regressões lineares
     # 5.5 Plot dos R2 das regressões livres
     if True:
-        aux.analyze_benchmarks_vs_complexity(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
+        aux.analyze_benchmarks_vs_complexity(appended_benchmarks_df_only_filter20_noembed, OUTPUT_FOLDER)
     
     # ===========
     
@@ -91,23 +101,23 @@ def main():
     # 6.4 Plot dos R2 das regressões lineares
     # 6.5 Plot dos R2 das regressões livres
     if True:
-        aux.analyze_param_count_vs_benchmarks(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
+        aux.analyze_param_count_vs_benchmarks(appended_benchmarks_df_only_filter20_noembed, OUTPUT_FOLDER)
     
     # ===========
     
     # (7) MAGICAL VARIABLE EXPLORE
-    if True:
-        aux.equation_exploration(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
+    if False:
+        aux.equation_exploration(appended_benchmarks_df_only_filter20_noembed, OUTPUT_FOLDER)
         
-    if True:
+    if False:
         aux.analyze_equation_exploration(OUTPUT_FOLDER)
         
-    if True:
+    if False:
         aux.create_equation_rankings(OUTPUT_FOLDER)
         
     # (8) FOR EACH BENCHMARK - MAGICAL VARIABLE vs BENCHMARK
-    if True:
-        aux.analyze_magical_var_vs_benchmarks(appended_benchmarks_df_only_filter20, OUTPUT_FOLDER)
+    if False:
+        aux.analyze_magical_var_vs_benchmarks(appended_benchmarks_df_only_filter20_noembed, OUTPUT_FOLDER)
          
 if __name__ == "__main__":
     main()

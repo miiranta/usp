@@ -109,6 +109,12 @@ def filter_rows(infos):
         if 'gemma-3n' in info.model.lower():
             print(f"[{info.model} | {info.types} | {info.filter}] Removing (gemma 3N model)")
             infos.remove(info)
+            
+    # Remove openai-gpt models - too old, not relevant
+    for info in infos[:]:
+        if 'openai-gpt' in info.model.lower():
+            print(f"[{info.model} | {info.types} | {info.filter}] Removing (openai-gpt model)")
+            infos.remove(info)
     
 # ====================================
 

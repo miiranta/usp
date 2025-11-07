@@ -111,14 +111,16 @@
 
     It would be interesting to further investigate if training a model while optimizing the complexity value of certain weight types (e.g. norm) could lead to better performance or generalization. However, this is also left as future work.
 
+    We will proceed with the analysis using all weight types combined except embeddings (the \textbf{bias-norm-other} combination). This is justified as embeddings have the lowest complexity values and are not likely to contribute significantly to the overall complexity of the model. Also because removing them allows us to follow the same methodology as the scaling laws study \cite{Kaplan2020}.
+
 \subsection{Complexity vs Number of parameters}
 \label{sec:complexity_vs_num_params_results}
 
-    Following the methodology described in section \ref{sec:complexity_vs_num_params}, we obtained the following plot for average and maximum LMC complexity values against the number of parameters across all weight-type combinations using the best filtering setting (20 $\sigma$):
+    Following the methodology described in section \ref{sec:complexity_vs_num_params}, we obtained the following plot for average and maximum LMC complexity values against the number of parameters across the bias-norm-other weight-type combination using the best filtering setting (20 $\sigma$):
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1\linewidth]{img/param_average_complexity_histogram.png}
+        \includegraphics[width=1\linewidth]{img/noembed-weights/param_average_complexity_histogram.png}
         \caption{Average complexity vs number of parameters.}
     \end{figure}
 
@@ -126,11 +128,11 @@
 
 \subsection{Complexity vs Number of bins}
 
-    Following the methodology described in section \ref{sec:complexity_vs_num_bins}, we obtained the following plot for average LMC complexity values against the number of histogram bins across all weight-type combinations using the best filtering setting (20 $\sigma$):
+    Following the methodology described in section \ref{sec:complexity_vs_num_bins}, we obtained the following plot for average LMC complexity values against the number of histogram bins across the bias-norm-other weight-type combination using the best filtering setting (20 $\sigma$):
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1\linewidth]{img/bin_average_complexity_histogram.png}
+        \includegraphics[width=1\linewidth]{img/noembed-weights/bin_average_complexity_histogram.png}
         \caption{Average complexity vs number of histogram bins.}   
     \end{figure}
 
@@ -138,18 +140,18 @@
 
 \subsection{Complexity vs Benchmarks}
 
-    Following the methodology described in section \ref{sec:complexity_vs_benchmark_performance}, first, we made a control plot using a known correlation: parameter count vs benchmark performance. The results are as follows:
+    Following the methodology described in section \ref{sec:complexity_vs_benchmark_performance}, using the bias-norm-other combination and the best filtering setting (20 $\sigma$) dataset, we made a control plot using a known correlation: parameter count vs benchmark performance. The results are as follows:
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.8\linewidth]{img/control_correlation_comparison.png}
+        \includegraphics[width=0.8\linewidth]{img/noembed-weights/control_correlation_comparison.png}
         \caption{Pearson correlation for parameter count vs benchmark performance.}
         \label{fig:control_correlation_comparison}
     \end{figure}
 
     \begin{figure}[H]
         \centering
-        \includegraphics[width=0.8\linewidth]{img/control_r2_linear_comparison.png}
+        \includegraphics[width=0.8\linewidth]{img/noembed-weights/control_r2_linear_comparison.png}
         \caption{Linear regression $R^2$ values for parameter count vs benchmark performance.}
         \label{fig:control_r2_linear_comparison}
     \end{figure}
@@ -160,14 +162,14 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.8\linewidth]{img/complexity_correlation_comparison.png}
+        \includegraphics[width=0.8\linewidth]{img/noembed-weights/complexity_correlation_comparison.png}
         \caption{Pearson correlation for Complexity vs benchmark performance.}   
         \label{fig:complexity_correlation_comparison}
     \end{figure}
 
     \begin{figure}[H]
         \centering
-        \includegraphics[width=0.8\linewidth]{img/complexity_r2_linear_comparison.png}
+        \includegraphics[width=0.8\linewidth]{img/noembed-weights/complexity_r2_linear_comparison.png}
         \caption{Linear regression $R^2$ values for complexity vs benchmark performance.}
         \label{fig:complexity_r2_linear_comparison}
     \end{figure}
@@ -207,25 +209,25 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.72\linewidth]{img/comp_lmarena_regression.png}
+        \includegraphics[width=0.72\linewidth]{img/noembed-weights/comp_lmarena_regression.png}
         \caption{Regression lines for LMC complexity vs LMArena benchmark.}
     \end{figure}
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.72\linewidth]{img/comp_mmlu_regression.png}
+        \includegraphics[width=0.72\linewidth]{img/noembed-weights/comp_mmlu_regression.png}
         \caption{Regression lines for LMC complexity vs MMLU benchmark.}
     \end{figure}
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.72\linewidth]{img/comp_mmlupro_regression.png}
+        \includegraphics[width=0.72\linewidth]{img/noembed-weights/comp_mmlupro_regression.png}
         \caption{Regression lines for LMC complexity vs MMLU-Pro benchmark.}
     \end{figure}
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.72\linewidth]{img/comp_openllm_regression.png}
+        \includegraphics[width=0.72\linewidth]{img/noembed-weights/comp_openllm_regression.png}
         \caption{Regression lines for LMC complexity vs OpenLLM benchmark.}
     \end{figure}
 
@@ -237,6 +239,6 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.8\linewidth]{img/top_20_correlations.png}
+        \includegraphics[width=0.8\linewidth]{img/all-weights/top_20_correlations.png}
         \caption{Top 20 configurations by Pearson correlation.}
     \end{figure}
