@@ -415,7 +415,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         This will be done by grouping \( R_{f} \) in relation to each weight-type combination and calculating the \textbf{average} and the \textbf{maximum} \textbf{complexity} for each group, then plotting a bar chart for each metric.  
         
-        It is necessary to select a best weight-type combination, like it is done in \ref{sec:best_filtering_setting}, because keeping all the different combinations will add bias to the analysis: a good way to visualize this problem is to think that a single benchmark value might be associated with 15 different complexity values for the same model, one for each weight-type combination. It also might wrongfully influence the the statistical significance by adding artificial datapoints.
+        It is necessary to select a best weight-type combination, like it is done in \ref{sec:best_filtering_setting}, because keeping all the different combinations will add bias to the analysis: a good way to visualize this problem is to imagine that a single benchmark value might be associated with 15 different complexity values for the same model, one for each weight-type combination. It also might wrongfully influence the statistical significance by adding artificial datapoints.
 
         We are heavily inclined to choose the combination that uses all weight types except for the \textbf{embedding} weights, since this approach is commonly used in research such as in the scaling laws one by OpenAI \cite{Kaplan2020}. However, the final decision will be made by removing weight types with the lowest average complexity, as they are likely to contribute less to the overall complexity measure.
 
@@ -457,7 +457,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         
         \[ p = 2 \cdot (1 - F_t(|t|; n-2)) \]
 
-        where \( F_t \) is the cumulative distribution function of the $t$-distribution with $n-2$ degrees of freedom. A significance level of 0.05 will be used to determine if the correlations are statistically significant. An approximation using the standard normal distribution was avoided due to the small sample size of some benchmarks (n < 30).
+        where \( F_t \) is the cumulative distribution function of the $t$-distribution with $n-2$ degrees of freedom. A significance level of 0.05 will be used to determine if the correlations are statistically significant. An approximation using the standard normal distribution was avoided due to the small sample size of some benchmarks (n $<$ 30).
 
         As a bonus, we will also provide a top 20 list sorted by the absolute value of Pearson correlation coefficients found in the analysis, indicating which (benchmark, model, weight-type) combinations produced the strongest correlations.
 

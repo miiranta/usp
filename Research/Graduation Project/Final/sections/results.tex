@@ -41,13 +41,13 @@
     \begin{figure}[H] 
         \centering
         \includegraphics[width=0.8\linewidth]{img/filterbins_regression.png}
-        \caption{Free regression lines for average and maximum number of histogram bins per filtering setting.}
+        \caption{Average and maximum number of histogram bins per filtering setting.}
         \label{fig:regression_bins_per_filtering}
     \end{figure}
 
-    The average bins show a weak fit with $R^2 = 0.044$, indicating high variability. In contrast, the maximum bins demonstrate an exceptional fit with $R^2 = 0.999$. This is expected, as the maximum bins are only one data point per filtering setting, making it easier to fit a curve through them. The fact that both curves follow an \textbf{exponential trend}, however, is noteworthy.
+    The average bins show a weak fit with $R^2 = 0.045$, indicating high variability. In contrast, the maximum bins demonstrate an exceptional fit with $R^2 = 0.999$. This is expected, as the maximum bins are only one data point per filtering setting, making it easier to fit a curve through them. The fact that both curves follow an \textbf{exponential trend}, however, is noteworthy.
 
-    The maximum bins (green dashed line) explodes much faster than the average bins (red line) as the filtering becomes less aggressive, meaning that a worst case scenario grows much more rapidly than the average case.
+    The maximum bins (green dashed line) explodes faster than the average bins (red line) as the filtering becomes less aggressive, meaning that a worst-case scenario grows more rapidly than the average case. Mathematically, while maximum bins grow at a rate of $e ^{0.250x}$, average bins only grow $e ^{0.236x}$.
 
     We can also analyze the filtering setting using our second criterion: complexity values. We obtained the following plots for average and maximum LMC complexity values per filtering setting across all models and weight-type combinations:
 
@@ -63,55 +63,55 @@
         \caption{Maximum complexity per filtering setting.}
     \end{figure}
 
-    We can see that the shape of the plots is similar to each other but follows a different trend compared to the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering}, more similar to a \textbf{logarithmic trend}.
+    We can see that the shapes of the plots are similar to each other but follow a different trend compared to the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering}. Except for the spike at 0.125 $\sigma$, they appear to follow a \textbf{logarithmic trend}.
     
-    Overall, the maximum values tend to be a bit more flat and unstable, while the average values show a smoother curve. The shapes are not as simple as the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering}, since it does not follow a monotonic downward trend, we can observe an upward trend from 0.25 to 0.125 $\sigma$. For reasons unknown, the 0.25 $\sigma$ bar is a global minimum while we have a spike at 0.125 $\sigma$.
+    Overall, the maximum values tend to be a bit more flat and unstable, while the average values show a smoother curve. The shapes are not as simple as the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering} since it does not follow a monotonic downward trend. For reasons unknown, the 0.25 $\sigma$ bar is the global minimum as we can observe an upward trend from 0.25 to 0.125 $\sigma$.
 
-    Complexity values in 10 and 20 $\sigma$ are almost identical to the unfiltered setting (40 $\sigma$), followed by a gradual decrease as the filtering becomes more aggressive until reaching the global minimum at 0.25 $\sigma$.
+    Complexity values in 10 and 20 $\sigma$ are almost identical to the unfiltered setting (40 $\sigma$), followed by a gradual decrease that accelerates as the filtering becomes more aggressive until reaching the global minimum.
 
     We can take a look at the regression lines to understand this behavior better:
 
     \begin{figure}[H] 
         \centering
         \includegraphics[width=0.8\linewidth]{img/filtercomplexity_regression.png}
-        \caption{Free regression lines for average and maximum number of complexity per filtering setting.}
+        \caption{Average and maximum number of complexity per filtering setting.}
     \end{figure}
 
-    As expected, both average (red line) and maximum (green dashed line) complexity values follow a \textbf{logarithmic trend}, with $R^2 = 0.014$ and $R^2 = 0.659$ respectively. The maximum fit is much better than the average fit due to the same reasons as explained in figure \ref{fig:regression_bins_per_filtering}, it is, however, much worse than the maximum fit in figure \ref{fig:regression_bins_per_filtering}, probably due to the unusual spike at 0.125 $\sigma$.
+    As expected, both average (red line) and maximum (green dashed line) complexity values follow a \textbf{logarithmic trend}, with $R^2 = 0.014$ and $R^2 = 0.578$ respectively. The maximum fit is much better than the average fit due to the same reasons as explained in figure \ref{fig:regression_bins_per_filtering}. The maximum fit here is, however, much worse than the maximum fit in figure \ref{fig:regression_bins_per_filtering}, probably due to the unusual spike at 0.125 $\sigma$.
 
-    Both curves show a downward trend as the filtering becomes more aggressive that accelerates the more we approach 0 $\sigma$, where all the values are removed. This acceleration is faster in the maximum complexity fit.
-
-    Analyzing both criteria together, we can conclude that the best filtering setting is \textbf{20 $\sigma$}, as it provides a significant reduction in the number of histogram bins while maintaining an almost identical complexity value compared to the unfiltered data. 
+    Both curves show a downward trend as the filtering becomes more aggressive that accelerates the more we approach 0 $\sigma$, where all the values are removed. This acceleration is faster in the maximum complexity fit. 
     
-    It looks like using even less aggressive filtering settings (such as 30 $\sigma$) could be a better choice, but concluding this would require further experiments with more filtering settings between 20 $\sigma$ and the unfiltered data. More experiments could also be done to understand the intriguing spike in complexity at 0.125 $\sigma$ and the behavior between it and totally filtered data (0 $\sigma$). However, both of those points are left as future work.
+    We also observe a very slight downward concavity in both curves approaching the unfiltered setting (40 $\sigma$) since the $x$ terms are slightly negative. For now, we are considering this an artifact of the regression that happens as a consequence of 40 $\sigma$ being an approximation of the unfiltered data even though it is very close.
 
+    Also, it looks like using even less aggressive filtering settings (such as 30 $\sigma$) could be a better choice, but concluding this would require further experiments with more filtering settings between 20 $\sigma$ and the unfiltered data. Further experiments could also be conducted to understand the intriguing spike in complexity at 0.125 $\sigma$ and the behavior between it and totally filtered data (0 $\sigma$). Both of those points are left as future work.
+
+    Analyzing the criteria together, we can conclude that the best filtering setting is \textbf{20 $\sigma$}, as it provides a significant reduction in the number of histogram bins while maintaining an almost identical complexity value compared to the unfiltered data. 
+    
 \subsection{Weight-type dimension}
 
     Following the methodology described in section \ref{sec:weight_type_analysis}, we obtained the plots for average and maximum LMC complexity values per weight-type combination across all models using the best filtering setting (20 $\sigma$):
 
     \begin{figure}[H]
         \centering
-        \includegraphics[width=0.8\linewidth]{img/weight_average_complexity_bar.png}
+        \includegraphics[width=0.85\linewidth]{img/weight_average_complexity_bar.png}
         \caption{Average complexity per weight-type combination.}
     \end{figure}
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.8\linewidth]{img/weight_maximum_complexity_bar.png}
+        \includegraphics[width=0.85\linewidth]{img/weight_maximum_complexity_bar.png}
         \caption{Maximum complexity per weight-type combination.}
     \end{figure}
 
-    Again, looking at both plots, we can see that the shapes are similar to each other. In this case we have some variation between the rankings of multiple weight classes (e.g. bias-embedding), which is expected since maximum values can be dominated by outliers. The ranking for single weight types (e.g. bias) is the same across both plots.
+    Looking at both plots, we can see that the shapes appear to be similar to each other. For a more careful analysis we will divide the ranking in multiple weight types (e.g. bias-embedding; norm-other) and single weight types (e.g. bias; other).
 
-    Analyzing the multiple weight classes, we can't find a consistent pattern. It is obvious that classes with \textbf{other} have similar values since \textbf{other} weights are the majority of parameters in a model. It is also interesting to see that \textbf{norm} and \textbf{bias} individually have higher average complexity values than when combined with each other.
+    We could not find a consistent pattern while analyzing the multiple weight types. It is obvious, however, that classes that include \textbf{other} have similar values since \textbf{other} weights are the majority of parameters in a model.
 
-    Analyzing the single weight types it is possible to observe that \textbf{norm} weights have the highest complexity values, followed by \textbf{bias} weights, then \textbf{other}, then \textbf{embedding}. While norm is responsible for the highest complexity values, embeddings are close to zero.
+    Analyzing the single weight types, it is possible to see that while \textbf{norm} is responsible for the highest complexity values in any case and \textbf{embedding} is responsible for the lowest in any case, near zero. \textbf{Bias} and \textbf{other} weights vary between second and third place depending on the metric (average or maximum).
 
-    It is unclear why this ranking occurs. It appears to indicate that removing embeddings from a model, like it was done in the scaling laws study \cite{Kaplan2020} won't significantly change its complexity value. 
+    It is unclear why this ranking occurs. As a consequence, it would be interesting to further investigate if training a model while optimizing the complexity value of certain weight types (e.g. norm) could lead to better performance or generalization. However, this is also left as future work.
 
-    It would be interesting to further investigate if training a model while optimizing the complexity value of certain weight types (e.g. norm) could lead to better performance or generalization. However, this is also left as future work.
-
-    We will proceed with the analysis using all weight types combined except embeddings (the \textbf{bias-norm-other} combination). This is justified as embeddings have the lowest complexity values and are not likely to contribute significantly to the overall complexity of the model. Also because removing them allows us to follow the same methodology as the scaling laws study \cite{Kaplan2020}.
+    We will proceed with the analysis using all weight types combined except \textbf{embedding} (the \textbf{bias-norm-other} combination). This is justified as \textbf{embedding} has the lowest complexity values and is not likely to contribute significantly to the overall complexity of the model. Also because removing them allows us to follow the same methodology as the scaling laws study \cite{Kaplan2020}.
 
 \subsection{Complexity vs Number of parameters}
 \label{sec:complexity_vs_num_params_results}
@@ -124,7 +124,11 @@
         \caption{Average complexity vs number of parameters.}
     \end{figure}
 
-    A clear trend emerges from the histogram: as the number of parameters increases, the average complexity tends to decrease, with a sudden spike at the end (around $10^{10.9}$ parameters). This indicates that larger models generally exhibit lower complexity values. The spike at the end is, however, unexpected and its causes are unknown.
+    A clear trend emerges from the histogram: as the number of parameters increases, the complexity values tend to stay mostly flat, with a sudden spike at the end (around $10^{10.5}$ to $10^{11.1}$ parameters). 
+    
+    This indicates that complexity values tend to remain stable with the amount of parameters. The spike at the end is, however, unexpected and its causes are unknown. Further investigation is required to understand if this is an artifact of the dataset or a genuine phenomenon.
+
+    Since number of parameters is a known predictor of model performance \cite{Kaplan2020}, we can conclude right away that the high average complexity values found in the spike region, genuine or not, are likely to induce a bias towards better performance in the next analysis.
 
 \subsection{Complexity vs Number of bins}
 
@@ -152,11 +156,11 @@
     \begin{figure}[H]
         \centering
         \includegraphics[width=0.8\linewidth]{img/noembed-weights/control_r2_linear_comparison.png}
-        \caption{Linear regression $R^2$ values for parameter count vs benchmark performance.}
+        \caption{$R^2$ values for parameter count vs benchmark performance.}
         \label{fig:control_r2_linear_comparison}
     \end{figure}
 
-    As expected, all the benchmarks show a positive correlation with parameter count. The linear regression $R^2$ values are lower, indicating that the relationship is not strictly linear.
+    As expected, all the benchmarks show a positive correlation with parameter count, validating the control set. It is also noticeable that the linear regression $R^2$ values are relatively low for the concatenation of all benchmarks (\textbf{all}), indicating a non-linear relationship between parameter count and benchmark performance.
 
     Now, we can analyze the actual relationship of interest: LMC complexity vs benchmark performance. The results are as follows:
 
@@ -170,15 +174,17 @@
     \begin{figure}[H]
         \centering
         \includegraphics[width=0.8\linewidth]{img/noembed-weights/complexity_r2_linear_comparison.png}
-        \caption{Linear regression $R^2$ values for complexity vs benchmark performance.}
+        \caption{$R^2$ values for complexity vs benchmark performance.}
         \label{fig:complexity_r2_linear_comparison}
     \end{figure}
 
     It is immediately clear that results are inconsistent across benchmarks. While \textbf{LMArena} and \textbf{MMLU} show a positive correlation between complexity and performance, \textbf{MMLU-Pro} and \textbf{OpenLLM} show a negative correlation.
 
-    The negative correlations have a smaller absolute value compared to the positive correlations, indicating a bias towards positive correlation. The \textbf{all} correlation, formed by analyzing a regression aggregating all data points from all benchmarks, shows a small positive correlation of 0.02, confirming this bias.
+    For individual benchmarks, the negative correlations have a smaller absolute value compared to the positive correlations, indicating a bias towards positive correlation. The correlation values are lower than the control's in all cases. The $R^2$ values are also lower than the control's in all cases, which might indicate an even less linear relationship between complexity and benchmark performance compared to control. It can also indicate that complexity is not a good predictor of benchmark performance.
+    
+    However, the \textbf{all} correlation, formed by analyzing a regression aggregating all data points from all benchmarks, shows an impressive positive correlation of 0.1625 which is higher than the control's 0.1488. The $R^2$ scores are still low but also slightly higher than the control's (0.0264 vs 0.0221).
 
-    The \textbf{all} correlation between control and complexity plots is about 5 times smaller (0.10 vs 0.02), indicating that complexity is a much weaker predictor of benchmark performance compared to parameter count. $R^2$ values are also much smaller in the complexity plot, further confirming the non-linearity of the relationship.
+    This is an interesting result: while individual benchmarks show inconsistent correlations and score consistently worse than control, the aggregation of all benchmarks is better than control. This suggests that there may be a general trend of increasing benchmark performance with increasing LMC complexity when considering a diverse set of benchmarks. Since benchmarks are an imperfect measure of model performance, it is possible that individual benchmark inconsistencies are smoothed out.
 
     We also found the statistical significance of the correlations found using t-tests \cite{Fisher1921}:
     
@@ -203,37 +209,48 @@
         \label{tab:statistical_significance}
     \end{table}
 
-    Interestingly, only LMArena, MMLU and MMLU-Pro correlations are statistically significant at a 0.05 significance level. The most important correlation, however, the \textbf{all} correlation, is not statistically significant by a wide margin, meaning more data would be required to confirm or deny the existence of a general correlation between complexity and benchmark performance.
+    It is possible to observe that only the MMLU correlation is statistically significant at a 0.05 significance level. The most important correlation, however, the \textbf{all} correlation, is not. 
+
+    The margins of error are quite high due to the small sample sizes (n < 30), which makes it difficult to draw strong conclusions from the correlations found. Even with small sample sizes, however, we can see that the correlations found are not that weak: \textbf{LMArena} and \textbf{all} were close to significance despite having only 21 and 86 datapoints respectively.
+
+    Interestingly, the benchmarks that are the furthest from significance are the ones with negative correlation (\textbf{MMLU-Pro} and \textbf{OpenLLM}), further indicating that there is more likely a positive bias towards correlation between complexity and benchmark performance than the other way around.
 
     To better understand the shape of the relationship, we can look at the free and linear regression lines for the complexity plots:
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.72\linewidth]{img/noembed-weights/comp_lmarena_regression.png}
-        \caption{Regression lines for LMC complexity vs LMArena benchmark.}
+        \includegraphics[width=0.65\linewidth]{img/noembed-weights/comp_lmarena_regression.png}
+        \caption{LMC complexity vs LMArena benchmark.}
+        \label{fig:comp_lmarena_regression}
     \end{figure}
+
+    Here it is possible to see that the datapoints follow an almost perfect constant trend with two outliers that drive the positive correlation. This is likely related to the result seen in section \ref{sec:complexity_vs_num_params_results}, where complexity values remain mostly flat with a sudden spike at the end.
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.72\linewidth]{img/noembed-weights/comp_mmlu_regression.png}
-        \caption{Regression lines for LMC complexity vs MMLU benchmark.}
+        \includegraphics[width=0.65\linewidth]{img/noembed-weights/comp_mmlu_regression.png}
+        \caption{LMC complexity vs MMLU benchmark.}
     \end{figure}
+
+    Again, a nearly constant trend is observed with a sudden spike at the end driving the positive correlation. Here we can see that the free regression fits an \textbf{exponential}, which can be the explanation for the apparently constant trend in both this and figure \ref{fig:comp_lmarena_regression} since exponentials can appear almost constant for small x values.
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.72\linewidth]{img/noembed-weights/comp_mmlupro_regression.png}
-        \caption{Regression lines for LMC complexity vs MMLU-Pro benchmark.}
+        \includegraphics[width=0.65\linewidth]{img/noembed-weights/comp_mmlupro_regression.png}
+        \caption{LMC complexity vs MMLU-Pro benchmark.}
     \end{figure}
+
+    Here we see a different behavior: a slightly downward linear trend with high variability and two outliers in the middle driving the negative correlation.
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.72\linewidth]{img/noembed-weights/comp_openllm_regression.png}
-        \caption{Regression lines for LMC complexity vs OpenLLM benchmark.}
+        \includegraphics[width=0.65\linewidth]{img/noembed-weights/comp_openllm_regression.png}
+        \caption{LMC complexity vs OpenLLM benchmark.}
     \end{figure}
 
-    We can see that the free regressions can't agree on a common trend since there are \textbf{logarithmic}, \textbf{exponential} and \textbf{quadratic} best fits across the different benchmarks. The benchmarks with negative correlation (MMLU-Pro and OpenLLM) at least agree on having a \textbf{logarithmic} trend, but the first one is increasing (+ln(x)) while the second one is decreasing (-ln(x)).
+    And here the most interesting behavior is observed: two lines are formed, one with a slight logarithmic upward trend and another with a slight logarithmic downward trend, both regression fits trying to find a middle ground between them.
 
-    This further confirms that LMC complexity is not a reliable predictor of benchmark performance, as different benchmarks show conflicting relationships with complexity values.
+    In all cases, we can see that the free regressions do not appear to be able to capture the behavior of the datapoints well due to their outliers. The linear regressions are also influenced by the same factor, leading to low $R^2$ values. This is a further indicator that LMC complexity appears not to be a reliable predictor of benchmark performance.
 
     As a bonus, for the sake of completeness, we made a bar plot ranking the top 20 configurations (model + weight-type combination) sorted by highest correlation between LMC complexity and benchmark performance (all benchmarks aggregated):
 
