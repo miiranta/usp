@@ -449,15 +449,15 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         We will provide a bar chart summarizing the Pearson correlation coefficient for each benchmark analyzed for both LMC complexity vs benchmark performance and number of parameters vs benchmark performance, so that they can be easily compared. In addition, for each of these plots we will check the result of the concatenation of all benchmarks available to see if a stronger correlation arises from the larger dataset, presented as another bar in the chart.
 
-        Using the complexity's Pearson correlation results, we will check for the statistical significance of the correlations found using a t-test \cite{Fisher1921}. The t-statistic can be computed as:
+        Using the complexity's Pearson correlation results, we will check for the statistical significance of the correlations found using a two-tailed t-test \cite{Fisher1921}. The t-statistic can be computed as:
 
         \[ t = r \cdot \sqrt{\frac{n-2}{1-r^2}} \]
 
-        where \( r \) is the Pearson correlation coefficient and \( n \) is the number of datapoints used in the correlation.  The p-value can then be obtained from the cumulative distribution function of the $t$-distribution with $n-2$ degrees of freedom:
+        where \( r \) is the Pearson correlation coefficient and \( n \) is the number of datapoints used in the correlation. The p-value can then be obtained from the cumulative distribution function of the $t$-distribution with $n-2$ degrees of freedom:
         
         \[ p = 2 \cdot (1 - F_t(|t|; n-2)) \]
 
-        where \( F_t \) is the cumulative distribution function of the $t$-distribution with $n-2$ degrees of freedom. A significance level of 0.05 will be used to determine if the correlations are statistically significant.
+        where \( F_t \) is the cumulative distribution function of the $t$-distribution with $n-2$ degrees of freedom. A significance level of 0.05 will be used to determine if the correlations are statistically significant. An approximation using the standard normal distribution was avoided due to the small sample size of some benchmarks (n < 30).
 
         As a bonus, we will also provide a top 20 list sorted by the absolute value of Pearson correlation coefficients found in the analysis, indicating which (benchmark, model, weight-type) combinations produced the strongest correlations.
 

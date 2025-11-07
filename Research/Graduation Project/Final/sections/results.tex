@@ -6,7 +6,7 @@
 
     A model with 10 billion parameters took approximately 3.5 hours to process all weight-type combinations and filtering settings using the workstation described in section \ref{sec:experimental_setup}. The total parameter count of all models is \textbf{652.802.782.352}, taking around \textbf{228 hours} (9.5 days) of computation time in total.
 
-    The resulting dataset contains \textbf{5676 rows}, each representing a unique combination of model, weight-type combination, filtering setting, LMC complexity value, number of histogram bins, and available benchmark results. That was 99 rows short of the expected 5775 rows due to:
+    The resulting dataset contains \textbf{5511 rows}, each representing a unique combination of model, weight-type combination, filtering setting, LMC complexity value, number of histogram bins, and available benchmark results. That was 264 rows short of the expected 5775 rows due to:
     \begin{itemize}
         \item Some unfiltered data models exceeded the maximum number of bins (set to 1 billion) during histogram creation, leading to their exclusion. Increasing the maximum bin count is not possible due to memory constraints and keeping the rows in the dataset capped at 1 billion bins would have introduced bias to the analysis.
         \item Some numerical values such as count, min, max, mean, std, bin\_count, shannon\_entropy, disequilibrium, and complexity were reported as NaN or infinite values in certain model and weight-type combinations, which required their exclusion from the dataset. The reasons are unknown, but the main suspects are floating-point precision errors and divisions by zero in some edge cases.
@@ -188,15 +188,15 @@
             \hline
             \textbf{Benchmark} & \textbf{r} & \textbf{n} & \textbf{t} & \textbf{p-value} & \textbf{Significance} \\
             \hline
-            LMArena & 0.2535 & 300 & 4.52 & 0.000006 & Yes \\
+            LMArena & 0.3860 & 21 & 1.8239 & 0.0839 & No \\
             \hline
-            MMLU & 0.1741 & 374 & 3.40 & 0.000674 & Yes \\
+            MMLU & 0.4176 & 26 & 2.2515 & 0.0338 & Yes \\
             \hline
-            MMLU-Pro & -0.1704 & 214 & -2.51 & 0.012073 & Yes \\
+            MMLU-Pro & -0.1813 & 15 & -0.6647 & 0.5179 & No \\
             \hline
-            OpenLLM & -0.0806 & 341 & -1.48 & 0.138873 & No \\
+            OpenLLM & -0.2534 & 24 & -1.2287 & 0.2322 & No \\
             \hline
-            all & 0.0238 & 1229 & 0.83 & 0.406539 & No \\
+            all & 0.1625 & 86 & 1.5094 & 0.1349 & No \\
             \hline
         \end{tabular}
         \caption{Statistical significance of Pearson correlations between complexity and benchmark performance.}
