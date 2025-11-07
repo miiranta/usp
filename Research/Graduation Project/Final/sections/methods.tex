@@ -344,7 +344,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             
         \end{enumerate}
 
-        At the end, we will have 35 models \(\times\) 15 weight-type combinations \(\times\)  11 filtering settings (including unfiltered) = 5775 datapoints. The resulting dataset \( \mathbf{R} \) consists of tuples structured as follows:
+        At the end, we will have 35 models \(\times\) 15 weight-type combinations \(\times\)  11 filtering settings (including unfiltered) = 5775 data points. The resulting dataset \( \mathbf{R} \) consists of tuples structured as follows:
         \begin{enumerate}
             \item Model name
             \item Number of parameters
@@ -404,7 +404,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             \item Since steps 1 and 2 represent the two criteria defined in section \ref{sec:filtering}, we will first filter the groups obtained in 1 to keep only the ones that have a lower average bin count than the unfiltered data. Then, among those groups, we will choose the one with the closest complexity value to the unfiltered data (least amount of filtering).
         \end{enumerate}
 
-        The filtering dimension will be used to determine the best general filtering setting following the criteria defined in section \ref{sec:filtering}. After defining the best filtering setting, we will discard all the runs where \( \sigma_{\text{filter}} \) is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{f}}$. There will be a total of: \( 35 \text{ models } \times 15 \text{ weight-type combinations } \times 1 \text{ filtering setting } = 525 \text{ datapoints}\).
+        The filtering dimension will be used to determine the best general filtering setting following the criteria defined in section \ref{sec:filtering}. After defining the best filtering setting, we will discard all the runs where \( \sigma_{\text{filter}} \) is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{f}}$. There will be a total of: \( 35 \text{ models } \times 15 \text{ weight-type combinations } \times 1 \text{ filtering setting } = 525 \text{ data points}\).
 
         We will also make a free regression on a scatter plot for the data obtained in steps 1 and 2 to analyze how filtering strength affects histogram bin count and complexity, respectively.
 
@@ -415,11 +415,11 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         This will be done by grouping \( R_{f} \) in relation to each weight-type combination and calculating the \textbf{average} and the \textbf{maximum} \textbf{complexity} for each group, then plotting a bar chart for each metric.  
         
-        It is necessary to select a best weight-type combination, like it is done in \ref{sec:best_filtering_setting}, because keeping all the different combinations will add bias to the analysis: a good way to visualize this problem is to imagine that a single benchmark value might be associated with 15 different complexity values for the same model, one for each weight-type combination. It also might wrongfully influence the statistical significance by adding artificial datapoints.
+        It is necessary to select the best weight-type combination, like it is done in \ref{sec:best_filtering_setting}, because keeping all the different combinations will add bias to the analysis: a good way to visualize this problem is to imagine that a single benchmark value might be associated with 15 different complexity values for the same model, one for each weight-type combination. It also might wrongfully influence the statistical significance by adding artificial data points.
 
         We are heavily inclined to choose the combination that uses all weight types except for the \textbf{embedding} weights, since this approach is commonly used in research such as in the scaling laws one by OpenAI \cite{Kaplan2020}. However, the final decision will be made by removing weight types with the lowest average complexity, as they are likely to contribute less to the overall complexity measure.
 
-        After choosing the best weight-type combination, we will discard all the runs in \( R_{f} \) where the weight-type combination is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{best}}$. There will be a total of: \( 35 \text{ models } \times 1 \text{ weight-type combination } \times 1 \text{ filtering setting } = 35 \text{ datapoints}\).
+        After choosing the best weight-type combination, we will discard all the runs in \( R_{f} \) where the weight-type combination is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{best}}$. There will be a total of: \( 35 \text{ models } \times 1 \text{ weight-type combination } \times 1 \text{ filtering setting } = 35 \text{ data points}\).
 
 
     \subsubsection{Complexity vs Number of parameters}   
@@ -443,7 +443,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         
         For each benchmark available in \( R_{best} \), we will create scatter plots with benchmark scores on the x-axis and complexity on the y-axis.
 
-        We will perform both linear and free regression analyses (section \ref{sec:regression_procedures}) to identify trends between complexity and performance. The strength and nature of these relationships will be assessed using Pearson correlation and \( R^2 \) values.
+        We will perform both linear and free regression analyzes (section \ref{sec:regression_procedures}) to identify trends between complexity and performance. The strength and nature of these relationships will be assessed using Pearson correlation and \( R^2 \) values.
 
         As a control, the experiment will be rerun using the number of model parameters instead of LMC complexity. The number of parameters is a known variable that is expected to correlate with benchmark performance according to scaling laws \cite{Kaplan2020}. This will help validate our methodology and provide a baseline for comparison.
 
@@ -453,7 +453,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         \[ t = r \cdot \sqrt{\frac{n-2}{1-r^2}} \]
 
-        where \( r \) is the Pearson correlation coefficient and \( n \) is the number of datapoints used in the correlation. The p-value can then be obtained from the cumulative distribution function of the $t$-distribution with $n-2$ degrees of freedom:
+        where \( r \) is the Pearson correlation coefficient and \( n \) is the number of data points used in the correlation. The p-value can then be obtained from the cumulative distribution function of the $t$-distribution with $n-2$ degrees of freedom:
         
         \[ p = 2 \cdot (1 - F_t(|t|; n-2)) \]
 
