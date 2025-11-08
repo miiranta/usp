@@ -1,33 +1,30 @@
 \section{Conclusion}
 
-In this work, we investigated the relationship between the LMC statistical complexity of neural network weights and their inference performance across various benchmarks. Our analysis revealed that, for the amount of data we had available \textbf{it is not yet possible to say there is a general correlation between LMC complexity and benchmark performance}. 
+In this work, we investigated the relationship between the LMC statistical complexity of neural network weights and their inference performance across various benchmarks. Our analysis revealed that, even with a statistically significant result, \textbf{it is not yet possible to say there is a general correlation between LMC complexity and benchmark performance}. 
 
-In order to validate or falsify the initial hypothesis, a new study with a larger dataset would be necessary. A new methodology independent of benchmark results may also be necessary given the difficulty in obtaining sufficient data for statistical significance and the imperfect nature of their performance assessments. As already mentioned, a good option is to use test loss in a new model trained from scratch as a performance metric.
-
-Even with the limited data available, it is possible to observe some trends towards a small positive correlation between LMC complexity and benchmark performance. Some facts support this observation such as: 
+Some facts support the validity of the initial hypothesis:
 \begin{enumerate}
-    \item The bigger Pearson correlation coefficient and $R_2$ values compared to control in the first analysis of section \ref{sec:complexity_vs_benchmark_performance_results};
-    \item The higher statistical significance of the positive correlation fits;
+    \item The high statistical significance of the aggregated analysis (\textbf{all}).
+    \item The higher statistical significance of the positive correlation fits compared to the negative ones.
+    \item The considerable Pearson correlation coefficient and $R_2$ values compared to control in the first analysis of section \ref{sec:complexity_vs_benchmark_performance_results}.
     \item The tendency of higher complexity values to be associated with higher parameter counts.
 \end{enumerate}
 
-Individually, some benchmarks such as the \textbf{MMLU} showed statistical significance pointing to a positive correlation. \textbf{LMArena} also showed a similar trend, although with slightly less significance.
+Individually, some benchmarks such as the \textbf{MMLU} showed statistical significance pointing to a positive correlation. \textbf{LMArena} also showed a similar trend, although with slightly less significance. Those results might be useful by themselves in future work.
 
-On the other hand, we also observed facts that go against the initial hypothesis, such as:
+On the other hand, other facts that go against our initial hypothesis:
 \begin{enumerate}
-    \item In section \ref{sec:complexity_vs_benchmark_performance_results}, some benchmarks showed positive correlation, others showed a negative correlation, while control only showed positive correlations;
-    \item The statistical significances of the fits were low overall, with only one benchmark showing $p<0.05$. $R_2$ values were also very low;
-    \item The best fit lines for the regressions had inconsistent shapes and trends. Each benchmark showed a different best fit with no clear pattern between them.
+    \item The most positive relations in benchmark regressions were driven by outliers.
+    \item The best fits for the regressions had inconsistent shapes and trends. Benchmarks had at least 3 classes of different regression shapes.
+    \item In section \ref{sec:complexity_vs_benchmark_performance_results}, some benchmarks showed positive correlation, others showed a negative correlation, while control only showed positive correlations.
 \end{enumerate}
 
-These might indicate that LMC Complexity is not a reliable predictor of neural network inference capability.
+Until the reasons why the opposite facts happen is clarified, it is hard to not consider that the results might be outcomes of outliers. The fact that these exist might indicate that LMC Complexity is not a reliable predictor of neural network inference capability in the first place.
+
+In order to validate or falsify the initial hypothesis, a new study with a new approach would be necessary. A new methodology independent of benchmark results should be better given the difficulty in obtaining sufficient data for statistical significance and the imperfect nature of their performance assessments. As already mentioned in section \ref{sec:inference_capability}, a good option is to use test loss in a new model trained from scratch as a performance metric.
+
+Maybe the LMC complexity to performance correlation is true, but different models are not comparable since we have a specific range of values for each architecture. You would need to compare the model with itself, which would be impossible using benchmarks since for one benchmark we have only one reading per model. Hence, again, finding a way of testing using test loss would be more reliable.
 
 Another hypothesis that could be investigated in future work is whether complexity measures how close we are to the performance ceiling given by the scaling laws, instead of measuring the performance itself. Based on the observations made in this work, it is still possible that this is true, and it might provide a reduction in the amount of compute needed for training by providing a good early stopping criterion.
 
 Overall, while our findings are not conclusive towards the initial hypothesis, they open avenues for further research into the nuanced relationship between complexity measures and neural network performance.
-
-Talk about similarities between benchmarks....
-
-Problems collecting benchmark data...
-
-Maybe the correlation is true but different models or model families are not comparable..., you need to compare within families only...

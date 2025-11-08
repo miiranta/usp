@@ -1,4 +1,5 @@
 \section{Methodology}
+\label{sec:methodology}
 
 \subsection{Testing Environment}
 \label{sec:experimental_setup}
@@ -212,6 +213,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         With the probabilities \( p_i \) computed from the histogram, we can now calculate the LMC complexity \( C_{LMC} \) using the formulas provided in the beginning of section \ref{sec:lmc_complexity}. This involves calculating the Disequilibrium \( D \) and the Shannon entropy \( H \) using the probabilities, and then multiplying them to obtain the final complexity measure \( C_{LMC} \).
 
 \subsection{Inference Capability}
+\label{sec:inference_capability}
 
     Often called model performance, inference capability refers to how well a trained neural network performs on unseen data. This is typically measured using various metrics depending on the specific task the model is designed for. 
     
@@ -230,11 +232,11 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         A nice proposal for future research to avoid the problems cited above would involve training a model from scratch twice: optimizing it initially for minimal loss and then for minimal loss plus maximum LMC complexity, then comparing the results. This is, however, out of the scope of this work.
 
         The benchmark selection followed three main heuristics:
-        \begin{itemize}
+        \begin{enumerate}
             \item \textbf{Relevance}: The benchmark should be widely recognized and accepted in the machine learning community, e.g., used in major research papers.
             \item \textbf{Generality}: It should cover a range of tasks and data types to provide an assessment of model performance across different scenarios, that is, not being specialized in one task.
             \item \textbf{Availability}: The benchmark results should be publicly available. Benchmarks that cover more of the selected models were preferred.
-        \end{itemize}
+        \end{enumerate}
 
         Based on those heuristics, the benchmarks selected were:
         \begin{itemize}
