@@ -203,7 +203,7 @@
             \hline
             OpenLLM & -0.2534 & 24 & -1.2287 & 0.2322 & No \\
             \hline
-            all & 0.1625 & 86 & 1.5094 & 0.1349 & No \\
+            all & 0.3066 & 86 & 2.9522 & 0.004089 & Yes \\
             \hline
         \end{tabular}
         \caption{Statistical significance of Pearson correlations between complexity and benchmark performance.}
@@ -250,6 +250,12 @@
     \end{figure}
 
     And here the most interesting behavior is observed: two lines are formed, one with a slight logarithmic upward trend and another with a slight logarithmic downward trend, both regression fits trying to find a middle ground between them.
+
+    \begin{figure}[H] 
+        \centering
+        \includegraphics[width=0.65\linewidth]{img/noembed-weights/comp_all_regression.png}
+        \caption{LMC complexity vs all benchmarks aggregated.}
+    \end{figure}
 
     In all cases, we can see that the free regressions do not appear to be able to capture the behavior of the datapoints well due to their outliers. The linear regressions are also influenced by the same factor, leading to low $R^2$ values. This is a further indicator that LMC complexity appears not to be a reliable predictor of benchmark performance.
 

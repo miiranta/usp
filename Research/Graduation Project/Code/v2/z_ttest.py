@@ -21,7 +21,7 @@ def correlation_significance(r, n):
 
 # Example usage:
 if __name__ == "__main__":
-    r = 0.1625   # example correlation coefficient
+    r = 0.3066   # example correlation coefficient
     n = 86    # example number of data points
 
     t_stat, p_value = correlation_significance(r, n)
