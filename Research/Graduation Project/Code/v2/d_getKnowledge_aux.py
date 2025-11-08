@@ -736,7 +736,7 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
     ax.set_xticklabels(transition_labels, rotation=90, ha='center', fontsize=8, fontweight='bold')
     ax.set_xlim(-0.5, n_bins - 0.5)
     ax.tick_params(axis='x', which='major', length=5)
-    ax.set_xlabel('Number of Parameters (transitions)', fontsize=12, labelpad=10)
+    ax.set_xlabel('Number of Parameters', fontsize=12, labelpad=10)
     
     # Get max height for ylim adjustment
     max_height = max(avg_complexity_per_bin) if avg_complexity_per_bin else 1
@@ -769,9 +769,9 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
                    wrap=True,
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
 
-    # Adjust y-axis limits to add significant space at top for model names
+    # Adjust y-axis limits to add space at top for model names
     current_ylim = ax.get_ylim()
-    ax.set_ylim(current_ylim[0], current_ylim[1] * 2.0)  # Double the space for model names
+    ax.set_ylim(current_ylim[0], current_ylim[1] * 1.15)  # Add 15% space for model names
     
     # Add overall statistics text
     overall_avg = np.average(avg_complexity_per_bin, weights=bin_counts)
@@ -1023,7 +1023,7 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
     ax.set_xticklabels(transition_labels, rotation=90, ha='center', fontsize=8, fontweight='bold')
     ax.set_xlim(-0.5, n_bins - 0.5)
     ax.tick_params(axis='x', which='major', length=5)
-    ax.set_xlabel('Number of Bins (transitions)', fontsize=12, labelpad=10)
+    ax.set_xlabel('Number of Bins', fontsize=12, labelpad=10)
     
     # Get max height for ylim adjustment
     max_height = max(avg_complexity_per_bin_bins) if avg_complexity_per_bin_bins else 1
@@ -1056,9 +1056,9 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
                    wrap=True,
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
 
-    # Adjust y-axis limits to add significant space at top for model names
+    # Adjust y-axis limits to add space at top for model names
     current_ylim = ax.get_ylim()
-    ax.set_ylim(current_ylim[0], current_ylim[1] * 2.0)  # Double the space for model names
+    ax.set_ylim(current_ylim[0], current_ylim[1] * 1.15)  # Add 15% space for model names
     
     # Add overall statistics text
     overall_avg_bins = np.average(avg_complexity_per_bin_bins, weights=bin_counts_bins)
