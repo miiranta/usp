@@ -147,6 +147,13 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
     fig, ax = plt.subplots(figsize=(12, 9))
     sns.scatterplot(x=appended_benchmarks_df['filter'], y=appended_benchmarks_df['complexity'],
                     alpha=0.6, label='Data', ax=ax)
+    
+    # Add model names below each data point
+    for idx, row in appended_benchmarks_df.iterrows():
+        if pd.notna(row['filter']) and pd.notna(row['complexity']):
+            ax.text(row['filter'], row['complexity'], row['model'], 
+                   fontsize=6, alpha=0.5, ha='center', va='top', color='gray')
+    
     # Regression lines
     sns.lineplot(x=x_line, y=y_line, color='red', linewidth=2, linestyle='-',
                  label=f'Best fit all data ({best_name})\n{best_equation}\nR² = {best_r2:.6f}', ax=ax)
@@ -370,6 +377,13 @@ def plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER):
     # Plot scatter with regression lines using seaborn
     fig, ax = plt.subplots(figsize=(12, 9))
     sns.scatterplot(x=appended_benchmarks_df['filter'], y=appended_benchmarks_df['bin_count'], alpha=0.6, label='Data', ax=ax)
+    
+    # Add model names below each data point
+    for idx, row in appended_benchmarks_df.iterrows():
+        if pd.notna(row['filter']) and pd.notna(row['bin_count']):
+            ax.text(row['filter'], row['bin_count'], row['model'], 
+                   fontsize=6, alpha=0.5, ha='center', va='top', color='gray')
+    
     sns.lineplot(x=x_line, y=y_line, color='red', linewidth=2, linestyle='-', label=f'Best fit all data ({best_name})\n{best_equation}\nR² = {best_r2:.6f}', ax=ax)
     sns.scatterplot(x=x_max, y=y_max, color='green', s=100, alpha=0.8, marker='D', label='Maximum values', zorder=5, ax=ax)
     sns.lineplot(x=x_line_max, y=y_line_max, color='green', linewidth=2, linestyle='--', label=f'Best fit max ({best_name_max})\n{best_equation_max}\nR² = {best_r2_max:.6f}', ax=ax)
@@ -631,6 +645,13 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
     # Plot scatter with regression line using seaborn
     fig, ax = plt.subplots(figsize=(12, 9))
     sns.scatterplot(x=x_data_params, y=y_data_params, alpha=0.6, label='Data', ax=ax)
+    
+    # Add model names below each data point
+    mask_params_valid = ~(appended_benchmarks_df['count'].isna() | appended_benchmarks_df['complexity'].isna())
+    for idx, row in appended_benchmarks_df[mask_params_valid].iterrows():
+        ax.text(row['count'], row['complexity'], row['model'], 
+               fontsize=6, alpha=0.5, ha='center', va='top', color='gray')
+    
     sns.lineplot(x=x_line_params, y=y_line_params, color='red', linewidth=2, linestyle='-', label=f'Best fit ({best_name_params})\n{best_equation_params}\nR² = {best_r2_params:.6f}', ax=ax)
     ax.set_xlabel('Number of Parameters')
     ax.set_ylabel('Complexity')
@@ -660,8 +681,8 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
     log_min = np.log10(max(min_val, 1))
     log_max = np.log10(max_val + 1)
     
-    # Create bins in log space
-    n_log_bins = max(15, min(50, n_bins_fd // 2))  # Reasonable number of bins
+    # Create bins in log space using Freedman-Diaconis result directly
+    n_log_bins = n_bins_fd  # Use FD result directly without modification
     log_bins = np.linspace(log_min, log_max, n_log_bins + 1)
     param_bins = 10 ** log_bins
     param_bins[0] = min_val  # Ensure exact min
@@ -671,6 +692,7 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
     bin_labels = []
     avg_complexity_per_bin = []
     bin_counts = []
+    bin_models = []  # Store models for each bin
 
     for i in range(len(param_bins) - 1):
         mask_bin = (x_data_params >= param_bins[i]) & (x_data_params < param_bins[i + 1])
@@ -684,35 +706,82 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
             bin_labels.append(f'10^{upper_mag:.1f}')
             avg_complexity_per_bin.append(y_data_params[mask_bin].mean())
             bin_counts.append(mask_bin.sum())
+            # Get models in this bin
+            models_in_bin = appended_benchmarks_df.loc[mask_params & mask_bin, 'model'].tolist()
+            bin_models.append(models_in_bin)
 
     # Plot histogram: average complexity per parameter count interval using seaborn
-    fig, ax = plt.subplots(figsize=(16, 9))
+    fig, ax = plt.subplots(figsize=(22, 16))
     hist_df = pd.DataFrame({'bin_range': bin_labels, 'avg_complexity': avg_complexity_per_bin})
-    sns.barplot(data=hist_df, x='bin_range', y='avg_complexity', color='steelblue', alpha=0.7, ax=ax, errorbar=None, order=bin_labels)
-    ax.set_xlabel('Number of Parameters', fontsize=12, labelpad=10)
+    bars = ax.bar(range(len(bin_labels)), avg_complexity_per_bin, color='steelblue', alpha=0.7, edgecolor='black', linewidth=1)
     ax.set_ylabel('Average Complexity', fontsize=12)
     ax.set_title(f'Average Complexity by Parameter Count', fontsize=13, pad=20)
     ax.grid(axis='y', alpha=0.3)
     
-    # Set x-axis ticks to show only every N bars, with clean labels
+    # Set x-axis ticks at transitions (between bars) instead of centers
     n_bins = len(bin_labels)
-    step = max(1, n_bins // 8)  # Show approximately 8 labels max
-    tick_positions = range(0, n_bins, step)
-    tick_labels = [bin_labels[i] if i < len(bin_labels) else '' for i in tick_positions]
-    ax.set_xticks(tick_positions)
-    ax.set_xticklabels(tick_labels, rotation=0, ha='center', fontsize=10, fontweight='bold')
-    # Remove tick marks but keep labels visible
-    ax.tick_params(axis='x', which='major', length=0)
+    # Create tick positions at transitions: -0.5, 0.5, 1.5, ..., n_bins-0.5
+    transition_positions = [i - 0.5 for i in range(n_bins + 1)]
+    
+    # Create transition labels from param_bins (actual boundaries)
+    transition_labels = []
+    for i in range(n_bins + 1):
+        if i < len(param_bins):
+            mag = np.log10(max(param_bins[i], 1))
+            transition_labels.append(f'10^{mag:.1f}')
+        else:
+            transition_labels.append('')
+    
+    ax.set_xticks(transition_positions)
+    ax.set_xticklabels(transition_labels, rotation=90, ha='center', fontsize=8, fontweight='bold')
+    ax.set_xlim(-0.5, n_bins - 0.5)
+    ax.tick_params(axis='x', which='major', length=5)
+    ax.set_xlabel('Number of Parameters (transitions)', fontsize=12, labelpad=10)
+    
+    # Get max height for ylim adjustment
+    max_height = max(avg_complexity_per_bin) if avg_complexity_per_bin else 1
+    
+    # Add model names above each bar (not inside)
+    for i, (bar, models, count, avg_comp) in enumerate(zip(bars, bin_models, bin_counts, avg_complexity_per_bin)):
+        # Get unique model names and sort them
+        unique_models = sorted(set(models))
+        
+        bar_height = bar.get_height()
+        bar_width = bar.get_width()
+        
+        if len(unique_models) > 0:
+            # Position text ABOVE the bar (starting above the top with more spacing)
+            text_y_position = bar_height + 0.002
+            
+            # Show all model names, each on its own line (matplotlib will wrap automatically within bbox)
+            models_text = '\n'.join(unique_models)
+            
+            # Calculate approximate width in inches for wrapping
+            # Each bar width in data coordinates needs to be converted
+            fig_width_inches = 22
+            data_width = n_bins
+            bar_width_inches = (bar_width / data_width) * fig_width_inches * 0.9  # 90% of bar width for padding
+            
+            ax.text(bar.get_x() + bar_width / 2, text_y_position, 
+                   models_text,
+                   ha='center', va='bottom', fontsize=4.5, color='black', 
+                   fontweight='normal', rotation=0,
+                   wrap=True,
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
 
+    # Adjust y-axis limits to add significant space at top for model names
+    current_ylim = ax.get_ylim()
+    ax.set_ylim(current_ylim[0], current_ylim[1] * 2.0)  # Double the space for model names
+    
     # Add overall statistics text
     overall_avg = np.average(avg_complexity_per_bin, weights=bin_counts)
-    stats_text = f'Overall Avg: {overall_avg:.4f}\nTotal samples: {sum(bin_counts)}'
+    stats_text = f'Overall Avg: {overall_avg:.4f}\nTotal samples: {sum(bin_counts)}\nNumber of bins: {len(bin_labels)}'
     ax.text(0.98, 0.97, stats_text, transform=ax.transAxes, verticalalignment='top', horizontalalignment='right',
         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
 
     fig.tight_layout()
-    fig.subplots_adjust(bottom=0.15)
-    fig.savefig(os.path.join(params_complexity_folder, 'average_complexity_histogram.png'), bbox_inches='tight', dpi=100)
+    fig.subplots_adjust(bottom=0.15, top=0.98)  # Margin for labels and top space
+    fig.savefig(os.path.join(params_complexity_folder, 'average_complexity_histogram.png'), bbox_inches='tight', dpi=150)
     plt.close(fig)
 
     # Save regression information to text file
@@ -734,7 +803,7 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
         f.write(f"Bin width: {bin_width_params:.2f} parameters\n")
         f.write(f"IQR: {iqr_params:.2f}\n")
 
-    # Save average complexity per bin to text file
+    # Save average complexity per bin to text file with model lists
     with open(os.path.join(params_complexity_folder, 'average_complexity_per_bin.txt'), 'w', encoding='utf-8') as f:
         f.write("AVERAGE COMPLEXITY PER PARAMETER COUNT RANGE\n")
         f.write("=" * 70 + "\n\n")
@@ -748,6 +817,20 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
         overall_avg = np.average(avg_complexity_per_bin, weights=bin_counts)
         f.write(f"Overall weighted average: {overall_avg:.16f}\n")
         f.write(f"Total data points: {sum(bin_counts)}\n")
+
+    # Save models per bin to a separate text file
+    with open(os.path.join(params_complexity_folder, 'models_per_bin.txt'), 'w', encoding='utf-8') as f:
+        f.write("MODELS IN EACH PARAMETER COUNT RANGE\n")
+        f.write("=" * 100 + "\n\n")
+        for i, (label, models) in enumerate(zip(bin_labels, bin_models)):
+            range_start = param_bins[i]
+            range_end = param_bins[i + 1]
+            f.write(f"Bin {i+1}: {label} (Range: {range_start:.2f} - {range_end:.2f})\n")
+            f.write(f"Number of models: {len(models)}\n")
+            f.write("Models:\n")
+            for model in sorted(set(models)):  # Use set to remove duplicates, then sort
+                f.write(f"  - {model}\n")
+            f.write("\n" + "-" * 100 + "\n\n")
 
     # Save overall statistics to text file
     with open(os.path.join(params_complexity_folder, 'statistics.txt'), 'w', encoding='utf-8') as f:
@@ -848,6 +931,13 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
     # Plot scatter with regression line using seaborn
     fig, ax = plt.subplots(figsize=(12, 9))
     sns.scatterplot(x=x_data_bins, y=y_data_bins, alpha=0.6, label='Data', ax=ax)
+    
+    # Add model names below each data point
+    mask_bins_valid = ~(appended_benchmarks_df['bin_count'].isna() | appended_benchmarks_df['complexity'].isna())
+    for idx, row in appended_benchmarks_df[mask_bins_valid].iterrows():
+        ax.text(row['bin_count'], row['complexity'], row['model'], 
+               fontsize=6, alpha=0.5, ha='center', va='top', color='gray')
+    
     sns.lineplot(x=x_line_bins, y=y_line_bins, color='red', linewidth=2, linestyle='-', label=f'Best fit ({best_name_bins})\n{best_equation_bins}\nR² = {best_r2_bins:.6f}', ax=ax)
     ax.set_xlabel('Number of Bins')
     ax.set_ylabel('Complexity')
@@ -877,8 +967,8 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
     log_min_bins = np.log10(max(min_val_bins, 1))
     log_max_bins = np.log10(max_val_bins + 1)
     
-    # Create bins in log space
-    n_log_bins = max(15, min(50, n_bins_fd_bins // 2))  # Reasonable number of bins
+    # Create bins in log space using Freedman-Diaconis result directly
+    n_log_bins = n_bins_fd_bins  # Use FD result directly without modification
     log_bins_array = np.linspace(log_min_bins, log_max_bins, n_log_bins + 1)
     bin_bins = 10 ** log_bins_array
     bin_bins[0] = min_val_bins  # Ensure exact min
@@ -888,6 +978,7 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
     bin_labels_bins = []
     avg_complexity_per_bin_bins = []
     bin_counts_bins = []
+    bin_models_bins = []  # Store models for each bin
 
     for i in range(len(bin_bins) - 1):
         mask_bin = (x_data_bins >= bin_bins[i]) & (x_data_bins < bin_bins[i + 1])
@@ -902,35 +993,82 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
             bin_labels_bins.append(f'10^{lower_mag:.1f}-10^{upper_mag:.1f}')
             avg_complexity_per_bin_bins.append(y_data_bins[mask_bin].mean())
             bin_counts_bins.append(mask_bin.sum())
+            # Get models in this bin
+            models_in_bin = appended_benchmarks_df.loc[mask_bins & mask_bin, 'model'].tolist()
+            bin_models_bins.append(models_in_bin)
 
     # Plot histogram: average complexity per bin count interval using seaborn
-    fig, ax = plt.subplots(figsize=(16, 9))
+    fig, ax = plt.subplots(figsize=(22, 16))
     hist_df = pd.DataFrame({'bin_range': bin_labels_bins, 'avg_complexity': avg_complexity_per_bin_bins})
-    sns.barplot(data=hist_df, x='bin_range', y='avg_complexity', color='steelblue', alpha=0.7, ax=ax, errorbar=None, order=bin_labels_bins)
-    ax.set_xlabel('Number of Bins', fontsize=12, labelpad=10)
+    bars = ax.bar(range(len(bin_labels_bins)), avg_complexity_per_bin_bins, color='steelblue', alpha=0.7, edgecolor='black', linewidth=1)
     ax.set_ylabel('Average Complexity', fontsize=12)
     ax.set_title(f'Average Complexity by Bin Count', fontsize=13, pad=20)
     ax.grid(axis='y', alpha=0.3)
     
-    # Set x-axis ticks to show only every N bars, with clean labels
+    # Set x-axis ticks at transitions (between bars) instead of centers
     n_bins = len(bin_labels_bins)
-    step = max(1, n_bins // 8)  # Show approximately 8 labels max
-    tick_positions = range(0, n_bins, step)
-    tick_labels = [bin_labels_bins[i] if i < len(bin_labels_bins) else '' for i in tick_positions]
-    ax.set_xticks(tick_positions)
-    ax.set_xticklabels(tick_labels, rotation=0, ha='center', fontsize=10, fontweight='bold')
-    # Remove tick marks but keep labels visible
-    ax.tick_params(axis='x', which='major', length=0)
+    # Create tick positions at transitions: -0.5, 0.5, 1.5, ..., n_bins-0.5
+    transition_positions = [i - 0.5 for i in range(n_bins + 1)]
+    
+    # Create transition labels from bin_bins (actual boundaries)
+    transition_labels = []
+    for i in range(n_bins + 1):
+        if i < len(bin_bins):
+            mag = np.log10(max(bin_bins[i], 1))
+            transition_labels.append(f'10^{mag:.1f}')
+        else:
+            transition_labels.append('')
+    
+    ax.set_xticks(transition_positions)
+    ax.set_xticklabels(transition_labels, rotation=90, ha='center', fontsize=8, fontweight='bold')
+    ax.set_xlim(-0.5, n_bins - 0.5)
+    ax.tick_params(axis='x', which='major', length=5)
+    ax.set_xlabel('Number of Bins (transitions)', fontsize=12, labelpad=10)
+    
+    # Get max height for ylim adjustment
+    max_height = max(avg_complexity_per_bin_bins) if avg_complexity_per_bin_bins else 1
+    
+    # Add model names above each bar (not inside)
+    for i, (bar, models, count, avg_comp) in enumerate(zip(bars, bin_models_bins, bin_counts_bins, avg_complexity_per_bin_bins)):
+        # Get unique model names and sort them
+        unique_models = sorted(set(models))
+        
+        bar_height = bar.get_height()
+        bar_width = bar.get_width()
+        
+        if len(unique_models) > 0:
+            # Position text ABOVE the bar (starting above the top with more spacing)
+            text_y_position = bar_height + 0.002
+            
+            # Show all model names, each on its own line (matplotlib will wrap automatically within bbox)
+            models_text = '\n'.join(unique_models)
+            
+            # Calculate approximate width in inches for wrapping
+            # Each bar width in data coordinates needs to be converted
+            fig_width_inches = 22
+            data_width = n_bins
+            bar_width_inches = (bar_width / data_width) * fig_width_inches * 0.9  # 90% of bar width for padding
+            
+            ax.text(bar.get_x() + bar_width / 2, text_y_position, 
+                   models_text,
+                   ha='center', va='bottom', fontsize=4.5, color='black', 
+                   fontweight='normal', rotation=0,
+                   wrap=True,
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
 
+    # Adjust y-axis limits to add significant space at top for model names
+    current_ylim = ax.get_ylim()
+    ax.set_ylim(current_ylim[0], current_ylim[1] * 2.0)  # Double the space for model names
+    
     # Add overall statistics text
     overall_avg_bins = np.average(avg_complexity_per_bin_bins, weights=bin_counts_bins)
-    stats_text = f'Overall Avg: {overall_avg_bins:.4f}\nTotal samples: {sum(bin_counts_bins)}'
+    stats_text = f'Overall Avg: {overall_avg_bins:.4f}\nTotal samples: {sum(bin_counts_bins)}\nNumber of bins: {len(bin_labels_bins)}'
     ax.text(0.98, 0.97, stats_text, transform=ax.transAxes, verticalalignment='top', horizontalalignment='right',
         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
 
     fig.tight_layout()
-    fig.subplots_adjust(bottom=0.15)
-    fig.savefig(os.path.join(bins_complexity_folder, 'average_complexity_histogram.png'), bbox_inches='tight', dpi=100)
+    fig.subplots_adjust(bottom=0.15, top=0.98)  # Margin for labels and top space
+    fig.savefig(os.path.join(bins_complexity_folder, 'average_complexity_histogram.png'), bbox_inches='tight', dpi=150)
     plt.close(fig)
 
     # Save regression information to text file
@@ -952,7 +1090,7 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
         f.write(f"Bin width: {bin_width_bins:.2f} bins\n")
         f.write(f"IQR: {iqr_bins:.2f}\n")
 
-    # Save average complexity per bin to text file
+    # Save average complexity per bin to text file with model lists
     with open(os.path.join(bins_complexity_folder, 'average_complexity_per_bin.txt'), 'w', encoding='utf-8') as f:
         f.write("AVERAGE COMPLEXITY PER BIN COUNT RANGE\n")
         f.write("=" * 70 + "\n\n")
@@ -966,6 +1104,20 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
         overall_avg_bins = np.average(avg_complexity_per_bin_bins, weights=bin_counts_bins)
         f.write(f"Overall weighted average: {overall_avg_bins:.16f}\n")
         f.write(f"Total data points: {sum(bin_counts_bins)}\n")
+
+    # Save models per bin to a separate text file
+    with open(os.path.join(bins_complexity_folder, 'models_per_bin.txt'), 'w', encoding='utf-8') as f:
+        f.write("MODELS IN EACH BIN COUNT RANGE\n")
+        f.write("=" * 100 + "\n\n")
+        for i, (label, models) in enumerate(zip(bin_labels_bins, bin_models_bins)):
+            range_start = bin_bins[i]
+            range_end = bin_bins[i + 1]
+            f.write(f"Bin {i+1}: {label} (Range: {range_start:.2f} - {range_end:.2f})\n")
+            f.write(f"Number of models: {len(models)}\n")
+            f.write("Models:\n")
+            for model in sorted(set(models)):  # Use set to remove duplicates, then sort
+                f.write(f"  - {model}\n")
+            f.write("\n" + "-" * 100 + "\n\n")
 
     # Save overall statistics to text file
     with open(os.path.join(bins_complexity_folder, 'statistics.txt'), 'w', encoding='utf-8') as f:
@@ -1100,6 +1252,12 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         # Plot scatter with both regression lines
         fig, ax = plt.subplots(figsize=(12, 10))
         ax.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
+        
+        # Add model names below each data point
+        for idx, (x, y) in enumerate(zip(x_data_bench, y_data_bench)):
+            model_name = appended_benchmarks_df.loc[mask_bench, 'model'].iloc[idx]
+            ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+        
         ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Free regression ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
         ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation}\nR² = {r2_linear:.6f}')
         ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
@@ -1164,26 +1322,39 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         print(f"  Completed {bench_name}: R² = {best_r2_bench:.6f}, Correlation = {correlation:.6f}")
 
     # ==============================================================================
-    # PROCESS "ALL" - Concatenate all benchmark data
+    # PROCESS "ALL" - Concatenate all benchmark data with Min-Max normalization
     # ==============================================================================
-    print("\nProcessing 'all' (concatenated benchmark data)...")
+    print("\nProcessing 'all' (concatenated benchmark data with Min-Max normalization)...")
     
-    # Collect all data points from all benchmarks
+    # Collect all data points from all benchmarks with Min-Max normalization per benchmark
     all_x_data = []
     all_y_data = []
+    all_model_names = []
     
     for bench_name in BENCH_ROWS_NAMES:
         mask_bench = ~(appended_benchmarks_df[bench_name].isna() | appended_benchmarks_df['complexity'].isna())
         x_data_bench = appended_benchmarks_df.loc[mask_bench, bench_name].values
         y_data_bench = appended_benchmarks_df.loc[mask_bench, 'complexity'].values
+        model_names_bench = appended_benchmarks_df.loc[mask_bench, 'model'].values
         
         if len(x_data_bench) >= 3:
-            all_x_data.extend(x_data_bench)
+            # Apply Min-Max normalization to scale to [0, 1]
+            # Best model (max score) = 1.0, Worst model (min score) = 0.0
+            x_min = x_data_bench.min()
+            x_max = x_data_bench.max()
+            if x_max > x_min:  # Avoid division by zero
+                x_normalized = (x_data_bench - x_min) / (x_max - x_min)
+            else:
+                x_normalized = np.ones_like(x_data_bench) * 0.5  # All same value
+            
+            all_x_data.extend(x_normalized)
             all_y_data.extend(y_data_bench)
+            all_model_names.extend(model_names_bench)
     
     # Convert to numpy arrays
     all_x_data = np.array(all_x_data)
     all_y_data = np.array(all_y_data)
+    all_model_names = np.array(all_model_names)
     
     if len(all_x_data) >= 3:
         # Try different functions and find the best fit
@@ -1258,11 +1429,17 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
             # Plot scatter with both regression lines
             fig, ax = plt.subplots(figsize=(12, 10))
             ax.scatter(all_x_data, all_y_data, alpha=0.6, label='Data')
+            
+            # Add model names below each data point
+            for idx, (x, y) in enumerate(zip(all_x_data, all_y_data)):
+                model_name = all_model_names[idx]
+                ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+            
             ax.plot(x_line_all, y_line_all, 'r-', linewidth=2, label=f'Free regression ({best_name_all})\n{best_equation_all}\nR² = {best_r2_all:.6f}')
             ax.plot(x_line_all, y_line_linear, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation_all}\nR² = {r2_linear_all:.6f}')
-            ax.set_xlabel('Benchmark Score (All Benchmarks)')
+            ax.set_xlabel('Normalized Benchmark Score (All Benchmarks, Min-Max [0,1])')
             ax.set_ylabel('Complexity')
-            ax.set_title('All Benchmarks vs Complexity')
+            ax.set_title('All Benchmarks vs Complexity (Normalized)')
             ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
             ax.grid(True, alpha=0.3)
             
@@ -1593,6 +1770,12 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                 # Plot scatter with both regression lines
                 fig, ax = plt.subplots(figsize=(12, 10))
                 ax.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
+                
+                # Add model names below each data point
+                for idx, (x, y) in enumerate(zip(x_data_combo, y_data_combo)):
+                    model_name = appended_benchmarks_df.loc[mask_combo, 'model'].iloc[idx]
+                    ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+                
                 ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Free regression ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
                 ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=2, label=f'Linear regression\nR² = {r2_linear_combo:.6f}\nN = {len(x_data_combo)}')
                 ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
@@ -1789,7 +1972,7 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         top_20_plot_sorted = top_20_plot.sort_values('abs_correlation', ascending=True)
         
         # Create labels
-        labels = [f"{row['benchmark'].replace('BENCH-', '')[:20]}\n{row['type'][:15]}, F={int(row['filter'])}" 
+        labels = [f"{row['benchmark'].replace('BENCH-', '')[:20]}\n{row['type'][:15]}, F={float(row['filter'])}" 
                 for _, row in top_20_plot_sorted.iterrows()]
         correlations = top_20_plot_sorted['pearson_correlation'].values
         
@@ -1935,6 +2118,12 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         # Plot scatter with both regression lines
         fig, ax = plt.subplots(figsize=(12, 10))
         ax.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
+        
+        # Add model names below each data point
+        for idx, (x, y) in enumerate(zip(x_data_bench, y_data_bench)):
+            model_name = appended_benchmarks_df.loc[mask_bench, 'model'].iloc[idx]
+            ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+        
         ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Free regression ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
         ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation}\nR² = {r2_linear:.6f}')
         ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
@@ -1999,26 +2188,39 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         print(f"  Completed {bench_name}: R² = {best_r2_bench:.6f}, Correlation = {correlation:.6f}")
 
     # ==============================================================================
-    # PROCESS "ALL" - Concatenate all benchmark data for param count
+    # PROCESS "ALL" - Concatenate all benchmark data for param count with Min-Max normalization
     # ==============================================================================
-    print("\nProcessing 'all' (concatenated benchmark data)...")
+    print("\nProcessing 'all' (concatenated benchmark data with Min-Max normalization)...")
     
-    # Collect all data points from all benchmarks
+    # Collect all data points from all benchmarks with Min-Max normalization per benchmark
     all_x_data_param = []
     all_y_data_param = []
+    all_model_names_param = []
     
     for bench_name in BENCH_ROWS_NAMES:
         mask_bench = ~(appended_benchmarks_df[bench_name].isna() | appended_benchmarks_df['count'].isna())
         x_data_bench = appended_benchmarks_df.loc[mask_bench, bench_name].values
         y_data_bench = appended_benchmarks_df.loc[mask_bench, 'count'].values
+        model_names_bench = appended_benchmarks_df.loc[mask_bench, 'model'].values
         
         if len(x_data_bench) >= 3:
-            all_x_data_param.extend(x_data_bench)
+            # Apply Min-Max normalization to scale to [0, 1]
+            # Best model (max score) = 1.0, Worst model (min score) = 0.0
+            x_min = x_data_bench.min()
+            x_max = x_data_bench.max()
+            if x_max > x_min:  # Avoid division by zero
+                x_normalized = (x_data_bench - x_min) / (x_max - x_min)
+            else:
+                x_normalized = np.ones_like(x_data_bench) * 0.5  # All same value
+            
+            all_x_data_param.extend(x_normalized)
             all_y_data_param.extend(y_data_bench)
+            all_model_names_param.extend(model_names_bench)
     
     # Convert to numpy arrays
     all_x_data_param = np.array(all_x_data_param)
     all_y_data_param = np.array(all_y_data_param)
+    all_model_names_param = np.array(all_model_names_param)
     
     if len(all_x_data_param) >= 3:
         # Try different functions and find the best fit
@@ -2080,8 +2282,14 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
             y_line_all_param = best_func_all_param(x_line_all_param, *best_params_all_param)
             
             # Calculate linear regression for comparison
+            # Use better initial guess based on data scale
+            y_range = all_y_data_param.max() - all_y_data_param.min()
+            x_range = all_x_data_param.max() - all_x_data_param.min() if all_x_data_param.max() != all_x_data_param.min() else 1
+            initial_slope = y_range / x_range
+            initial_intercept = all_y_data_param.mean()
+            
             linear_params_all, _ = curve_fit(lambda x, a, b: a * x + b, all_x_data_param, all_y_data_param, 
-                                        p0=[1, 1], maxfev=10000)
+                                        p0=[initial_slope, initial_intercept], maxfev=10000)
             y_pred_linear_param = linear_params_all[0] * all_x_data_param + linear_params_all[1]
             r2_linear_all_param = 1 - (np.sum((all_y_data_param - y_pred_linear_param)**2) / np.sum((all_y_data_param - np.mean(all_y_data_param))**2))
             y_line_linear_param = linear_params_all[0] * x_line_all_param + linear_params_all[1]
@@ -2095,11 +2303,17 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
             # Plot scatter with both regression lines
             fig, ax = plt.subplots(figsize=(12, 10))
             ax.scatter(all_x_data_param, all_y_data_param, alpha=0.6, label='Data')
+            
+            # Add model names below each data point
+            for idx, (x, y) in enumerate(zip(all_x_data_param, all_y_data_param)):
+                model_name = all_model_names_param[idx]
+                ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+            
             ax.plot(x_line_all_param, y_line_all_param, 'r-', linewidth=2, label=f'Free regression ({best_name_all_param})\n{best_equation_all_param}\nR² = {best_r2_all_param:.6f}')
             ax.plot(x_line_all_param, y_line_linear_param, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation_all_param}\nR² = {r2_linear_all_param:.6f}')
-            ax.set_xlabel('Benchmark Score (All Benchmarks)')
+            ax.set_xlabel('Normalized Benchmark Score (All Benchmarks, Min-Max [0,1])')
             ax.set_ylabel('Parameter Count')
-            ax.set_title('All Benchmarks vs Parameter Count')
+            ax.set_title('All Benchmarks vs Parameter Count (Normalized)')
             ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
             ax.grid(True, alpha=0.3)
             
@@ -2430,6 +2644,12 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 # Plot scatter with both regression lines
                 fig, ax = plt.subplots(figsize=(12, 10))
                 ax.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
+                
+                # Add model names below each data point
+                for idx, (x, y) in enumerate(zip(x_data_combo, y_data_combo)):
+                    model_name = appended_benchmarks_df.loc[mask_combo, 'model'].iloc[idx]
+                    ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+                
                 ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Free regression ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
                 ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=2, label=f'Linear regression\nR² = {r2_linear_combo:.6f}\nN = {len(x_data_combo)}')
                 ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
@@ -2625,7 +2845,7 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         top_20_plot_sorted = top_20_plot.sort_values('abs_correlation', ascending=True)
         
         # Create labels
-        labels = [f"{row['benchmark'].replace('BENCH-', '')[:20]}\n{row['type'][:15]}, F={int(row['filter'])}" 
+        labels = [f"{row['benchmark'].replace('BENCH-', '')[:20]}\n{row['type'][:15]}, F={float(row['filter'])}" 
                 for _, row in top_20_plot_sorted.iterrows()]
         correlations = top_20_plot_sorted['pearson_correlation'].values
         
@@ -3955,7 +4175,7 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         top_20_plot = magical_results_df_sorted.head(20).copy()
         
         # Create labels
-        labels = [f"{row['benchmark'].replace('BENCH-', '')[:20]}\n{row['type'][:15]}, F={int(row['filter'])}" 
+        labels = [f"{row['benchmark'].replace('BENCH-', '')[:20]}\n{row['type'][:15]}, F={float(row['filter'])}" 
                 for _, row in top_20_plot.iterrows()]
         correlations = top_20_plot['pearson_correlation'].values
         

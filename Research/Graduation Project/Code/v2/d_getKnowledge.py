@@ -53,6 +53,7 @@ def main():
     
     # -------
     appended_benchmarks_df_only_filter20 = appended_benchmarks_df[appended_benchmarks_df['filter'] == 20]
+    # appended_benchmarks_df_only_filter20 = appended_benchmarks_df
     # -------
     
     # (2) COMPLEXITY vs TYPES

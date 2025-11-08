@@ -447,7 +447,13 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         As a control, the experiment will be rerun using the number of model parameters instead of LMC complexity. The number of parameters is a known variable that is expected to correlate with benchmark performance according to scaling laws \cite{Kaplan2020}. This will help validate our methodology and provide a baseline for comparison.
 
-        We will provide a bar chart summarizing the Pearson correlation coefficient for each benchmark analyzed for both LMC complexity vs benchmark performance and number of parameters vs benchmark performance, so that they can be easily compared. In addition, for each of these plots we will check the result of the concatenation of all benchmarks available to see if a stronger correlation arises from the larger dataset, presented as another bar in the chart.
+        We will provide a bar chart summarizing the Pearson correlation coefficient for each benchmark analyzed for both LMC complexity vs benchmark performance and number of parameters vs benchmark performance, so that they can be easily compared. 
+        
+        In addition, for each of these plots we will check the result of the concatenation of all benchmarks available to see if a stronger correlation arises from the larger dataset, presented as another bar in the chart. For the concatenated analysis, benchmark scores are normalized per benchmark using Min-Max normalization scaled to $[0, 1]$, where each benchmark's best model = 1.0 and worst model = 0.0, ensuring fair comparison across different scales \cite{Pinheiro2025}. The normalization is calculated as:
+
+        \[ x_{\text{normalized}} = \frac{x - x_{\min}}{x_{\max} - x_{\min}} \]
+
+        where $x$ is the original benchmark score for a model, $x_{\min}$ is the minimum score among all models for that specific benchmark, and $x_{\max}$ is the maximum score among all models for that benchmark.
 
         Using the complexity's Pearson correlation results, we will check for the statistical significance of the correlations found using a two-tailed t-test \cite{Fisher1921}. The t-statistic can be computed as:
 
