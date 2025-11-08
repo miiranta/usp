@@ -703,7 +703,7 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
             bin_centers.append((param_bins[i] + param_bins[i + 1]) / 2)
             # Format labels as order of magnitude - only show upper bound
             upper_mag = np.log10(max(param_bins[i+1], 1))
-            bin_labels.append(f'10^{upper_mag:.1f}')
+            bin_labels.append(f'10^{upper_mag:.3f}')
             avg_complexity_per_bin.append(y_data_params[mask_bin].mean())
             bin_counts.append(mask_bin.sum())
             # Get models in this bin
@@ -728,7 +728,7 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
     for i in range(n_bins + 1):
         if i < len(param_bins):
             mag = np.log10(max(param_bins[i], 1))
-            transition_labels.append(f'10^{mag:.1f}')
+            transition_labels.append(f'10^{mag:.3f}')
         else:
             transition_labels.append('')
     
@@ -990,7 +990,7 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
             # Format labels as order of magnitude - show range
             lower_mag = np.log10(max(bin_bins[i], 1))
             upper_mag = np.log10(max(bin_bins[i+1], 1))
-            bin_labels_bins.append(f'10^{lower_mag:.1f}-10^{upper_mag:.1f}')
+            bin_labels_bins.append(f'10^{lower_mag:.3f}-10^{upper_mag:.3f}')
             avg_complexity_per_bin_bins.append(y_data_bins[mask_bin].mean())
             bin_counts_bins.append(mask_bin.sum())
             # Get models in this bin
@@ -1015,7 +1015,7 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
     for i in range(n_bins + 1):
         if i < len(bin_bins):
             mag = np.log10(max(bin_bins[i], 1))
-            transition_labels.append(f'10^{mag:.1f}')
+            transition_labels.append(f'10^{mag:.3f}')
         else:
             transition_labels.append('')
     

@@ -124,11 +124,15 @@
         \caption{Average complexity vs number of parameters.}
     \end{figure}
 
-    A clear trend emerges from the histogram: as the number of parameters increases, the complexity values tend to stay mostly flat, with a sudden spike at the end (around $10^{10.5}$ to $10^{11.1}$ parameters). 
+    A clear trend emerges from the histogram: as the number of parameters increases, the complexity values tend to stay mostly flat, with two sudden spikes between ranges $10^{9.742}$ - $10^{9.915}$ and $10^{10.298}$ - $10^{10.489}$ parameters.
     
-    This indicates that complexity values tend to remain stable with the amount of parameters. The spike at the end is, however, unexpected and its causes are unknown. Further investigation is required to understand if this is an artifact of the dataset or a genuine phenomenon.
+    This indicates that complexity values tend to remain stable with the amount of parameters, except for certain model families in higher parameter count group that exhibit much higher complexity values than the rest.
+    
+    The reasons for the two spikes are unknown, but it is likely to be caused by the \textbf{GPT-OSS family} which is the common factor between both ranges and has noticeably higher complexity values.
+    
+    It is interesting to see that newer models with higher complexity values such as the \textbf{Phi-4 family}, the \textbf{LLaMA 4 family}, and the \textbf{GPT-OSS family} cluster themselves together in those two spikes. This is probably a coincidence since we can observe a gap between the two spikes with weaker models, but in any case more investigation is required.
 
-    Since number of parameters is a known predictor of model performance \cite{Kaplan2020}, we can conclude right away that the high average complexity values found in the spike region, genuine or not, are likely to induce a bias towards better performance in the next analysis.
+    Also, since number of parameters is a known predictor of model performance \cite{Kaplan2020}, we can conclude right away that the high average complexity values found in the spike regions at the end, genuine or not, are likely to induce a bias towards better performance in the final analysis.
 
 \subsection{Complexity vs Number of bins}
 
@@ -140,8 +144,10 @@
         \caption{Average complexity vs number of histogram bins.}   
     \end{figure}
 
-    Again, a clear trend emerges, almost identical to the previous section (\ref{sec:complexity_vs_num_params_results}). That indicates that there may be a strong correlation between the number of parameters and the number of histogram bins. A possible explanation is that larger models tend to have a wider range of weight values, leading to more histogram bins when using the Freedman-Diaconis choice \cite{FreedmanDiaconis1981}.
+    Again, a clear trend emerges, we can see that values remain mostly flat with one continuous spike at the end between the range $10^{3.874}$ - $10^{3.922}$ bins. This spike is caused by the same models that caused the spikes in the previous section (\ref{sec:complexity_vs_num_params_results}): the \textbf{GPT-OSS family}, since in this case they are the only models in the spike range.
 
+    The graphical similarity to the previous section (\ref{sec:complexity_vs_num_params_results}) might indicate that there may be a strong correlation between the number of parameters and the number of histogram bins. A possible explanation is that larger models tend to have a wider range of weight values, leading to more histogram bins when using the Freedman-Diaconis choice \cite{FreedmanDiaconis1981}. However, in this case, we don't have a gap between two spikes, which may indicate that this correlation is probably a coincidence.
+    
 \subsection{Complexity vs Benchmarks}
 \label{sec:complexity_vs_benchmark_performance_results}
 
