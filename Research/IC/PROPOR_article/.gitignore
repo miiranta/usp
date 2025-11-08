@@ -1,0 +1,16 @@
+*.aux
+*.log
+*.gz
+*.fls
+*.fdb_latexmk
+*.toc
+*.blg
+*.bbl
+*.run.xml
+*.bcf
+*.out
+
+venv
+.env
+__pycache__
+
