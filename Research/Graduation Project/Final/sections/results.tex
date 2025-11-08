@@ -167,7 +167,9 @@
         \label{fig:control_r2_linear_comparison}
     \end{figure}
 
-    As expected, all the benchmarks show a positive correlation with parameter count, validating the control set. It is also noticeable that the linear regression $R^2$ values are relatively low for the concatenation of all benchmarks (\textbf{all}), indicating a non-linear relationship between parameter count and benchmark performance.
+    As expected, all the benchmarks show a positive correlation with parameter count, validating the control set. It is also noticeable that the linear regression $R^2$ values are relatively low indicating a non-linear relationship between parameter count and benchmark performance.
+
+    The concatenation of all benchmarks (\textbf{all}) shows a correlation value of 0.5476 and an $R^2$ value of 0.3002, indicating a moderate positive correlation. This result is an intermediate between the individual benchmarks.
 
     Now, we can analyze the actual relationship of interest: LMC complexity vs benchmark performance. The results are as follows:
 
@@ -185,13 +187,13 @@
         \label{fig:complexity_r2_linear_comparison}
     \end{figure}
 
-    It is immediately clear that results are inconsistent across benchmarks. While \textbf{LMArena} and \textbf{MMLU} show a positive correlation between complexity and performance, \textbf{MMLU-Pro} and \textbf{OpenLLM} show a negative correlation.
+    It is also immediately clear that results are inconsistent across benchmarks. While \textbf{LMArena} and \textbf{MMLU} show a positive correlation between complexity and performance, \textbf{MMLU-Pro} and \textbf{OpenLLM} show a negative correlation.
 
     For individual benchmarks, the negative correlations have a smaller absolute value compared to the positive correlations, indicating a bias towards positive correlation. The correlation values are lower than the control's in all cases. The $R^2$ values are also lower than the control's in all cases, which might indicate an even less linear relationship between complexity and benchmark performance compared to control. It can also indicate that complexity is not a good predictor of benchmark performance.
     
-    However, the \textbf{all} correlation, formed by analyzing a regression aggregating all data points from all benchmarks, shows an impressive positive correlation of 0.1625 which is higher than the control's 0.1488. The $R^2$ scores are still low but also slightly higher than the control's (0.0264 vs 0.0221).
+    The \textbf{all} correlation, formed by analyzing a regression aggregating all benchmarks together and, as a consequence, with a bigger amount of data points, shows a positive correlation of 0.3066 and an $R^2$ value of 0.0940. Again, (\textbf{all}) is an intermediate between the individual benchmarks, both in correlation and $R^2$ values.
 
-    This is an interesting result: while individual benchmarks show inconsistent correlations and score consistently worse than control, the aggregation of all benchmarks is better than control. This suggests that there may be a general trend of increasing benchmark performance with increasing LMC complexity when considering a diverse set of benchmarks. Since benchmarks are an imperfect measure of model performance, it is possible that individual benchmark inconsistencies are smoothed out.
+    While individual benchmarks show inconsistent correlations and score consistently worse than control and the aggregation of all benchmarks is also worse than control, having a 0.3066 general correlation is still pretty good. This suggests that there may be a general trend of increasing benchmark performance with increasing LMC complexity when considering a diverse set of benchmarks. Since benchmarks are an imperfect measure of model performance, it is possible that individual benchmark inconsistencies are smoothed out.
 
     We also found the statistical significance of the correlations found using t-tests \cite{Fisher1921}:
     
@@ -216,13 +218,13 @@
         \label{tab:statistical_significance}
     \end{table}
 
-    It is possible to observe that only the MMLU correlation is statistically significant at a 0.05 significance level. The most important correlation, however, the \textbf{all} correlation, is not. 
-
-    The margins of error are quite high due to the small sample sizes (n < 30), which makes it difficult to draw strong conclusions from the correlations found. Even with small sample sizes, however, we can see that the correlations found are not that weak: \textbf{LMArena} and \textbf{all} were close to significance despite having only 21 and 86 data points respectively.
+    For individual benchmarks, it is possible to observe that only the \textbf{MMLU} correlation is statistically significant at a 0.05 significance level. While \textbf{LMArena} is not significant, it is really close. Still, the margins of error are quite high due to the small sample sizes (n $<$ 30), which makes it difficult to draw strong conclusions from the correlations found. 
 
     Interestingly, the benchmarks that are the furthest from significance are the ones with negative correlation (\textbf{MMLU-Pro} and \textbf{OpenLLM}), further indicating that there is more likely a positive bias towards correlation between complexity and benchmark performance than the other way around.
 
-    To better understand the shape of the relationship, we can look at the free and linear regression lines for the complexity plots:
+    For the aggregation of all benchmarks (\textbf{all}), the correlation is statistically significant by a wide margin, since it has a much larger sample size (n = 86) compared to individual benchmarks (n $<$ 30). If we only consider statistically significance as a criterion for confirming the initial hypothesis, it's safe to say we have strong evidence that LMC complexity generally correlates positively with benchmark performance.
+
+    Before concluding, however, it is important observe the regression lines to understand the nature of the relationships found. We can look at the free and linear regression lines for the complexity plots:
 
     \begin{figure}[H] 
         \centering
@@ -233,13 +235,18 @@
 
     Here it is possible to see that the data points follow an almost perfect constant trend with two outliers that drive the positive correlation. This is likely related to the result seen in section \ref{sec:complexity_vs_num_params_results}, where complexity values remain mostly flat with a sudden spike at the end.
 
+    We can see that those two outliers correspond to the \textbf{GPT-OSS family} models again and without them the correlation would be almost zero. Further investigation is required to understand why the complexity values of those models are so high and if they are genuine or artifacts.
+
     \begin{figure}[H] 
         \centering
         \includegraphics[width=0.65\linewidth]{img/noembed-weights/comp_mmlu_regression.png}
         \caption{LMC complexity vs MMLU benchmark.}
+        \label{fig:comp_mmlu_regression}
     \end{figure}
 
     Again, a nearly constant trend is observed with a sudden spike at the end driving the positive correlation. Here we can see that the free regression fits an \textbf{exponential}, which can be the explanation for the apparently constant trend in both this and figure \ref{fig:comp_lmarena_regression} since exponentials can appear almost constant for small x values.
+
+    But again, those outliers correspond to the \textbf{GPT-OSS family} models and without them the correlation would be almost zero, or even, as it appears, slightly negative.
 
     \begin{figure}[H] 
         \centering
@@ -247,7 +254,9 @@
         \caption{LMC complexity vs MMLU-Pro benchmark.}
     \end{figure}
 
-    Here we see a different behavior: a slightly downward linear trend with high variability and two outliers in the middle driving the negative correlation.
+    Here we see a different behavior: a slightly downward linear trend with high variability and two outliers in the middle driving an even more negative correlation.
+
+    This time, those two outliers are not part of the \textbf{GPT-OSS family}, but from the \textbf{Gemma-2 family}. It is not clear why those models have such complexity values compared to the rest as other \textbf{Gemma} families seem to have a more normal behavior, in any case, further investigation is required.
 
     \begin{figure}[H] 
         \centering
@@ -257,13 +266,37 @@
 
     And here the most interesting behavior is observed: two lines are formed, one with a slight logarithmic upward trend and another with a slight logarithmic downward trend, both regression fits trying to find a middle ground between them.
 
+    The downward line is formed by the \textbf{Gemma-2 family}, \textbf{Phi-1\_5 family}, \textbf{Phi-2 family} and \textbf{GPT-2 family}.
+
+    The upward line is formed by the \textbf{LLaMA-4 family}, \textbf{LLaMA-3 family}, \textbf{LLaMA-2 family}, \textbf{Phi-4 family}, \textbf{GPT-OSS family}, \textbf{Gemma family}, bigger parameter count models from \textbf{Gemma-2 family},
+    and \textbf{Gemma-3 family} models.
+
+    Appears that there is no clear reason why those two lines are formed: \textbf{parameters count} does not seem to be a factor since the upward line has both higher and lower parameter count models. The downward line, however, appears to be formed mostly by older models with lower parameters count. \textbf{Family type} also does not seem to be a factor since both lines have multiple different families. Maybe a good guess would be something in common in the \textbf{architectures}, but further investigation is required.
+
+    There was one outlier with a very high complexity value for its benchmark performance: the \textbf{GPT-2} model. It is also not clear why.
+
+    We can finally look at the aggregation of all benchmarks:
+
     \begin{figure}[H] 
         \centering
         \includegraphics[width=0.65\linewidth]{img/noembed-weights/comp_all_regression.png}
         \caption{LMC complexity vs all benchmarks aggregated.}
     \end{figure}
 
-    In all cases, we can see that the free regressions do not appear to be able to capture the behavior of the datapoints well due to their outliers. The linear regressions are also influenced by the same factor, leading to low $R^2$ values. This is a further indicator that LMC complexity appears not to be a reliable predictor of benchmark performance.
+    It seems to follow the same pattern as the first two individual benchmarks (figures \ref{fig:comp_lmarena_regression} and \ref{fig:comp_mmlu_regression}): an almost constant trend with a sudden spike at the end driving the positive correlation. The spike is again caused by the \textbf{GPT-OSS family} models and without them the correlation would be almost zero. A few models seem to form another almost constant line below the main one, with a small downward trend.
+
+    We can roughly classify the benchmarks based on their regression plots:
+    \begin{itemize}
+        \item Constant + outlier's upward trend: \textbf{LMArena}, \textbf{MMLU}, \textbf{all};
+        \item General downward trend + outlier's downward trend: \textbf{MMLU-Pro};
+        \item Two opposite trends: \textbf{OpenLLM};
+    \end{itemize}
+
+    \textbf{All} was put in the first category since the influence of the first category benchmarks made it follow the same trend approximately. 
+    
+    Also, it is interesting to see that \textbf{MMLU} and \textbf{MMLU-Pro}, both really similar benchmarks, behaved quite differently. It is noticeable that \textbf{MMLU-Pro} has a bigger concentration of newer models which might indicate the reason, but still further investigation is required.
+
+    In all cases, we can see that the free regressions do not appear to be able to capture the behavior of the data points well due to their outliers. The linear regressions are also influenced by the same factor, leading to low $R^2$ values. This is a further indicator that LMC complexity appears not to be a reliable predictor of benchmark performance.
 
     As a bonus, for the sake of completeness, we made a bar plot ranking the top 20 configurations (model + weight-type combination) sorted by highest correlation between LMC complexity and benchmark performance (all benchmarks aggregated):
 
@@ -272,3 +305,10 @@
         \includegraphics[width=0.8\linewidth]{img/all-weights/top_20_correlations.png}
         \caption{Top 20 configurations by Pearson correlation.}
     \end{figure}
+
+    We can see that the top 20 correlations are mixed between negative and positive biggest absolute values. The top 5 is all positive.
+    
+    The ranking is dominated by very high filtering and, interestingl, the top 1 is 0.25 $\sigma$, which is part of the global minimum complexity value of the filtering dimension analysis.
+
+    Except for the \textbf{MMLU}, all the benchmarks appeared. Almost all of the weight-type combinations were \textbf{bias} or included it, the only exceptions were 2 "\textbf{embedding-norm}".
+    
