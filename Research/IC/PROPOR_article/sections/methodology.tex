@@ -130,6 +130,8 @@
 
         Finally, we concatenated the results into sets named \(E_{m}\) for each model \(m\). Each \(E_{m}\) contained tuples of the form \((\text{phrase}, \text{date}, \text{sentiment})\).
 
+    The set that contains all sets \(E_{m}\) is named \(E_{Models}\).
+
 
 
 \subsection{Human Evaluation Dataset}
@@ -159,26 +161,73 @@
 
     Finally, we created a dataset \(E_{h}\) for each human evaluation method \(h\) presented. Each \(E_{h}\) contained tuples of the form \((\text{phrase}, \text{date}, \text{sentiment})\), where sentiment is the label assigned by the humans in the respective evaluation method. In the end, \(E_{Open}\) had 278 tuples, \(E_{Specialist}\) had 350 and \(E_{Consolidated}\) had 220.
 
+    The set that contains all sets \(E_{h}\) is named \(E_{Humans}\).
 
 
-\subsection{Model Comparison and Analysis}
 
-    \subsubsection{Baseline and Sentiment-Enhanced Datasets}
+\subsection{Testing Inflation Prediction Performance}
 
-        We created three comparison datasets:
+    We will test two of the most common inflation prediction models: (1) \textbf{ARIMA} and (2) \textbf{LSTM}. 
+    
+    The goal is to check whether adding sentiment variables derived from LLM evaluations can reduce RMSE compared to using only historical inflation data and also if bias correction based on human evaluations can further improve performance.
+
+    \subsubsection{Creating the Input Datasets}
+
+        \textbf{For each} set of the power set of \(E_{Models}\), except for the empty one, we will concatenate the tuples of the selected \(E_{m}\) sets into a single set named \(U_{i}\). 
+
+        \textbf{For each} \(U_{i}\) created, we will create \(j\) more tuples in the form (\(U_{i}\), \(V_{j}\)), where \(V_{j}\) is one of the three human evaluation datasets in \(E_{Humans}\).
+
+        \textbf{For each} tuple (\(U_{i}\), \(V_{j}\)) created, we will create \(k\) more tuples in the form (\(U_{i}\), \(V_{j}\), \(eq_{k}\)), where \(eq_{k}\) is one of the equations to be used for bias correction later.
+
+        The tuple (\(U_{i}\), \(V_{j}\), \(eq_{k}\)) represents the sentiment evaluations from the selected LLM models combined with the human evaluation dataset \(V_{j}\) for bias correction using equation \(eq_{k}\).
+
+        The possible equation forms for \(eq_{k}\) are: linear (\(x + a\)), affine (\(bx + a\)), quadratic (\(cx^2 + bx + a\)), and cubic (\(dx^3 + cx^2 + bx + a\)).
+
+        \textbf{For each} tuple (\(U_{i}\), \(V_{j}\), \(eq_{k}\)), we will create three different input datasets for inflation prediction models, each one of them will provide a list of tuples in the form of (\({Inflation}, {Sentiment}\)):
 
         \begin{enumerate}
-            \item \textbf{Only Inflation (Baseline):} We used IPCA monthly inflation data (Series 433) from the Brazilian Central Bank API: \url{https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json}
+            \item \textit{Only Inflation (Baseline)} 
+            
+            IPCA monthly (Series 433). The series can be accessed here: \url{https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json}.
 
-            \item \textbf{Inflation + Sentiment (without Correction):} We combined the baseline IPCA data with sentiment variables.
-            For each LLM model combination, we computed sentiment as the average grade per date from the model evaluations.
-            Sentiment values were interpolated using cubic spline fitting and aligned with available IPCA dates.
+            The sentiment variable will be set to 0 for associated inflation values.
 
-            \item \textbf{Inflation + Sentiment (with Correction):} We combined the baseline IPCA data with bias-corrected sentiment variables.
-            For each LLM model combination and each human evaluation dataset, we computed sentiment as described above, then applied a correction factor based on the selected human evaluation bias.
+            \item \textit{Inflation + Sentiment (Without Correction)}
+            
+            IPCA monthly (Series 433) + Sentiment variable created as an average grade per date of the evaluations in \(U_{i}\) (interpolated by cubic spline and fitted to the available IPCA dates)
+
+            \item \textit{Inflation + Sentiment (With Correction)}
+            
+            IPCA monthly (Series 433) + Sentiment variable created as an average grade per date of the evaluations in \(U_{i}\) (interpolated by cubic spline and fitted to the available IPCA dates) corrected based on the bias measured from \(V_{j}\).
+            
+            The correction process works as follows: 
+            
+            First, both LLM sentiment scores from \(U_{i}\) and human evaluations from \(V_{j}\) are averaged by date and interpolated using cubic spline to create continuous daily time series. 
+            
+            Then, we try to find a single set of parameters of the transformation equation \(eq_{k}\) that when applied to all dates individually minimize the mean squared error (MSE).
+            
+            The equation is applied per date with the variable \(x\) representing the average LLM sentiment score in that date, and the resulting value representing the bias-corrected sentiment score.
+            
+            The optimization uses gradient descent with the Adam optimizer (1000 epochs, learning rate 0.01) implemented in PyTorch. 
+            
+            These optimized parameters are then applied to the equation to transform the LLM sentiment score for each individual date in \(U_{i}\), producing bias-corrected values aligned with human judgment from \(V_{j}\).
+
         \end{enumerate}
 
-    \subsubsection{Evaluation Framework}
+        Finally, for each tuple (\(U_{i}\), \(V_{j}\), \(eq_{k}\)) created, we will have 3 new associated lists of tuples in the form of (\({Inflation}, {Sentiment}\)) which will be called \(IN_{ijkm}\), where \(i\) is the LLM model combination used; \(j\) is the human evaluation dataset used for bias correction; \(k\) is the equation type used for bias correction; and \(m\) \(\in\) \{\textit{Baseline}, \textit{Without Correction}, or \textit{With Correction}.\}
 
-        We compared model performance for each LLM model combination against each of the three human evaluation datasets: specialist, consolidated, and open.
-        This multi-faceted comparison allowed us to assess the quality of LLM-based sentiment classification relative to human expert judgment across different evaluation methodologies.
+        The set that contains all sets \(IN_{ijkm}\) is named \(IN\).
+
+
+    \subsubsection{Running the Tests}
+
+        Looking at the \(IN\), it is obvious that this approach implies a lot of apparent unnecessary repetition of \(IN_{ijkm}\) datasets, since, for example, \textit{Baseline} is the same for all tuples (\(U_{i}\), \(V_{j}\), \(eq_{k}\)).
+
+        While this is bad from a computational efficiency perspective, it provides a control for every experiment: \textit{Baseline} should be a control \textit{Without Correction} and \textit{With Correction}, while \textit{Without Correction} should be a control for \textit{With Correction}.
+
+        \textbf{For each} \(IN_{ijkm}\) in \(IN\), we will run both ARIMA and LSTM inflation prediction models using the respective dataset as input. Data was split 70/30 for training and testing.
+
+        We employed ARIMA with sentiment as exogenous variable using walk-forward validation, and LSTM with 5000 neurons trained with NAdam optimizer (learning rate 0.001, max 10,000 epochs, early stopping patience 10). Both models were evaluated using Root Mean Squared Error (RMSE).
+
+        In total, we conducted 36,792 tests: $(2^9 - 1)$ LLM combinations $\times$ 3 human datasets $\times$ 4 equation types $\times$ 3 dataset types $\times$ 2 models. 
+
