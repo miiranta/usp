@@ -47,20 +47,13 @@
 
     \subsubsection{Phrase Selection}
 
-        We concatenated all phrases from the previous step while preserving their date labels.
-        We performed vector search using cosine similarity for the word ``inflation'' in the dataset using the following Python libraries:
-        \begin{verbatim}
-            import os
-            import torch
-            import pandas as pd
-            from sklearn.metrics.pairwise import cosine_similarity
-            import numpy as np
-            from tqdm import tqdm
-            from langchain_huggingface import HuggingFaceEmbeddings
-        \end{verbatim}
+        We flattened the set \(F\) into a single list of phrases while preserving each phrase date labels, creating a list \(L\) of tuples \((\text{phrase}, \text{date})\).
 
-        We retained only phrases with a similarity score greater than 0.6.
-        Using the date labels, we reconstructed the minutes for each date with the selected phrases.
+        We performed \textbf{dense passage retrieval} using semantic similarity filtering. We computed dense vector representations (embeddings) for all phrases using the \textbf{Qwen3-Embedding-0.6B} model and computed the cosine similarity between each phrase embedding and the embedding of the target concept ``inflation''. We retained only phrases with a cosine similarity score exceeding a threshold of 0.6, thereby selecting phrases semantically related to inflation concepts.
+
+        The implementation utilized PyTorch for GPU acceleration, pandas for data manipulation, scikit-learn for similarity computations, and the LangChain HuggingFace integration for embedding generation.
+        
+        Using the date labels, we reconstructed a set similar to \(F\) but containing only the selected phrases: for each date \(d_i\), we created a set \(F_{d_i}^{infl}\) containing only the selected phrases from that date, then created a set containing all \(F_{d_i}^{infl}\), named \(F^{infl}\). 
 
 \subsection{Model-Based Evaluation}
 
