@@ -45,6 +45,7 @@
 
         At the end we obtained a set \(F\) made of smaller sets \(F_{d_i}\) for each date \(d_i\), where \(d_i\) is the associated date of minute \(c\). Each \(F_{d_i}\) contained 20 to 70 phrases.
 
+
     \subsubsection{Phrase Selection}
 
         We flattened the set \(F\) into a single list of phrases while preserving each phrase date labels, creating a list \(L\) of tuples \((\text{phrase}, \text{date})\).
@@ -53,86 +54,112 @@
 
         The implementation utilized PyTorch for GPU acceleration, pandas for data manipulation, scikit-learn for similarity computations, and the LangChain HuggingFace integration for embedding generation.
         
-        Using the date labels, we reconstructed a set similar to \(F\) but containing only the selected phrases: for each date \(d_i\), we created a set \(F_{d_i}^{infl}\) containing only the selected phrases from that date, then created a set containing all \(F_{d_i}^{infl}\), named \(F^{infl}\). 
+        We then constructed a set of tuples \((\text{phrase}, \text{date})\) containing only the selected phrases named \(F^{infl}\). 
 
-\subsection{Model-Based Evaluation}
+        \(F^{infl}\) is the final phrase dataset used in subsequent steps. It contains 9378 phrases related to inflation across 251 dates (or COPOM minutes), an average of approximately 37.4 phrases per date.
 
-    \subsubsection{Large Language Model Evaluation}
 
-        We evaluated each phrase of the entire dataset using nine different large language models:
-        openai/gpt-5,
-        anthropic/claude-sonnet-4,
-        google/gemini-2.5-pro,
-        x-ai/grok-4-fast,
-        openai/gpt-oss-120b,
-        meta-llama/llama-4-maverick,
-        google/gemma-3-27b-it,
-        microsoft/phi-4, and
-        deepseek/deepseek-chat-v3.1.
 
-        For each model, we used the same dataset obtained from the data collection phase.
-        For each phrase, we prompted the model without providing previous context; each request was independent.
+\subsection{Creating the Sentiment Datasets}
 
-        The evaluation prompt was formulated in Portuguese and asked the model to classify each phrase as optimistic, neutral, or pessimistic based on the following definitions provided by our specialist economist Cezio:
+
+    \subsubsection{LLM Evaluation Dataset}
+    \label{sec:llm_evaluation_dataset}
+
+        We evaluated the sentiment of the phrases using nine different Large Language Models (LLMs), each one made from a different company:
+        \begin{enumerate}[noitemsep]
+            \item \textit{openai/gpt-5}
+            \item \textit{anthropic/claude-sonnet-4}
+            \item \textit{google/gemini-2.5-pro}
+            \item \textit{x-ai/grok-4-fast}
+            \item \textit{openai/gpt-oss-120b}
+            \item \textit{meta-llama/llama-4-maverick}
+            \item \textit{google/gemma-3-27b-it}
+            \item \textit{microsoft/phi-4}
+            \item \textit{deepseek/deepseek-chat-v3.1}
+        \end{enumerate}
+
+        \textbf{For each model} in the list above, we made one independent request \textbf{for each phrase} of the dataset \(F^{infl}\), without providing previous context.
+
+        The prompt was formulated in Brazilian Portuguese by our specialist economist Cézio Luiz Ferreira Junior. It contained a fixed text that explained the task and the phrase to be evaluated concatenated at the end:
 
         \begin{quote}
-        \noindent\textbf{DEFINIÇÃO DE OTIMISMO:}
-        Ocorre quando as projeções indicam que a inflação ficará abaixo da meta ou dentro do intervalo de tolerância com folga.
-        Isso pode sinalizar que o Banco Central vê espaço para reduzir juros ou manter uma política monetária mais acomodatícia.
+            \noindent\textbf{DEFINIÇÃO DE OTIMISMO:}
+            Ocorre quando as projeções indicam que a inflação ficará abaixo da meta ou dentro do intervalo de tolerância com folga.
+            Isso pode sinalizar que o Banco Central vê espaço para reduzir juros ou manter uma política monetária mais acomodatícia.
 
-        \textbf{DEFINIÇÃO DE PESSIMISMO:}
-        Ocorre quando as projeções apontam para inflação acima da meta ou próxima do teto do intervalo de tolerância.
-        Isso sugere preocupação com pressões inflacionárias e pode justificar uma política monetária mais restritiva.
+            \textbf{DEFINIÇÃO DE PESSIMISMO:}
+            Ocorre quando as projeções apontam para inflação acima da meta ou próxima do teto do intervalo de tolerância.
+            Isso sugere preocupação com pressões inflacionárias e pode justificar uma política monetária mais restritiva.
 
-        \textbf{AVALIE A FRASE COMO:}
-        O para OTIMISTA, N para NEUTRA, P para PESSIMISTA.
-        SUA RESPOSTA DEVE SER APENAS UMA LETRA, SEM QUALQUER OUTRO TEXTO.
+            \textbf{AVALIE A FRASE COMO:}
+            O para OTIMISTA, N para NEUTRA, P para PESSIMISTA.
+            SUA RESPOSTA DEVE SER APENAS UMA LETRA, SEM QUALQUER OUTRO TEXTO.
+
+            \textbf{FRASE A SER AVALIADA:}
+            <<<<PHRASE>>>>
         \end{quote}
 
-        Model responses (O, N, P) were converted to numerical values: 1 for optimistic, 0 for neutral, and $-1$ for pessimistic.
-        Phrases that could not be parsed were labeled as $-2$; such cases were rare.
+        In the prompt we asked the model to classify each phrase as optimistic, neutral, or pessimistic based on the provided definitions. Model responses (O, N, P) were converted to numerical values: 1 for optimistic, 0 for neutral, and $-1$ for pessimistic. Responses that could not be parsed were labeled as $-2$, but such cases were rare.
 
-        Inference was performed using the OpenRouter API to unify model access.
-        Each model was assigned a maximum token limit determined through initial testing.
-        Models were tested on the phrases from the first minute with an initial limit of 1 token.
-        If any phrase received a $-2$ score, the limit was doubled and the test was repeated until the model could process all phrases successfully.
+        Inference was performed using the OpenRouter API to unify model access and each model was assigned a maximum token limit determined through initial testing.
 
-        The resulting maximum token limits were:
-        openai/gpt-5 (1024),
-        google/gemini-2.5-pro (128),
-        openai/gpt-oss-120b (512),
-        google/gemma-3-27b-it (8),
-        deepseek/deepseek-chat-v3.1 (4), and
-        others (1).
+        The maximum token limit was determined by testing the models on the phrases from the first $F_{d_i}^{infl}$ $\in$ $F^{infl}$. With an initial token limit of 1, if any phrase received a $-2$ score in this first set, the limit was doubled and the test was repeated until the model could process all the set's phrases successfully.
 
-\subsection{Human-Based Evaluation}
+        The resulting maximum token limits were shown in \autoref{tab:token_limits}. Interestingly, OpenAI's models needed considerably higher token limits compared to other models, followed by Google's.
 
-    We performed human evaluation in three stages: specialist, consolidated, and open evaluation.
+        \begin{table}[h]
+            \centering
+            \begin{tabular}{|l|r|}
+                \hline
+                \textbf{Model} & \textbf{Token Limit} \\
+                \hline
+                openai/gpt-5 & 1024 \\
+                openai/gpt-oss-120b & 512 \\
+                google/gemini-2.5-pro & 128 \\
+                google/gemma-3-27b-it & 8 \\
+                deepseek/deepseek-chat-v3.1 & 4 \\
+                others & 1 \\
+                \hline
+            \end{tabular}
+            \caption{Maximum token limits per LLM model.}
+            \label{tab:token_limits}
+        \end{table}
 
-    \subsubsection{Specialist Evaluation}
+        To ensure consistency and more reliable results, we discarded any evaluations where the sentiment wasn't 1 and -1.
 
-        We concatenated all phrases from all minutes while encoding their date labels in Base64 to prevent human bias.
-        We randomly selected 350 phrases for manual evaluation by our specialist economist.
-        The specialist labeled each phrase as: 1 (optimistic), 0 (neutral), $-1$ (pessimistic), $-2$ (non-related), or $-3$ (did not understand).
-        Using the date labels, we reconstructed the minutes for each date with the remaining phrases.
+        Finally, we concatenated the results into sets named \(E_{m}\) for each model \(m\). Each \(E_{m}\) contained tuples of the form \((\text{phrase}, \text{date}, \text{sentiment})\).
 
-    \subsubsection{Consolidated Evaluation}
 
-        The dataset from the specialist evaluation was re-analyzed by the specialist and two additional professors.
-        They discussed each phrase and attempted to reach consensus.
-        This consolidated evaluation resulted in a dataset of 220 phrases.
-        Using the date labels, we reconstructed the minutes for each date with the remaining phrases.
 
-    \subsubsection{Open Evaluation}
+\subsection{Human Evaluation Dataset}
 
-        We created a website (\url{https://inflation-form.luvas.io}) featuring the same evaluation prompt used for the LLM models.
-        Users were presented with each phrase and could select from three options: optimistic, neutral, or pessimistic.
-        Responses were later converted to numerical values (1, 0, $-1$, respectively) and stored.
-        Each browser was limited to evaluating 10 phrases per 24-hour period.
+    Similar to the previous section, we created three different human evaluation datasets:
+    \begin{enumerate}
+        
+        \item \textit{Open}
+        
+        We created a website featuring the same evaluation system used for LLMs presented in section \ref{sec:llm_evaluation_dataset}, but adapted for humans to select between O (optimistic), N (neutral), and P (pessimistic) options instead of reading API responses. The phrases were randomly selected from the set \(F^{infl}\) and each browser was limited to evaluating 10 phrases per 24-hour period.
+        
+        We requested collaborating universities (USP and Unicamp) to share the website with their economics-related graduate students. It is publicly accessible at \url{https://inflation-form.luvas.io}.
+        
+        \item \textit{Specialist}
+        
+        We created a subset named \(F^{infl-350}\) consisting of 350 randomly selected phrases from \(F^{infl}\). The date labels were encoded in Base64 to prevent human bias. 
+        
+        Then, our specialist economist Cézio Luiz Ferreira Junior, manually labeled each phrase as: 1 for optimistic, 0 for neutral, $-1$ for pessimistic, $-2$ for non-related phrase, or $-3$ for did not understand. The definitions used were also the same as those presented in the prompt for LLMs in section \ref{sec:llm_evaluation_dataset}.
 
-        We requested collaborating universities (USP and Unicamp) to share the website with their economics-related graduate students.
-        The open evaluation phase resulted in 278 evaluated phrases.
-        Using the date labels, we reconstructed the minutes for each date with the remaining phrases.
+        \item \textit{Consolidated}
+        
+        The \(F^{infl-350}\) dataset and its sentiment labels from the Specialist evaluation was re-analyzed by the specialist and two additional professors in conjunction. They discussed each phrase and attempted to reach consensus.
+
+    \end{enumerate}
+
+    To ensure consistency and more reliable results, we discarded any evaluations where the sentiment wasn't 1 and -1 for all labels produced by humans.
+
+    Finally, we created a dataset \(E_{h}\) for each human evaluation method \(h\) presented. Each \(E_{h}\) contained tuples of the form \((\text{phrase}, \text{date}, \text{sentiment})\), where sentiment is the label assigned by the humans in the respective evaluation method. In the end, \(E_{Open}\) had 278 tuples, \(E_{Specialist}\) had 350 and \(E_{Consolidated}\) had 220.
+
+
 
 \subsection{Model Comparison and Analysis}
 
