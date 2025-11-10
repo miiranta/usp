@@ -5,7 +5,7 @@
 
     \subsubsection{Scraping}
 
-        We collected COPOM (Central Bank of Brazil's Monetary Policy Committee) minutes using Python and Selenium. We accessed \url{https://www.bcb.gov.br/publicacoes/atascopom/cronologicos}, which contains the listing of all of them. For each minute, we downloaded both the HTML and PDF content when available.
+        We collected COPOM (Central Bank of Brazil's Monetary Policy Committee) minutes using Python and Selenium. We accessed the official COPOM minutes listing~\cite{BCB_COPOM_Minutes}, which contains all available minutes. For each minute, we downloaded both the HTML and PDF content when available.
 
         We ended up with a dataset \(C\) containing 251 COPOM minutes from January 1996 to July 2025. Each minute \(c\) in \(C\) has an associated date \(d_i\) and may have one or both HTML and PDF versions of the content.
 
@@ -19,7 +19,7 @@
 
                 HTML file: if it exists, we extracted only the content inside the body tag. Tags such as \texttt{strong}, \texttt{i}, and \texttt{br} were removed while preserving their inner content. Other tags were removed along with their content.
 
-                PDF file: if it exists, we used SpaCyLayout with the \texttt{pt\_core\_news\_lg} model to extract individual phrases from PDF documents.
+                PDF file: if it exists, we used SpaCyLayout~\cite{neumann2019scispacy} with the \texttt{pt\_core\_news\_lg} model to extract individual phrases from PDF documents.
 
                 After that, we created two separate phrase lists: one from the HTML source \(P_{c}^{\text{html}}\) and another from the PDF source \(P_{c}^{\text{pdf}}\).
 
@@ -50,9 +50,9 @@
 
         We flattened the set \(F\) into a single list of phrases while preserving each phrase date labels, creating a list \(L\) of tuples \((\text{phrase}, \text{date})\).
 
-        We performed \textbf{dense passage retrieval} using semantic similarity filtering. We computed dense vector representations (embeddings) for all phrases using the \textbf{Qwen3-Embedding-0.6B} model and computed the cosine similarity between each phrase embedding and the embedding of the target concept ``inflation''. We retained only phrases with a cosine similarity score exceeding a threshold of 0.6, thereby selecting phrases semantically related to inflation concepts.
+        We performed \textbf{dense passage retrieval}~\cite{karpukhin2020dense} using semantic similarity filtering. We computed dense vector representations (embeddings) for all phrases using the \textbf{Qwen3-Embedding-0.6B}~\cite{zhang2025qwen3embedding} model and computed the cosine similarity between each phrase embedding and the embedding of the target concept ``inflation''. We retained only phrases with a cosine similarity score exceeding a threshold of 0.6, thereby selecting phrases semantically related to inflation concepts.
 
-        The implementation utilized PyTorch for GPU acceleration, pandas for data manipulation, scikit-learn for similarity computations, and the LangChain HuggingFace integration for embedding generation.
+        The implementation utilized PyTorch~\cite{paszke2019pytorch} for GPU acceleration, pandas for data manipulation, scikit-learn for similarity computations, and the LangChain HuggingFace integration for embedding generation.
         
         We then constructed a set of tuples \((\text{phrase}, \text{date})\) containing only the selected phrases named \(F^{infl}\). 
 
@@ -143,7 +143,7 @@
         
         We created a website featuring the same evaluation system used for LLMs presented in section \ref{sec:llm_evaluation_dataset}, but adapted for humans to select between O (optimistic), N (neutral), and P (pessimistic) options instead of reading API responses. The phrases were randomly selected from the set \(F^{infl}\) and each browser was limited to evaluating 10 phrases per 24-hour period.
         
-        We requested collaborating universities (USP and Unicamp) to share the website with their economics-related graduate students. It is publicly accessible at \url{https://inflation-form.luvas.io}.
+        We requested collaborating universities (USP and Unicamp) to share the website with their economics-related graduate students. The evaluation form is publicly accessible~\cite{Inflation_Form}.
         
         \item \textit{Specialist}
         
@@ -188,7 +188,7 @@
         \begin{enumerate}
             \item \textit{Only Inflation (Baseline)} 
             
-            IPCA monthly (Series 433). The series can be accessed here: \url{https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json}.
+            IPCA monthly (Series 433)~\cite{BCB_IPCA_API}.
 
             The sentiment variable will be set to 0 for associated inflation values.
 
@@ -208,13 +208,13 @@
             
             The equation is applied per date with the variable \(x\) representing the average LLM sentiment score in that date, and the resulting value representing the bias-corrected sentiment score.
             
-            The optimization uses gradient descent with the Adam optimizer (1000 epochs, learning rate 0.01) implemented in PyTorch. 
+            The optimization uses gradient descent with the Adam optimizer~\cite{kingma2014adam} (1000 epochs, learning rate 0.01) implemented in PyTorch. 
             
             These optimized parameters are then applied to the equation to transform the LLM sentiment score for each individual date in \(U_{i}\), producing bias-corrected values aligned with human judgment from \(V_{j}\).
 
         \end{enumerate}
 
-        Finally, for each tuple (\(U_{i}\), \(V_{j}\), \(eq_{k}\)) created, we will have 3 new associated lists of tuples in the form of (\({Inflation}, {Sentiment}\)) which will be called \(IN_{ijkm}\), where \(i\) is the LLM model combination used; \(j\) is the human evaluation dataset used for bias correction; \(k\) is the equation type used for bias correction; and \(m\) \(\in\) \{\textit{Baseline}, \textit{Without Correction}, or \textit{With Correction}.\}
+        Finally, for each tuple (\(U_{i}\), \(V_{j}\), \(eq_{k}\)) created, we will have 3 new associated lists of tuples in the form of (\({Inflation}, {Sentiment}\)), each will be called \(IN_{ijkm}\) where \(i\) is the LLM model combination used; \(j\) is the human evaluation dataset used for bias correction; \(k\) is the equation type used for bias correction; and \(m\) \(\in\) \{\textit{Baseline}, \textit{Without Correction}, or \textit{With Correction}.\}
 
         The set that contains all sets \(IN_{ijkm}\) is named \(IN\).
 
@@ -225,9 +225,9 @@
 
         While this is bad from a computational efficiency perspective, it provides a control for every experiment: \textit{Baseline} should be a control \textit{Without Correction} and \textit{With Correction}, while \textit{Without Correction} should be a control for \textit{With Correction}.
 
-        \textbf{For each} \(IN_{ijkm}\) in \(IN\), we will run both ARIMA and LSTM inflation prediction models using the respective dataset as input. Data was split 70/30 for training and testing.
+        \textbf{For each} \(IN_{ijkm}\) in \(IN\), we will run both ARIMA and LSTM~\cite{hochreiter1997lstm} inflation prediction models using the respective dataset as input. Data was split 70/30 for training and testing.
 
-        We employed ARIMA with sentiment as exogenous variable using walk-forward validation, and LSTM with 5000 neurons trained with NAdam optimizer (learning rate 0.001, max 10,000 epochs, early stopping patience 10). Both models were evaluated using Root Mean Squared Error (RMSE).
+        We employed ARIMA with sentiment as exogenous variable~\cite{moslemi2024comprehensive} using walk-forward validation, and LSTM with 5000 neurons trained with NAdam optimizer~\cite{dozat2016nadam} (learning rate 0.001, max 10,000 epochs, early stopping patience 10). The choice of a highly parameterized LSTM architecture aligns with recent insights on double descent~\cite{schaeffer2023double}, where increasing model complexity can lead to improved generalization in the overparameterized regime. Both models were evaluated using Root Mean Squared Error (RMSE).
 
         In total, we conducted 36,792 tests: $(2^9 - 1)$ LLM combinations $\times$ 3 human datasets $\times$ 4 equation types $\times$ 3 dataset types $\times$ 2 models. 
 
