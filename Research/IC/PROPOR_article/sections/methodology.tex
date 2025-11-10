@@ -5,9 +5,9 @@
 
     \subsubsection{Scraping}
 
-        We collected COPOM (Central Bank of Brazil's Monetary Policy Committee) minutes using Python and Selenium. We accessed the official COPOM minutes listing~\cite{BCB_COPOM_Minutes}, which contains all available minutes. For each minute, we downloaded both the HTML and PDF content when available.
+        We collected COPOM (Central Bank of Brazil's Monetary Policy Committee) minutes using Python and Selenium from the official listing~\cite{BCB_COPOM_Minutes}, downloading both HTML and PDF versions when available.
 
-        We ended up with a dataset \(C\) containing 251 COPOM minutes from January 1996 to July 2025. Each minute \(c\) in \(C\) has an associated date \(d_i\) and may have one or both HTML and PDF versions of the content.
+        The dataset \(C\) contains 251 COPOM minutes from January 1996 to July 2025. Each minute \(c\) has an associated date \(d_i\) and may have HTML and/or PDF versions.
 
 
     \subsubsection{Parsing}
@@ -17,46 +17,37 @@
 
             \item{Type-Specific Pre-Processing}
 
-                HTML file: if it exists, we extracted only the content inside the body tag. Tags such as \texttt{strong}, \texttt{i}, and \texttt{br} were removed while preserving their inner content. Other tags were removed along with their content.
+                HTML: extract body content, remove formatting tags (\texttt{strong}, \texttt{i}, \texttt{br}) while preserving inner content, remove other tags with content.
 
-                PDF file: if it exists, we used SpaCyLayout~\cite{neumann2019scispacy} with the \texttt{pt\_core\_news\_lg} model to extract individual phrases from PDF documents.
+                PDF: extract phrases using SpaCyLayout~\cite{neumann2019scispacy} with \texttt{pt\_core\_news\_lg} model.
 
-                After that, we created two separate phrase lists: one from the HTML source \(P_{c}^{\text{html}}\) and another from the PDF source \(P_{c}^{\text{pdf}}\).
+                We create phrase lists \(P_{c}^{\text{html}}\) and \(P_{c}^{\text{pdf}}\), each containing phrases from respective versions.
 
             \item{General Pre-Processing}
                 
-                For each phrase in both \(P_{c}^{\text{html}}\) and \(P_{c}^{\text{pdf}}\), we applied the following steps in that order: 
-                    (1) Removed newlines and tabs;
-                    (2) Removed remaining tag entities (e.g., \texttt{\&nbsp});
-                    (3) Reduced multiple consecutive spaces, commas, and periods to single characters;
-                    (4) Added a period at the end if it did not exist.
+                For each phrase: (1) Remove newlines and tabs; (2) Remove tag entities (e.g., \texttt{\&nbsp}); (3) Reduce consecutive spaces, commas, periods to single characters; (4) Add period at end if missing.
 
             \item{Length Filtering}
 
-                For both \(P_{c}^{\text{html}}\) and \(P_{c}^{\text{pdf}}\) sets, we applied the following steps in that order: (1) Discarded single-word phrases; (2) Discarded phrases with character count below $\mu$, the mean character count of phrases from the respective source \(P_{c}^{\text{x}}\).
+                Discard single-word phrases and phrases with character count below \(\mu\), the mean character count from the respective source \(P_{c}^{\text{x}}\).
 
             \item{Blacklist Filtering}
 
-                We removed phrases containing at least one of the words from the following list: (1) \textit{javascript}; (2) \textit{cookies}; (3) \textit{expand\_less}; (4) \textit{content\_copy}; (5) \textit{Garantir a estabilidade do poder de compra da moeda}.
+                Remove phrases containing: (1) \textit{javascript}; (2) \textit{cookies}; (3) \textit{expand\_less}; (4) \textit{content\_copy}; or (5) \textit{Garantir a estabilidade do poder de compra da moeda}. 
+                
+                While terms (1) to (4) are related to web page elements and scripts, term (5) is the Brazilian Central Bank's motto, which often appears in the minutes and is not relevant for sentiment analysis.
 
-                While terms (1) to (4) are related to web page elements and scripts, term (5) is the Brazilian Central Bank's motto, which often appears in the minutes and is not relevant for sentiment analysis.        \end{enumerate}
+        \end{enumerate}
 
-        Finally, we compared the number of phrases between sets \(P_{c}^{\text{html}}\) and \(P_{c}^{\text{pdf}}\) for each minute \(c\). We selected the set with the most phrases; if both sets had equal size, we chose the PDF version as it appeared to have an overall superior phrase quality. When either source was unavailable or contained insufficient information, this step ensured we obtained the most reliable set for each minute.
-
-        At the end we obtained a set \(F\) made of smaller sets \(F_{d_i}\) for each date \(d_i\), where \(d_i\) is the associated date of minute \(c\). Each \(F_{d_i}\) contained 20 to 70 phrases.
-
+        Finally, we compare phrase counts between sets and select the one with more phrases (PDF if equal to ensure superior quality), creating the selected set \(F_{d_i}\) for each date \(d_i\). The set \(F\) contains all sets \(F_{d_i}\).
 
     \subsubsection{Phrase Selection}
 
-        We flattened the set \(F\) into a single list of phrases while preserving each phrase date labels, creating a list \(L\) of tuples \((\text{phrase}, \text{date})\).
+        We flatten \(F\) into list \(L\) of tuples (\text{phrase}, \text{date}).
 
-        We performed \textbf{dense passage retrieval}~\cite{karpukhin2020dense} using semantic similarity filtering. We computed dense vector representations (embeddings) for all phrases using the \textbf{Qwen3-Embedding-0.6B}~\cite{zhang2025qwen3embedding} model and computed the cosine similarity between each phrase embedding and the embedding of the target concept ``inflation''. We retained only phrases with a cosine similarity score exceeding a threshold of 0.6, thereby selecting phrases semantically related to inflation concepts.
-
-        The implementation utilized PyTorch~\cite{paszke2019pytorch} for GPU acceleration, pandas for data manipulation, scikit-learn for similarity computations, and the LangChain HuggingFace integration for embedding generation.
+        We perform dense passage retrieval using semantic similarity filtering. We compute embeddings with \textbf{Qwen3-Embedding-0.6B}~\cite{zhang2025qwen3embedding} and retain phrases with cosine similarity > 0.6 to ``inflation''. We use PyTorch for GPU acceleration, pandas for manipulation, and scikit-learn for similarity.
         
-        We then constructed a set of tuples \((\text{phrase}, \text{date})\) containing only the selected phrases named \(F^{infl}\). 
-
-        \(F^{infl}\) is the final phrase dataset used in subsequent steps. It contains 9378 phrases related to inflation across 251 dates (or COPOM minutes), an average of approximately 37.4 phrases per date.
+        The final dataset \(F^{infl}\) contains 9,378 inflation-related phrases across 251 dates (~37.4 phrases per date).
 
 
 
@@ -66,7 +57,7 @@
     \subsubsection{LLM Evaluation Dataset}
     \label{sec:llm_evaluation_dataset}
 
-        We evaluated the sentiment of the phrases using nine different Large Language Models (LLMs), each one made from a different company:
+        We evaluated phrase sentiment using nine LLMs from different companies:
         \begin{enumerate}[noitemsep]
             \item \textit{openai/gpt-5}
             \item \textit{anthropic/claude-sonnet-4}
@@ -79,9 +70,9 @@
             \item \textit{deepseek/deepseek-chat-v3.1}
         \end{enumerate}
 
-        \textbf{For each model} in the list above, we made one independent request \textbf{for each phrase} of the dataset \(F^{infl}\), without providing previous context.
+        \textbf{For each model}, we made one independent request per phrase in \(F^{infl}\), without prior context.
 
-        The prompt was formulated in Brazilian Portuguese by our specialist economist Cézio Luiz Ferreira Junior. It contained a fixed text that explained the task and the phrase to be evaluated concatenated at the end:
+        The prompt, formulated in Brazilian Portuguese by economist Cézio Luiz Ferreira Junior, explained the task and appended the phrase:
 
         \begin{quote}
             \noindent\textbf{DEFINIÇÃO DE OTIMISMO:}
@@ -100,13 +91,9 @@
             <<<<PHRASE>>>>
         \end{quote}
 
-        In the prompt we asked the model to classify each phrase as optimistic, neutral, or pessimistic based on the provided definitions. Model responses (O, N, P) were converted to numerical values: 1 for optimistic, 0 for neutral, and $-1$ for pessimistic. Responses that could not be parsed were labeled as $-2$, but such cases were rare.
+        Models classify phrases as optimistic, neutral, or pessimistic. Responses (O, N, P) are converted to 1, 0, -1; unparseable responses labeled -2 (rare occasions).
 
-        Inference was performed using the OpenRouter API to unify model access and each model was assigned a maximum token limit determined through initial testing.
-
-        The maximum token limit was determined by testing the models on the phrases from the first $F_{d_i}^{infl}$ $\in$ $F^{infl}$. With an initial token limit of 1, if any phrase received a $-2$ score in this first set, the limit was doubled and the test was repeated until the model could process all the set's phrases successfully.
-
-        The resulting maximum token limits were shown in \autoref{tab:token_limits}. Interestingly, OpenAI's models needed considerably higher token limits compared to other models, followed by Google's.
+        We use OpenRouter API for unified access. We determine token limits by testing on the first date's phrases; if any receives -2, we double the limit and repeat testing until all responses are successful. Table \ref{tab:token_limits} shows the final token limits used.
 
         \begin{table}[h]
             \centering
@@ -122,54 +109,42 @@
                 others & 1 \\
                 \hline
             \end{tabular}
-            \caption{Maximum token limits per LLM model.}
+            \caption{Token limits per LLM model.}
             \label{tab:token_limits}
         \end{table}
 
-        To ensure consistency and more reliable results, we discarded any evaluations where the sentiment wasn't 1 and -1.
-
-        Finally, we concatenated the results into sets named \(E_{m}\) for each model \(m\). Each \(E_{m}\) contained tuples of the form \((\text{phrase}, \text{date}, \text{sentiment})\).
-
-    The set that contains all sets \(E_{m}\) is named \(E_{Models}\).
+        We discarded evaluations not equal to 1 or -1. We concatenated results into sets \(E_{m}\) for each model, containing tuples (\text{phrase}, \text{date}, \text{sentiment}). The set \(E_{Models}\) contains all \(E_{m}\).
 
 
 
 \subsection{Human Evaluation Dataset}
 
-    Similar to the previous section, we created three different human evaluation datasets:
+    We created three human evaluation datasets:
     \begin{enumerate}
         
         \item \textit{Open}
         
-        We created a website featuring the same evaluation system used for LLMs presented in section \ref{sec:llm_evaluation_dataset}, but adapted for humans to select between O (optimistic), N (neutral), and P (pessimistic) options instead of reading API responses. The phrases were randomly selected from the set \(F^{infl}\) and each browser was limited to evaluating 10 phrases per 24-hour period.
-        
-        We requested collaborating universities (USP and Unicamp) to share the website with their economics-related graduate students. The evaluation form is publicly accessible~\cite{Inflation_Form}.
+        A website with O/N/P selection for randomly selected phrases from \(F^{infl}\), limited to 10 phrases per browser per 24h. Distributed to economics graduate students at USP and Unicamp. Result: \(E_{Open}\) with 278 tuples.
         
         \item \textit{Specialist}
         
-        We created a subset named \(F^{infl-350}\) consisting of 350 randomly selected phrases from \(F^{infl}\). The date labels were encoded in Base64 to prevent human bias. 
-        
-        Then, our specialist economist Cézio Luiz Ferreira Junior, manually labeled each phrase as: 1 for optimistic, 0 for neutral, $-1$ for pessimistic, $-2$ for non-related phrase, or $-3$ for did not understand. The definitions used were also the same as those presented in the prompt for LLMs in section \ref{sec:llm_evaluation_dataset}.
+        A subset \(F^{infl-350}\) of 350 random phrases from \(F^{infl}\), with date labels Base64-encoded to prevent bias. Labeled by economist Cézio Luiz Ferreira Junior as: 1 (optimistic), 0 (neutral), -1 (pessimistic), -2 (non-related), -3 (not understood). Result: \(E_{Specialist}\) with 350 tuples.
 
         \item \textit{Consolidated}
         
-        The \(F^{infl-350}\) dataset and its sentiment labels from the Specialist evaluation was re-analyzed by the specialist and two additional professors in conjunction. They discussed each phrase and attempted to reach consensus.
+        \(F^{infl-350}\) re-analyzed by the specialist and two additional professors together, discussing each phrase to reach consensus. Result: \(E_{Consolidated}\) with 220 tuples.
 
     \end{enumerate}
 
-    To ensure consistency and more reliable results, we discarded any evaluations where the sentiment wasn't 1 and -1 for all labels produced by humans.
-
-    Finally, we created a dataset \(E_{h}\) for each human evaluation method \(h\) presented. Each \(E_{h}\) contained tuples of the form \((\text{phrase}, \text{date}, \text{sentiment})\), where sentiment is the label assigned by the humans in the respective evaluation method. In the end, \(E_{Open}\) had 278 tuples, \(E_{Specialist}\) had 350 and \(E_{Consolidated}\) had 220.
-
-    The set that contains all sets \(E_{h}\) is named \(E_{Humans}\).
+    Again, we discarded evaluations not equal to 1 or -1. for all methods. Set \(E_{Humans}\) contains all \(E_{h}\).
 
 
 
 \subsection{Testing Inflation Prediction Performance}
 
-    We will test two of the most common inflation prediction models: (1) \textbf{ARIMA} and (2) \textbf{LSTM}. 
+    We test two common inflation prediction models: (1) \textbf{ARIMA} and (2) \textbf{LSTM}. 
     
-    The goal is to check whether adding sentiment variables derived from LLM evaluations can reduce RMSE compared to using only historical inflation data and also if bias correction based on human evaluations can further improve performance.
+    The goal is to check whether adding sentiment variables from LLM evaluations reduces RMSE compared to historical inflation data alone, and whether bias correction from human evaluations further improves performance.
 
     \subsubsection{Creating the Input Datasets}
 
@@ -183,14 +158,14 @@
 
         The possible equation forms for \(eq_{k}\) are: linear (\(x + a\)), affine (\(bx + a\)), quadratic (\(cx^2 + bx + a\)), and cubic (\(dx^3 + cx^2 + bx + a\)).
 
-        \textbf{For each} tuple (\(U_{i}\), \(V_{j}\), \(eq_{k}\)), we will create three different input datasets for inflation prediction models, each one of them will provide a list of tuples in the form of (\({Inflation}, {Sentiment}\)):
+        \textbf{For each} tuple (\(U_{i}\), \(V_{j}\), \(eq_{k}\)), we create three different input datasets for inflation prediction models, each one of them will provide a list of tuples in the form of (\({Inflation}, {Sentiment}\)):
 
         \begin{enumerate}
             \item \textit{Only Inflation (Baseline)} 
             
             IPCA monthly (Series 433)~\cite{BCB_IPCA_API}.
 
-            The sentiment variable will be set to 0 for associated inflation values.
+            The sentiment variable is set to 0 for associated inflation values.
 
             \item \textit{Inflation + Sentiment (Without Correction)}
             
@@ -204,7 +179,7 @@
             
             First, both LLM sentiment scores from \(U_{i}\) and human evaluations from \(V_{j}\) are averaged by date and interpolated using cubic spline to create continuous daily time series. 
             
-            Then, we try to find a single set of parameters of the transformation equation \(eq_{k}\) that when applied to all dates individually minimize the mean squared error (MSE).
+            Then, we find a single set of parameters of the transformation equation \(eq_{k}\) that when applied to all dates individually minimizes the mean squared error (MSE).
             
             The equation is applied per date with the variable \(x\) representing the average LLM sentiment score in that date, and the resulting value representing the bias-corrected sentiment score.
             
@@ -214,20 +189,20 @@
 
         \end{enumerate}
 
-        Finally, for each tuple (\(U_{i}\), \(V_{j}\), \(eq_{k}\)) created, we will have 3 new associated lists of tuples in the form of (\({Inflation}, {Sentiment}\)), each will be called \(IN_{ijkm}\) where \(i\) is the LLM model combination used; \(j\) is the human evaluation dataset used for bias correction; \(k\) is the equation type used for bias correction; and \(m\) \(\in\) \{\textit{Baseline}, \textit{Without Correction}, or \textit{With Correction}.\}
+        Finally, for each tuple (\(U_{i}\), \(V_{j}\), \(eq_{k}\)) created, we have 3 new associated lists of tuples in the form of (\({Inflation}, {Sentiment}\)), each called \(IN_{ijkm}\) where \(i\) is the LLM model combination used; \(j\) is the human evaluation dataset used for bias correction; \(k\) is the equation type used for bias correction; and \(m\) \(\in\) \{\textit{Baseline}, \textit{Without Correction}, or \textit{With Correction}.\}
 
-        The set that contains all sets \(IN_{ijkm}\) is named \(IN\).
+        The set \(IN\) contains all sets \(IN_{ijkm}\).
 
 
     \subsubsection{Running the Tests}
 
-        Looking at the \(IN\), it is obvious that this approach implies a lot of apparent unnecessary repetition of \(IN_{ijkm}\) datasets, since, for example, \textit{Baseline} is the same for all tuples (\(U_{i}\), \(V_{j}\), \(eq_{k}\)).
+        Looking at the \(IN\), we see that this approach involves repetition of \(IN_{ijkm}\) datasets since, for example, \textit{Baseline} is the same for all tuples (\(U_{i}\), \(V_{j}\), \(eq_{k}\)).
 
         While this is bad from a computational efficiency perspective, it provides a control for every experiment: \textit{Baseline} should be a control \textit{Without Correction} and \textit{With Correction}, while \textit{Without Correction} should be a control for \textit{With Correction}.
 
-        \textbf{For each} \(IN_{ijkm}\) in \(IN\), we will run both ARIMA and LSTM~\cite{hochreiter1997lstm} inflation prediction models using the respective dataset as input. Data was split 70/30 for training and testing.
+        \textbf{For each} \(IN_{ijkm}\) in \(IN\), we run both ARIMA and LSTM~\cite{hochreiter1997lstm} inflation prediction models on the respective dataset with a 70/30 train/test split.
 
-        We employed ARIMA with sentiment as exogenous variable~\cite{moslemi2024comprehensive} using walk-forward validation, and LSTM with 5000 neurons trained with NAdam optimizer~\cite{dozat2016nadam} (learning rate 0.001, max 10,000 epochs, early stopping patience 10). The choice of a highly parameterized LSTM architecture aligns with recent insights on double descent~\cite{schaeffer2023double}, where increasing model complexity can lead to improved generalization in the overparameterized regime. Both models were evaluated using Root Mean Squared Error (RMSE).
+        We employ ARIMA with sentiment as exogenous variable~\cite{moslemi2024comprehensive} using walk-forward validation, and LSTM with 5000 neurons trained with NAdam optimizer~\cite{dozat2016nadam} (learning rate 0.001, max 10,000 epochs, early stopping patience 10). The highly parameterized LSTM aligns with recent insights on double descent~\cite{schaeffer2023double}, where increased complexity improves generalization in the overparameterized regime. Both models are evaluated using Root Mean Squared Error (RMSE).
 
         In total, we conducted 36,792 tests: $(2^9 - 1)$ LLM combinations $\times$ 3 human datasets $\times$ 4 equation types $\times$ 3 dataset types $\times$ 2 models. 
 
