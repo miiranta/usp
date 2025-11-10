@@ -3,49 +3,102 @@
     \begin{figure*}[t]
         \centering
         \includegraphics[width=\textwidth]{img/average_grade_by_date_with_ipca.png}
-        \caption{Average sentiment grade by date with IPCA inflation data.}
+        \caption{Average LLM sentiment grade by date and model (with IPCA inflation).}
         \label{fig:average_grade_by_date}
     \end{figure*}
 
-    \begin{figure}[H]
+    In Figure~\ref{fig:average_grade_by_date} it is possible to observe that, despite some variability, all the LLMs' sentiment follow a similar trend over time, with peaks and valleys occurring around the same dates. Even the exceptional cases such as Deepseek-chat-v3.1, which shows a significant lower average than the other models, still follows the same general trend. 
+    
+    This suggests that models can indeed capture market sentiment dynamics, but the bias should be taken into account when using their outputs as sentiment indicators. This also indicate that correcting for bias might improve the models' performance in downstream tasks such as inflation prediction.
+
+    The inflation in the graph appears to be stable, but it is noticeable that some drops in sentiment happen at the same time we have peaks in inflation, such as in 2002. Interestingly, that same correlation occurs in reverse in 2022 and also don't happen at all in some other periods we would expect it to happen such as 2008.
+
+    \begin{figure}[t]
         \centering
         \includegraphics[width=\columnwidth]{img/average_ci_by_dataset_95perc.png}
-        \caption{Average confidence intervals by dataset at 95\% confidence level.}
+        \caption{Average grade and confidence intervals by dataset at 95\% confidence level.}
         \label{fig:average_ci_95}
     \end{figure}
 
-    \begin{figure}[H]
+    \begin{figure}[t]
         \centering
         \includegraphics[width=\columnwidth]{img/average_ci_by_dataset_99perc.png}
-        \caption{Average confidence intervals by dataset at 99\% confidence level.}
+        \caption{Average grade and confidence intervals by dataset at 99\% confidence level.}
         \label{fig:average_ci_99}
     \end{figure}
 
-    \begin{figure}[H]
+    \begin{table}[t]
+        \centering
+        \begin{tabular}{lrr}
+            \hline
+            \textbf{Dataset} & \textbf{Average} & \textbf{Std. Dev.} \\
+            \hline
+            \multicolumn{3}{l}{\textit{Global}} \\
+            Models only & $-0.1826$ & $0.9832$ \\
+            Humans only & $-0.0413$ & $0.7187$ \\
+            \hline
+            \multicolumn{3}{l}{\textit{By LLM}} \\
+            Claude Sonnet 4 & $-0.2572$ & $0.9664$ \\
+            Deepseek Chat v3.1 & $-0.4851$ & $0.8745$ \\
+            Gemini 2.5 Pro & $-0.2823$ & $0.9594$ \\
+            Gemma 3 27B IT & $-0.1442$ & $0.9896$ \\
+            Llama 4 Maverick & $-0.0248$ & $0.9998$ \\
+            Phi 4 & $-0.1158$ & $0.9933$ \\
+            GPT-5 & $-0.2146$ & $0.9768$ \\
+            GPT-OSS-120B & $-0.1160$ & $0.9933$ \\
+            Grok 4 Fast & $-0.0415$ & $0.9992$ \\
+            \hline
+            \multicolumn{3}{l}{\textit{By Human}} \\
+            Specialist & $-0.0343$ & $0.6459$ \\
+            Conciliated & $-0.0591$ & $0.7030$ \\
+            Open & $-0.0360$ & $0.8142$ \\
+            \hline
+        \end{tabular}
+        \caption{Average sentiment grades and standard deviations.}
+        \label{tab:average_grades}
+    \end{table}
+
+    In figures \ref{fig:average_ci_95}, \ref{fig:average_ci_99} and table \ref{tab:average_grades} we can see the average grades and confidence intervals for each dataset used in the evaluation. 
+    
+    It is noticeable that we have a significant variation in the average grades assigned by different models, with all averages being slightly negative, including the human evaluated ones. This might indicate a general pessimistic bias in the COPOM minutes.
+    
+    \textbf{Grok-4-fask} and \textbf{Llama-4-maverick} were the models with a bias closer to the human averages, while \textbf{Deepseek-chat-v3.1} was the furthest and also the most pessimistic by a large margin.
+
+    It is also noticeable that the confidence intervals are quite wide at human evaluated averages, even with lower standard deviation values, because they have a smaller number of samples. The global human evaluations are also more optimistic than the LLM ones.
+
+    \begin{figure}[t]
         \centering
         \includegraphics[width=\columnwidth]{img/rmse_comparison_6plots.png}
         \caption{RMSE comparison across six different model configurations.}
         \label{fig:rmse_comparison}
     \end{figure}
 
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=\columnwidth]{img/ranking_cezio.png}
-        \caption{Model ranking based on specialist evaluation.}
-        \label{fig:ranking_cezio}
-    \end{figure}
+    In figure \ref{fig:rmse_comparison} we can see the comparison of the best model configurations for each of the six setups presented.
 
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=\columnwidth]{img/ranking_consolidated.png}
-        \caption{Model ranking based on consolidated evaluation.}
-        \label{fig:ranking_consolidated}
-    \end{figure}
+    We can see that in most cases we have a small improvement when using sentiment grades compared to the baseline model without sentiment. While this is always true in the ARIMA setups, in the LSTM setups the results are mixed and much more unstable.
 
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=\columnwidth]{img/ranking_open.png}
-        \caption{Model ranking based on open evaluation.}
-        \label{fig:ranking_open}
-    \end{figure}
+    A fascinating insight is that the most frequent best models are \textbf{Grok-4-fask} and \textbf{Llama-4-maverick}, which were also the models with sentiment averages closer to the human evaluated ones. This suggests that altering the bias towards a more human-like sentiment might improve the models' performance in inflation prediction.
 
+    \begin{table}[h]
+        \centering
+        \begin{tabular}{lcc}
+            \textbf{Model} & \textbf{Uncorrected} & \textbf{Corrected} \\
+            \hline
+            LSTM & 0.16\% & 0.23\% \\
+            ARIMA & 1.20\% & 0.73\% \\
+        \end{tabular}
+        \caption{RMSE reduction across different models.}
+        \label{tab:rmse_reduction}
+    \end{table}
+
+    In table \ref{tab:rmse_reduction}, we can observe the RMSE reduction percentages when including sentiment with and without correction compared to baseline (only inflation), an average of all our 36,792 tests.
+
+
+    As we can see we had a small improvement in all configurations, with ARIMA models benefiting the most from the inclusion of sentiment overall.
+
+    While ARIMA models observed a reduction in predition performance when using corrected sentiment grades, LSTM models saw an improvement.
+
+
+    
+    
+    
