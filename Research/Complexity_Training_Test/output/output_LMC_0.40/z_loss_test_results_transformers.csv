@@ -1,0 +1,15 @@
+Metric,Value
+Test Loss,7.2066
+Test LMC Complexity,0.8095
+Final Training Loss,5.4531
+Final Validation Loss,7.9777
+Final Model LMC,0.9800
+LMC Weight,0.4
+Loss Weight,0.6
+
+Epoch,Training Loss,Validation Loss,Model LMC
+1,8.3632,8.2606,1.2371
+2,6.2985,8.0036,1.0356
+3,5.8687,7.9346,0.9987
+4,5.5893,7.9621,0.9932
+5,5.4531,7.9777,0.9800
