@@ -5,7 +5,7 @@ import torch.nn as nn
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
-from transformers import GPT2Tokenizer, GPT2LMHeadModel, get_linear_schedule_with_warmup
+from transformers import RobertaTokenizer, GPT2LMHeadModel, get_linear_schedule_with_warmup
 from tqdm import tqdm
 
 # Check CUDA availability
@@ -44,14 +44,14 @@ if torch.cuda.is_available():
 
 
 # Model hyperparameters
-HIDDEN_DIM = 200
+HIDDEN_DIM = 100
 NUM_LAYERS = 2  
 NUM_ATTENTION_HEADS = 4 
 BATCH_SIZE = 64  
 GRADIENT_ACCUMULATION_STEPS = 1
 EPOCHS = 40
 LEARNING_RATE = 5e-4 
-SEQ_LENGTH = 32 
+SEQ_LENGTH = 8 
 WARMUP_RATIO = 0.1
 MAX_GRAD_NORM = 0.5
 MAX_SAMPLES = None
@@ -380,8 +380,8 @@ def run(output_dir='output'):
     print(f"Output directory: {os.path.abspath(output_dir)}\n")
     
     # Initialize tokenizer
-    print("Initializing GPT-2 tokenizer...")
-    tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+    print("Initializing RoBERTa tokenizer (fast)...")
+    tokenizer = RobertaTokenizer.from_pretrained('roberta-base', use_fast=True)
     tokenizer.pad_token = tokenizer.eos_token
     
     # Load datasets
