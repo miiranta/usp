@@ -22,20 +22,21 @@ else:
     print("WARNING: CUDA is not available! Using CPU instead.\n")
 
 VOCAB_SIZE = 10000
-HIDDEN_DIM = 400   # Reasonable size for P5000
-NUM_LAYERS = 2     # Good depth for small dataset
-NUM_ATTENTION_HEADS = 4  # Proper multi-head attention
-BATCH_SIZE = 20    # Better batch size for stable gradients
-GRADIENT_ACCUMULATION_STEPS = 1  # No accumulation needed
-EPOCHS = 40
-LEARNING_RATE = 5e-4  # Higher LR for better convergence
-SEQ_LENGTH = 256   # Longer context window
+HIDDEN_DIM = 400
+NUM_LAYERS = 2  
+NUM_ATTENTION_HEADS = 4 
+BATCH_SIZE = 32  
+GRADIENT_ACCUMULATION_STEPS = 1
+EPOCHS = 50
+LEARNING_RATE = 5e-4 
+SEQ_LENGTH = 256 
 WARMUP_STEPS = 500
 MAX_GRAD_NORM = 0.5
-MAX_SAMPLES = None  # Use full dataset to prevent overfitting
+MAX_SAMPLES = None
 
 # LMC Complexity weight (0.0 = 100% loss optimization, 1.0 = 100% LMC maximization)
-LMC_WEIGHT = 0.0  # e.g., 0.2 = 20% LMC maximization + 80% loss minimization
+# e.g., 0.2 = 20% LMC maximization + 80% loss minimization
+LMC_WEIGHT = 0.0  
 
 class TextDataset(Dataset):
     """Optimized text dataset for transformers"""
@@ -508,9 +509,7 @@ def run(output_dir='output'):
 
 def main():
     global LMC_WEIGHT
-    global EPOCHS
     
-    EPOCHS = 50
     LMC_WEIGHT = 0.0
     # Iterate from 0.0 to 1.0 in steps of 0.05, run(output-LMC_WEIGHT)
     # Ignore if folder already exists
@@ -522,7 +521,6 @@ def main():
         else:
             print(f"Skipping LMC_WEIGHT={LMC_WEIGHT:.2f}, output directory '{output_dir}' already exists.")
 
-    EPOCHS = 50
     LMC_WEIGHT = 0.0
     # Final run with EPOCHS=50 and LMC_WEIGHT=0
     output_dir = f'output/final_run_LMC_{LMC_WEIGHT:.2f}_epochs_{EPOCHS}'
