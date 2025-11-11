@@ -22,12 +22,12 @@ else:
     print("WARNING: CUDA is not available! Using CPU instead.\n")
 
 # Model hyperparameters
-HIDDEN_DIM = 400
+HIDDEN_DIM = 200
 NUM_LAYERS = 2  
 NUM_ATTENTION_HEADS = 4 
 BATCH_SIZE = 32  
 GRADIENT_ACCUMULATION_STEPS = 1
-EPOCHS = 50
+EPOCHS = 40
 LEARNING_RATE = 5e-4 
 SEQ_LENGTH = 256 
 WARMUP_RATIO = 0.1
