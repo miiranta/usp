@@ -21,7 +21,7 @@ if torch.cuda.is_available():
 else:
     print("WARNING: CUDA is not available! Using CPU instead.\n")
 
-VOCAB_SIZE = 10000
+# Model hyperparameters
 HIDDEN_DIM = 400
 NUM_LAYERS = 2  
 NUM_ATTENTION_HEADS = 4 
@@ -30,7 +30,7 @@ GRADIENT_ACCUMULATION_STEPS = 1
 EPOCHS = 50
 LEARNING_RATE = 5e-4 
 SEQ_LENGTH = 256 
-WARMUP_STEPS = 500
+WARMUP_RATIO = 0.1
 MAX_GRAD_NORM = 0.5
 MAX_SAMPLES = None
 
@@ -115,9 +115,17 @@ class TransformerLLM(nn.Module):
         # Embeddings
         embeddings = self.embedding(input_ids) + self.position_embedding(positions)
         
+        # Causal mask: prevent attention to future tokens
+        # Upper triangular matrix with diagonal=1 ensures each position can only attend to previous positions
+        causal_mask = torch.triu(torch.ones(seq_length, seq_length, device=input_ids.device), diagonal=1).bool()
+        
         # Convert attention mask to proper format (True = mask out, False = attend)
         # TransformerEncoder expects True where we want to mask
-        transformer_out = self.transformer(embeddings, src_key_padding_mask=attention_mask)
+        transformer_out = self.transformer(
+            embeddings,
+            mask=causal_mask,
+            src_key_padding_mask=attention_mask
+        )
         
         # Language model head
         logits = self.lm_head(transformer_out)
@@ -388,16 +396,19 @@ def run(output_dir='output'):
     
     # Optimizer and scheduler
     total_steps = len(train_loader) * EPOCHS // GRADIENT_ACCUMULATION_STEPS
+    num_warmup_steps = int(WARMUP_RATIO * total_steps)  # Scale warmup with total steps
+    
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
-        num_warmup_steps=WARMUP_STEPS,
+        num_warmup_steps=num_warmup_steps,
         num_training_steps=total_steps
     )
     
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
     print(f"Training on {device}")
     print(f"Total training steps: {total_steps}")
+    print(f"Warmup steps: {num_warmup_steps} ({WARMUP_RATIO*100:.0f}% of total)")
     print(f"LMC weight: {LMC_WEIGHT} ({LMC_WEIGHT*100:.0f}% LMC maximization, {(1-LMC_WEIGHT)*100:.0f}% loss minimization)\n")
     
     # Lists to track losses and LMC complexity
