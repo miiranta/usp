@@ -44,17 +44,17 @@ if torch.cuda.is_available():
 
 
 # Model hyperparameters
-HIDDEN_DIM = 400
+HIDDEN_DIM = 200
 NUM_LAYERS = 2  
 NUM_ATTENTION_HEADS = 4 
-BATCH_SIZE = 64  
+BATCH_SIZE = 128  
 GRADIENT_ACCUMULATION_STEPS = 1
 EPOCHS = 50
 LEARNING_RATE = 5e-4 
-SEQ_LENGTH = 64
+SEQ_LENGTH = 16
 WARMUP_RATIO = 0.1
 MAX_GRAD_NORM = 0.5
-MAX_SAMPLES = 100000
+MAX_SAMPLES = 40000
 
 # LMC Complexity weight (0.0 = 100% loss optimization, 1.0 = 100% LMC maximization)
 # e.g., 0.2 = 20% LMC maximization + 80% loss minimization
