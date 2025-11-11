@@ -22,17 +22,17 @@ else:
     print("WARNING: CUDA is not available! Using CPU instead.\n")
 
 VOCAB_SIZE = 10000
-HIDDEN_DIM = 64    # Very small
-NUM_LAYERS = 2     # Minimal layers
-NUM_ATTENTION_HEADS = 2  # Minimal heads
-BATCH_SIZE = 4     # Very small batch
-GRADIENT_ACCUMULATION_STEPS = 1  # No accumulation
-EPOCHS = 5
-LEARNING_RATE = 5e-5
-SEQ_LENGTH = 64    # Short sequences
+HIDDEN_DIM = 400   # Reasonable size for P5000
+NUM_LAYERS = 2     # Good depth for small dataset
+NUM_ATTENTION_HEADS = 4  # Proper multi-head attention
+BATCH_SIZE = 20    # Better batch size for stable gradients
+GRADIENT_ACCUMULATION_STEPS = 1  # No accumulation needed
+EPOCHS = 40
+LEARNING_RATE = 5e-4  # Higher LR for better convergence
+SEQ_LENGTH = 256   # Longer context window
 WARMUP_STEPS = 500
-MAX_GRAD_NORM = 1.0
-MAX_SAMPLES = 100  # Limit to 2000 samples for fast testing
+MAX_GRAD_NORM = 0.5
+MAX_SAMPLES = None  # Use full dataset to prevent overfitting
 
 # LMC Complexity weight (0.0 = 100% loss optimization, 1.0 = 100% LMC maximization)
 LMC_WEIGHT = 0.0  # e.g., 0.2 = 20% LMC maximization + 80% loss minimization
@@ -98,7 +98,7 @@ class TransformerLLM(nn.Module):
             nhead=num_attention_heads,
             dim_feedforward=hidden_dim * 4,
             batch_first=True,
-            dropout=0.1,
+            dropout=0.3,  # Increased dropout for regularization
             activation='gelu'
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
