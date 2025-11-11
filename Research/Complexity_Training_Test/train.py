@@ -44,17 +44,17 @@ if torch.cuda.is_available():
 
 
 # Model hyperparameters
-HIDDEN_DIM = 200
+HIDDEN_DIM = 400
 NUM_LAYERS = 2  
 NUM_ATTENTION_HEADS = 4 
 BATCH_SIZE = 64  
 GRADIENT_ACCUMULATION_STEPS = 1
-EPOCHS = 20
+EPOCHS = 60
 LEARNING_RATE = 5e-4 
-SEQ_LENGTH = 8 
+SEQ_LENGTH = 64
 WARMUP_RATIO = 0.1
 MAX_GRAD_NORM = 0.5
-MAX_SAMPLES = 40000
+MAX_SAMPLES = None
 
 # LMC Complexity weight (0.0 = 100% loss optimization, 1.0 = 100% LMC maximization)
 # e.g., 0.2 = 20% LMC maximization + 80% loss minimization
@@ -587,22 +587,22 @@ def run(output_dir='output'):
 def main():
     global LMC_WEIGHT
     
-    # LMC_WEIGHT = 0.0
+    LMC_WEIGHT = 0.0
     # # Final run with EPOCHS=50 and LMC_WEIGHT=0
-    # output_dir = f'output/final_run_LMC_{LMC_WEIGHT:.2f}_epochs_{EPOCHS}'
-    # if not os.path.exists(output_dir):
-    #     run(output_dir)
+    output_dir = f'output/final_run_LMC_{LMC_WEIGHT:.2f}_epochs_{EPOCHS}'
+    if not os.path.exists(output_dir):
+        run(output_dir)
 
     LMC_WEIGHT = 0.0
     # Iterate from 0.0 to 1.0 in steps of 0.05, run(output-LMC_WEIGHT)
     # Ignore if folder already exists
-    for step in range(21):
-        LMC_WEIGHT = step * 0.05
-        output_dir = f'output/output_LMC_{LMC_WEIGHT:.2f}'
-        if not os.path.exists(output_dir):
-            run(output_dir)
-        else:
-            print(f"Skipping LMC_WEIGHT={LMC_WEIGHT:.2f}, output directory '{output_dir}' already exists.")
+    # for step in range(21):
+    #     LMC_WEIGHT = step * 0.05
+    #     output_dir = f'output/output_LMC_{LMC_WEIGHT:.2f}'
+    #     if not os.path.exists(output_dir):
+    #         run(output_dir)
+    #     else:
+    #         print(f"Skipping LMC_WEIGHT={LMC_WEIGHT:.2f}, output directory '{output_dir}' already exists.")
 
 if __name__ == '__main__':
     main()

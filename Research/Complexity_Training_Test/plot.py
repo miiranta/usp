@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Define the output directory
-output_dir = "output"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+output_dir = os.path.join(SCRIPT_DIR, "output")
 
 # Lists to store data
 lmc_weights = []
