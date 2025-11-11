@@ -56,7 +56,9 @@ class TextDataset(Dataset):
             padding=False,
             truncation=False,
             add_special_tokens=False,
-            return_attention_mask=False
+            return_attention_mask=False,
+            max_length=None,  # Allow any length since we chunk later
+            verbose=False  # Suppress length warnings
         )
         
         self.input_ids = encodings['input_ids'][0]
