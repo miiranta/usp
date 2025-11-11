@@ -189,11 +189,12 @@ def calculate_lmc_complexity(logits, temperature=1.0):
     
     return lmc, shannon_entropy, disequilibrium
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, gradient_accumulation_steps, lmc_weight=0.2):
+def train_epoch(model, train_loader, optimizer, scheduler, device, gradient_accumulation_steps, scaler, lmc_weight=0.2):
     """
-    Train for one epoch with gradient accumulation and LMC complexity optimization.
+    Train for one epoch with gradient accumulation, mixed precision, and LMC complexity optimization.
     
     Args:
+        scaler: GradScaler for mixed precision training
         lmc_weight: Weight for LMC complexity (0.0-1.0)
                    0.0 = 100% loss minimization, 0% LMC maximization
                    0.5 = 50% loss minimization, 50% LMC maximization
@@ -215,28 +216,29 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, gradient_accu
         labels = batch['labels'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         
-        # Forward pass
-        logits = model(input_ids, attention_mask=attention_mask)
+        # Forward pass with automatic mixed precision (AMP)
+        with torch.cuda.amp.autocast():
+            logits = model(input_ids, attention_mask=attention_mask)
+            
+            # Reshape for loss computation
+            logits_flat = logits.view(-1, model.vocab_size)
+            labels_flat = labels.view(-1)
+            
+            # Cross-entropy loss (ignore padding tokens marked with -100)
+            ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
+            
+            # Calculate LMC complexity (for optimization only)
+            lmc, _, _ = calculate_lmc_complexity(logits)
+            
+            # Combined objective: weighted sum of loss minimization and LMC maximization
+            # Minimize: (1-lmc_weight)*loss - lmc_weight*lmc
+            combined_loss = loss_weight * ce_loss - lmc_weight * lmc
+            
+            # Normalize by gradient accumulation steps
+            combined_loss = combined_loss / gradient_accumulation_steps
         
-        # Reshape for loss computation
-        logits_flat = logits.view(-1, model.vocab_size)
-        labels_flat = labels.view(-1)
-        
-        # Cross-entropy loss (ignore padding tokens marked with -100)
-        ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
-        
-        # Calculate LMC complexity (for optimization only)
-        lmc, _, _ = calculate_lmc_complexity(logits)
-        
-        # Combined objective: weighted sum of loss minimization and LMC maximization
-        # Minimize: (1-lmc_weight)*loss - lmc_weight*lmc
-        combined_loss = loss_weight * ce_loss - lmc_weight * lmc
-        
-        # Normalize by gradient accumulation steps
-        combined_loss = combined_loss / gradient_accumulation_steps
-        
-        # Backward pass
-        combined_loss.backward()
+        # Backward pass with scaled loss
+        scaler.scale(combined_loss).backward()
         
         total_loss += ce_loss.detach().item()
         total_lmc += lmc.detach().item()
@@ -246,7 +248,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, gradient_accu
         # Gradient accumulation step
         if (batch_idx + 1) % gradient_accumulation_steps == 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             scheduler.step()
             optimizer.zero_grad()
             
@@ -407,6 +410,9 @@ def run(output_dir='output'):
         num_training_steps=total_steps
     )
     
+    # Initialize GradScaler for mixed precision training
+    scaler = torch.cuda.amp.GradScaler()
+    
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
     print(f"Training on {device}")
     print(f"Total training steps: {total_steps}")
@@ -423,7 +429,7 @@ def run(output_dir='output'):
         print(f"\nEpoch {epoch + 1}/{EPOCHS}")
         train_loss, train_combined = train_epoch(
             model, train_loader, optimizer, scheduler, device, 
-            GRADIENT_ACCUMULATION_STEPS, LMC_WEIGHT
+            GRADIENT_ACCUMULATION_STEPS, scaler, LMC_WEIGHT
         )
         val_loss = validate(model, val_loader, device)
         
