@@ -49,7 +49,7 @@ NUM_LAYERS = 2
 NUM_ATTENTION_HEADS = 4 
 BATCH_SIZE = 64  
 GRADIENT_ACCUMULATION_STEPS = 1
-EPOCHS = 40
+EPOCHS = 20
 LEARNING_RATE = 5e-4 
 SEQ_LENGTH = 8 
 WARMUP_RATIO = 0.1
@@ -587,11 +587,11 @@ def run(output_dir='output'):
 def main():
     global LMC_WEIGHT
     
-    LMC_WEIGHT = 0.0
-    # Final run with EPOCHS=50 and LMC_WEIGHT=0
-    output_dir = f'output/final_run_LMC_{LMC_WEIGHT:.2f}_epochs_{EPOCHS}'
-    if not os.path.exists(output_dir):
-        run(output_dir)
+    # LMC_WEIGHT = 0.0
+    # # Final run with EPOCHS=50 and LMC_WEIGHT=0
+    # output_dir = f'output/final_run_LMC_{LMC_WEIGHT:.2f}_epochs_{EPOCHS}'
+    # if not os.path.exists(output_dir):
+    #     run(output_dir)
 
     LMC_WEIGHT = 0.0
     # Iterate from 0.0 to 1.0 in steps of 0.05, run(output-LMC_WEIGHT)
