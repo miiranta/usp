@@ -510,15 +510,17 @@ def main():
     global LMC_WEIGHT
     global EPOCHS
     
+    EPOCHS = 50
+    LMC_WEIGHT = 0.0
     # Iterate from 0.0 to 1.0 in steps of 0.05, run(output-LMC_WEIGHT)
     # Ignore if folder already exists
-    # for step in range(21):
-    #     LMC_WEIGHT = step * 0.05
-    #     output_dir = f'output/output_LMC_{LMC_WEIGHT:.2f}'
-    #     if not os.path.exists(output_dir):
-    #         run(output_dir)
-    #     else:
-    #         print(f"Skipping LMC_WEIGHT={LMC_WEIGHT:.2f}, output directory '{output_dir}' already exists.")
+    for step in range(21):
+        LMC_WEIGHT = step * 0.05
+        output_dir = f'output/output_LMC_{LMC_WEIGHT:.2f}'
+        if not os.path.exists(output_dir):
+            run(output_dir)
+        else:
+            print(f"Skipping LMC_WEIGHT={LMC_WEIGHT:.2f}, output directory '{output_dir}' already exists.")
 
     EPOCHS = 50
     LMC_WEIGHT = 0.0
