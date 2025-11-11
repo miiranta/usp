@@ -555,7 +555,6 @@ def run(output_dir='output'):
     # Create secondary y-axis for LMC complexity
     ax2 = ax1.twinx()
     ax2.plot(range(1, EPOCHS + 1), lmc_values, label='Model LMC', marker='D', color='green', linewidth=2)
-    ax2.axhline(y=test_lmc, color='darkgreen', linestyle='--', label=f'Test LMC ({test_lmc:.4f})')
     ax2.set_ylabel('LMC Complexity (C = H × D)', fontsize=12, color='green')
     ax2.tick_params(axis='y', labelcolor='green')
     
@@ -589,6 +588,12 @@ def main():
     global LMC_WEIGHT
     
     LMC_WEIGHT = 0.0
+    # Final run with EPOCHS=50 and LMC_WEIGHT=0
+    output_dir = f'output/final_run_LMC_{LMC_WEIGHT:.2f}_epochs_{EPOCHS}'
+    if not os.path.exists(output_dir):
+        run(output_dir)
+
+    LMC_WEIGHT = 0.0
     # Iterate from 0.0 to 1.0 in steps of 0.05, run(output-LMC_WEIGHT)
     # Ignore if folder already exists
     for step in range(21):
@@ -598,12 +603,6 @@ def main():
             run(output_dir)
         else:
             print(f"Skipping LMC_WEIGHT={LMC_WEIGHT:.2f}, output directory '{output_dir}' already exists.")
-
-    LMC_WEIGHT = 0.0
-    # Final run with EPOCHS=50 and LMC_WEIGHT=0
-    output_dir = f'output/final_run_LMC_{LMC_WEIGHT:.2f}_epochs_{EPOCHS}'
-    if not os.path.exists(output_dir):
-        run(output_dir)
 
 if __name__ == '__main__':
     main()
