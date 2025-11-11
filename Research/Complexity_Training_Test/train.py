@@ -469,7 +469,7 @@ def run(output_dir='output'):
     )
     
     # Initialize GradScaler for mixed precision training
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.amp.GradScaler('cuda')
     
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
     print(f"Training on {device}")
