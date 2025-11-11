@@ -54,7 +54,7 @@ LEARNING_RATE = 5e-4
 SEQ_LENGTH = 64
 WARMUP_RATIO = 0.1
 MAX_GRAD_NORM = 0.5
-MAX_SAMPLES = None
+MAX_SAMPLES = 100000
 
 # LMC Complexity weight (0.0 = 100% loss optimization, 1.0 = 100% LMC maximization)
 # e.g., 0.2 = 20% LMC maximization + 80% loss minimization
