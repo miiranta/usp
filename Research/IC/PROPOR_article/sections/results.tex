@@ -84,8 +84,8 @@
         \begin{tabular}{lcc}
             \textbf{Model} & \textbf{Uncorrected} & \textbf{Corrected} \\
             \hline
-            LSTM & 0.16\% & 0.23\% \\
-            ARIMA & 1.20\% & 0.73\% \\
+            LSTM & 0.1581\% & 0.2534\% \\
+            ARIMA & 1.2209\% & 0.7403\% \\
         \end{tabular}
         \caption{RMSE reduction across different models.}
         \label{tab:rmse_reduction}
@@ -97,7 +97,20 @@
 
     While ARIMA models observed a reduction in predition performance when using corrected sentiment grades, LSTM models saw an improvement.
 
+    \begin{table*}[t]
+        \centering
+        \caption{Statistical significance of RMSE improvements across all experimental runs.}
+        \label{tab:significance_results}
+        \begin{tabular}{llrrrrrr}
+            \hline
+            \textbf{Model} & \textbf{Correction} & \textbf{Mean (\%)} & \textbf{Std (\%)} & \textbf{n} & \textbf{t-statistic} & \textbf{p-value} & \textbf{Significant} \\
+            \hline
+            LSTM & Uncorrected & 0.1581 & 1.47 & 6132 & 8.4154 & $4.82 \times 10^{-17}$ & Yes ($p < 0.001$) \\
+            LSTM & Corrected & 0.2534 & 1.40 & 6132 & 14.1432 & $1.03 \times 10^{-44}$ & Yes ($p < 0.001$) \\
+            ARIMA & Uncorrected & 1.2209 & 0.36 & 6132 & 268.0091 & $\approx 0$ & Yes ($p < 0.001$) \\
+            ARIMA & Corrected & 0.7403 & 0.76 & 6132 & 76.3413 & $\approx 0$ & Yes ($p < 0.001$) \\
+            \hline
+        \end{tabular}
+    \end{table*}
 
-    
-    
-    
+    Table~\ref{tab:significance_results} presents the statistical significance analysis of RMSE improvements. All configurations demonstrate highly significant improvements ($p < 0.001$), confirming that the observed performance gains are not due to random variation. The ARIMA models show particularly strong improvements, with mean RMSE reductions of 1.2209\% (uncorrected) and 0.7403\% (corrected). LSTM models exhibit more modest but still significant improvements of 0.1581\% (uncorrected) and 0.2534\% (corrected). The large sample sizes ($n = 6{,}132$) and substantial t-statistics provide robust evidence for the effectiveness of incorporating sentiment analysis into inflation forecasting models.

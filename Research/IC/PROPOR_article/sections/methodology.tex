@@ -204,5 +204,20 @@
 
         We employ ARIMA with sentiment as exogenous variable~\cite{moslemi2024comprehensive} using walk-forward validation, and LSTM with 5000 neurons trained with NAdam optimizer~\cite{dozat2016nadam} (learning rate 0.001, max 10,000 epochs, early stopping patience 10). The highly parameterized LSTM aligns with recent insights on double descent~\cite{schaeffer2023double}, where increased complexity improves generalization in the overparameterized regime. Both models are evaluated using Root Mean Squared Error (RMSE).
 
-        In total, we conducted 36,792 tests: $(2^9 - 1)$ LLM combinations $\times$ 3 human datasets $\times$ 4 equation types $\times$ 3 dataset types $\times$ 2 models. 
+        In total, we conducted 36,792 tests: $(2^9 - 1)$ LLM combinations $\times$ 3 human datasets $\times$ 4 equation types $\times$ 3 dataset types $\times$ 2 models.
+
+
+    \subsubsection{Statistical Significance Testing}
+
+        To assess whether the observed RMSE improvements are statistically significant, we perform a one-sample t-test on the percentage improvements relative to baseline. For each model and correction type, we test whether the mean improvement percentage differs significantly from zero (no improvement).
+
+        We grouped all \(IN_{ijkm}\) instances by model type (LSTM or ARIMA) and the \(m\) index value (\textit{Without Correction} or \textit{With Correction}), excluding \textit{Baseline} since it serves as the reference point. For each group, we calculated the percentage improvement by comparing the RMSE of each \(IN_{ijkm}\) against its corresponding baseline: \(\text{Improvement}_{\%} = \frac{\text{RMSE}_{\text{baseline}} - \text{RMSE}_{ijkm}}{\text{RMSE}_{\text{baseline}}} \times 100\). This yields four distinct groups for analysis: LSTM-Uncorrected, LSTM-Corrected, ARIMA-Uncorrected, and ARIMA-Corrected. Each group aggregates results across all LLM combinations (\(i\)), human evaluation datasets (\(j\)), and equation types (\(k\)), resulting in $n = 6{,}132$ observations per group (511 LLM combinations $\times$ 3 human datasets $\times$ 4 equation types).
+
+        The null hypothesis $H_0: \mu = 0$ states that sentiment inclusion provides no average improvement, tested against the alternative $H_1: \mu \neq 0$ (nonzero improvement). The t-statistic is:
+
+        \[
+        t = \frac{\bar{x}}{s / \sqrt{n}}
+        \]
+
+        where $\bar{x}$ is the mean improvement percentage across all experimental runs, $s$ is the sample standard deviation, and $n$ is the sample size. The p-value indicates the probability of observing such improvements if sentiment truly had no effect. We consider $p < 0.001$ as highly significant, $p < 0.01$ as very significant, and $p < 0.05$ as significant. 
 
