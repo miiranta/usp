@@ -23,7 +23,7 @@ class Config:
     # Training hyperparameters
     BATCH_SIZE = 512
     GRADIENT_ACCUMULATION_STEPS = 1
-    EPOCHS = 50
+    EPOCHS = 30
     LEARNING_RATE = 5e-4
     SEQ_LENGTH = 16
     WARMUP_RATIO = 0.1
