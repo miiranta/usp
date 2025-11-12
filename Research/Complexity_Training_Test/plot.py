@@ -33,11 +33,11 @@ for folder in folders:
         with open(csv_path, 'r') as f:
             lines = f.readlines()
         
-        # Extract Test Loss and Test LMC Complexity from the first section
+        # Extract Test Loss and Test LMC Complexity - get the LAST occurrence
         test_loss = None
         test_lmc = None
         
-        for line in lines[:10]:  # Only check first 10 lines
+        for line in lines:  # Check all lines to find the last occurrence
             if line.startswith('Test Loss,'):
                 test_loss = float(line.split(',')[1].strip())
             elif line.startswith('Test LMC Complexity,'):
@@ -82,25 +82,25 @@ fig, ax1 = plt.subplots(figsize=(12, 6))
 color = 'tab:blue'
 ax1.set_xlabel('LMC Weight', fontsize=12)
 ax1.set_ylabel('Test Loss', color=color, fontsize=12)
-ax1.plot(lmc_weights, test_losses, marker='o', linestyle='-', linewidth=2, markersize=8, color=color, label='Test Loss')
+line1 = ax1.plot(lmc_weights, test_losses, marker='o', linestyle='-', linewidth=2, markersize=8, color=color, label='Test Loss')
 ax1.tick_params(axis='y', labelcolor=color)
-ax1.grid(True, alpha=0.3)
+ax1.grid(True, alpha=0.3, axis='x')
 
 # Create a second y-axis for Test LMC
 ax2 = ax1.twinx()
 color = 'tab:red'
 ax2.set_ylabel('Test LMC Complexity', color=color, fontsize=12)
-ax2.plot(lmc_weights, test_lmc_complexities, marker='s', linestyle='-', linewidth=2, markersize=8, color=color, label='Test LMC Complexity')
+line2 = ax2.plot(lmc_weights, test_lmc_complexities, marker='s', linestyle='-', linewidth=2, markersize=8, color=color, label='Test LMC Complexity')
 ax2.tick_params(axis='y', labelcolor=color)
 
 # Add title and legends
 plt.title('Test Loss and Test LMC Complexity vs LMC Weight', fontsize=14, fontweight='bold')
 fig.tight_layout()
 
-# Add legends
-lines1, labels1 = ax1.get_legend_handles_labels()
-lines2, labels2 = ax2.get_legend_handles_labels()
-ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+# Add legends - combine both lines correctly
+lines = line1 + line2
+labels = [l.get_label() for l in lines]
+ax1.legend(lines, labels, loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=True)
 
 # Save the plot
 plt.savefig('plot_test_loss_and_lmc_plot.png', dpi=300, bbox_inches='tight')
@@ -229,54 +229,93 @@ for lmc_weight, data in training_data.items():
 
 df_3d = pd.DataFrame(training_data_3d)
 
-# Create 3D plots for each metric with better visibility
+# Create 3D plots for each metric with interpolated surfaces
 fig = plt.figure(figsize=(20, 6))
 
-# Generate colors for each LMC weight
+# Get unique values for interpolation
 unique_lmc_weights = sorted(df_3d['LMC Weight'].unique())
-colors_map = plt.cm.viridis(np.linspace(0, 1, len(unique_lmc_weights)))
+unique_epochs = sorted(df_3d['Epoch'].unique())
+
+# Create meshgrid for interpolation
+X, Y = np.meshgrid(unique_epochs, unique_lmc_weights)
+
+# Function to create interpolated surface with color based on distance from plane
+def create_surface_plot(ax, metric_name, title):
+    from scipy.interpolate import griddata
+    
+    # Create Z matrix for the metric
+    Z = np.zeros((len(unique_lmc_weights), len(unique_epochs)))
+    
+    for i, lmc_weight in enumerate(unique_lmc_weights):
+        for j, epoch in enumerate(unique_epochs):
+            value = df_3d[(df_3d['LMC Weight'] == lmc_weight) & (df_3d['Epoch'] == epoch)][metric_name]
+            if not value.empty:
+                Z[i, j] = value.values[0]
+            else:
+                # Interpolate if missing
+                Z[i, j] = np.nan
+    
+    # Fill NaN values with linear interpolation if any
+    mask = ~np.isnan(Z)
+    if not mask.all():
+        points = np.array([(Y[mask].flatten()[k], X[mask].flatten()[k]) for k in range(mask.sum())])
+        values = Z[mask].flatten()
+        Z_filled = griddata(points, values, (Y, X), method='linear')
+        Z = np.where(np.isnan(Z), Z_filled, Z)
+    
+    # Create a much denser grid for smooth visualization
+    epochs_fine = np.linspace(unique_epochs[0], unique_epochs[-1], len(unique_epochs) * 5)
+    lmc_weights_fine = np.linspace(unique_lmc_weights[0], unique_lmc_weights[-1], len(unique_lmc_weights) * 5)
+    X_fine, Y_fine = np.meshgrid(epochs_fine, lmc_weights_fine)
+    
+    # Flatten the original data for interpolation
+    points = np.array([X.flatten(), Y.flatten()]).T
+    values = Z.flatten()
+    
+    # Interpolate on the fine grid using cubic interpolation for smoothness
+    points_fine = np.array([X_fine.flatten(), Y_fine.flatten()]).T
+    Z_fine = griddata(points, values, points_fine, method='cubic')
+    Z_fine = Z_fine.reshape(X_fine.shape)
+    
+    # Color based on distance from the Epoch x LMC Weight plane (Z=0)
+    # Use absolute distance and apply exponential scaling for more pronounced color changes near 0
+    Z_abs = np.abs(Z_fine)
+    Z_normalized = (Z_abs - np.nanmin(Z_abs)) / (np.nanmax(Z_abs) - np.nanmin(Z_abs))
+    
+    # Apply power function to make color changes more pronounced near 0
+    # Higher exponent = more dramatic color change near 0
+    Z_normalized = Z_normalized ** 3
+    
+    # Invert so closer to Z=0 is darker
+    Z_normalized = 1 - Z_normalized
+    
+    # Create surface plot with color based on distance from base plane (Z=0)
+    surf = ax.plot_surface(X_fine, Y_fine, Z_fine, facecolors=plt.cm.viridis(Z_normalized), 
+                          alpha=0.9, edgecolor='none', shade=True, antialiased=True)
+    
+    # Add contour lines on the base plane for better visualization
+    ax.contour(X_fine, Y_fine, Z_fine, zdir='z', offset=np.nanmin(Z_fine), cmap='viridis', alpha=0.3, linewidths=1)
+    
+    ax.set_xlabel('Epoch', fontsize=11, fontweight='bold')
+    ax.set_ylabel('LMC Weight', fontsize=11, fontweight='bold')
+    ax.set_zlabel(title, fontsize=11, fontweight='bold')
+    ax.set_title(title, fontsize=13, fontweight='bold')
+    ax.view_init(elev=25, azim=120)
+    ax.grid(True, alpha=0.3)
+    
+    return surf
 
 # 3D Plot 1: Training Loss
 ax1 = fig.add_subplot(131, projection='3d')
-for i, lmc_weight in enumerate(unique_lmc_weights):
-    subset = df_3d[df_3d['LMC Weight'] == lmc_weight]
-    ax1.plot(subset['Epoch'], [lmc_weight]*len(subset), subset['Training Loss'], 
-             marker='o', color=colors_map[i], label=f'LMC {lmc_weight:.2f}', linewidth=2.5, markersize=6)
-
-ax1.set_xlabel('Epoch', fontsize=11, fontweight='bold')
-ax1.set_ylabel('LMC Weight', fontsize=11, fontweight='bold')
-ax1.set_zlabel('Training Loss', fontsize=11, fontweight='bold')
-ax1.set_title('Training Loss', fontsize=13, fontweight='bold')
-ax1.view_init(elev=25, azim=120)
-ax1.grid(True, alpha=0.3)
+surf1 = create_surface_plot(ax1, 'Training Loss', 'Training Loss')
 
 # 3D Plot 2: Validation Loss
 ax2 = fig.add_subplot(132, projection='3d')
-for i, lmc_weight in enumerate(unique_lmc_weights):
-    subset = df_3d[df_3d['LMC Weight'] == lmc_weight]
-    ax2.plot(subset['Epoch'], [lmc_weight]*len(subset), subset['Validation Loss'], 
-             marker='s', color=colors_map[i], label=f'LMC {lmc_weight:.2f}', linewidth=2.5, markersize=6)
-
-ax2.set_xlabel('Epoch', fontsize=11, fontweight='bold')
-ax2.set_ylabel('LMC Weight', fontsize=11, fontweight='bold')
-ax2.set_zlabel('Validation Loss', fontsize=11, fontweight='bold')
-ax2.set_title('Validation Loss', fontsize=13, fontweight='bold')
-ax2.view_init(elev=25, azim=120)
-ax2.grid(True, alpha=0.3)
+surf2 = create_surface_plot(ax2, 'Validation Loss', 'Validation Loss')
 
 # 3D Plot 3: Model LMC
 ax3 = fig.add_subplot(133, projection='3d')
-for i, lmc_weight in enumerate(unique_lmc_weights):
-    subset = df_3d[df_3d['LMC Weight'] == lmc_weight]
-    ax3.plot(subset['Epoch'], [lmc_weight]*len(subset), subset['Model LMC'], 
-             marker='^', color=colors_map[i], label=f'LMC {lmc_weight:.2f}', linewidth=2.5, markersize=6)
-
-ax3.set_xlabel('Epoch', fontsize=11, fontweight='bold')
-ax3.set_ylabel('LMC Weight', fontsize=11, fontweight='bold')
-ax3.set_zlabel('Model LMC', fontsize=11, fontweight='bold')
-ax3.set_title('Model LMC', fontsize=13, fontweight='bold')
-ax3.view_init(elev=25, azim=120)
-ax3.grid(True, alpha=0.3)
+surf3 = create_surface_plot(ax3, 'Model LMC', 'Model LMC')
 
 fig.suptitle('3D Training Metrics: Epoch vs LMC Weight vs Metric Value', fontsize=15, fontweight='bold', y=1.00)
 plt.tight_layout()
