@@ -103,8 +103,9 @@ labels = [l.get_label() for l in lines]
 ax1.legend(lines, labels, loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=True)
 
 # Save the plot
-plt.savefig('plot_test_loss_and_lmc_plot.png', dpi=300, bbox_inches='tight')
-print("\nPlot saved as 'test_loss_and_lmc_plot.png'")
+output_plot_path = os.path.join(SCRIPT_DIR, 'plot_test_loss_and_lmc_plot.png')
+plt.savefig(output_plot_path, dpi=300, bbox_inches='tight')
+print(f"\nPlot saved as '{output_plot_path}'")
 
 # Show the plot
 plt.show()
@@ -206,8 +207,9 @@ ax.legend(loc='best', fontsize=8, ncol=2)
 ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('plot_training_curves_all_lmc_weights.png', dpi=300, bbox_inches='tight')
-print("\nTraining curves plot saved as 'training_curves_all_lmc_weights.png'")
+output_training_path = os.path.join(SCRIPT_DIR, 'plot_training_curves_all_lmc_weights.png')
+plt.savefig(output_training_path, dpi=300, bbox_inches='tight')
+print(f"\nTraining curves plot saved as '{output_training_path}'")
 plt.show()
 
 # ============================================================================
@@ -277,21 +279,10 @@ def create_surface_plot(ax, metric_name, title):
     Z_fine = griddata(points, values, points_fine, method='cubic')
     Z_fine = Z_fine.reshape(X_fine.shape)
     
-    # Color based on distance from the Epoch x LMC Weight plane (Z=0)
-    # Use absolute distance and apply exponential scaling for more pronounced color changes near 0
-    Z_abs = np.abs(Z_fine)
-    Z_normalized = (Z_abs - np.nanmin(Z_abs)) / (np.nanmax(Z_abs) - np.nanmin(Z_abs))
-    
-    # Apply power function to make color changes more pronounced near 0
-    # Higher exponent = more dramatic color change near 0
-    Z_normalized = Z_normalized ** 3
-    
-    # Invert so closer to Z=0 is darker
-    Z_normalized = 1 - Z_normalized
-    
-    # Create surface plot with color based on distance from base plane (Z=0)
-    surf = ax.plot_surface(X_fine, Y_fine, Z_fine, facecolors=plt.cm.viridis(Z_normalized), 
-                          alpha=0.9, edgecolor='none', shade=True, antialiased=True)
+    # Create surface plot with smooth color gradient based on Z values
+    surf = ax.plot_surface(X_fine, Y_fine, Z_fine, cmap='viridis', 
+                          alpha=0.9, edgecolor='none', shade=False, 
+                          antialiased=True, rstride=1, cstride=1)
     
     # Add contour lines on the base plane for better visualization
     ax.contour(X_fine, Y_fine, Z_fine, zdir='z', offset=np.nanmin(Z_fine), cmap='viridis', alpha=0.3, linewidths=1)
@@ -319,6 +310,7 @@ surf3 = create_surface_plot(ax3, 'Model LMC', 'Model LMC')
 
 fig.suptitle('3D Training Metrics: Epoch vs LMC Weight vs Metric Value', fontsize=15, fontweight='bold', y=1.00)
 plt.tight_layout()
-plt.savefig('plot_3d_training_curves_all_lmc_weights.png', dpi=300, bbox_inches='tight')
-print("\n3D Training curves plot saved as 'plot_3d_training_curves_all_lmc_weights.png'")
+output_3d_path = os.path.join(SCRIPT_DIR, 'plot_3d_training_curves_all_lmc_weights.png')
+plt.savefig(output_3d_path, dpi=300, bbox_inches='tight')
+print(f"\n3D Training curves plot saved as '{output_3d_path}'")
 plt.show()
