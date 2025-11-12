@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
+from mpl_toolkits.mplot3d import Axes3D
 
 # Define the output directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -62,7 +64,7 @@ for folder in folders:
             for line in lines[epoch_start_idx + 1:]:
                 if line.strip():  # Skip empty lines
                     parts = line.strip().split(',')
-                    if len(parts) == 4:
+                    if len(parts) >= 4:  # Now has 7 columns: Epoch, Training Loss, Validation Loss, Model LMC, Weights Entropy, Weights Disequilibrium, Num Bins
                         epoch_data.append({
                             'epoch': int(parts[0]),
                             'training_loss': float(parts[1]),
@@ -206,4 +208,78 @@ ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.savefig('plot_training_curves_all_lmc_weights.png', dpi=300, bbox_inches='tight')
 print("\nTraining curves plot saved as 'training_curves_all_lmc_weights.png'")
+plt.show()
+
+# ============================================================================
+# 3D PLOT: Training curves using seaborn with 3D visualization
+# ============================================================================
+
+# Prepare data for 3D plots
+training_data_3d = []
+
+for lmc_weight, data in training_data.items():
+    for entry in data:
+        training_data_3d.append({
+            'LMC Weight': lmc_weight,
+            'Epoch': entry['epoch'],
+            'Training Loss': entry['training_loss'],
+            'Validation Loss': entry['validation_loss'],
+            'Model LMC': entry['model_lmc']
+        })
+
+df_3d = pd.DataFrame(training_data_3d)
+
+# Create 3D plots for each metric with better visibility
+fig = plt.figure(figsize=(20, 6))
+
+# Generate colors for each LMC weight
+unique_lmc_weights = sorted(df_3d['LMC Weight'].unique())
+colors_map = plt.cm.viridis(np.linspace(0, 1, len(unique_lmc_weights)))
+
+# 3D Plot 1: Training Loss
+ax1 = fig.add_subplot(131, projection='3d')
+for i, lmc_weight in enumerate(unique_lmc_weights):
+    subset = df_3d[df_3d['LMC Weight'] == lmc_weight]
+    ax1.plot(subset['Epoch'], [lmc_weight]*len(subset), subset['Training Loss'], 
+             marker='o', color=colors_map[i], label=f'LMC {lmc_weight:.2f}', linewidth=2.5, markersize=6)
+
+ax1.set_xlabel('Epoch', fontsize=11, fontweight='bold')
+ax1.set_ylabel('LMC Weight', fontsize=11, fontweight='bold')
+ax1.set_zlabel('Training Loss', fontsize=11, fontweight='bold')
+ax1.set_title('Training Loss', fontsize=13, fontweight='bold')
+ax1.view_init(elev=25, azim=120)
+ax1.grid(True, alpha=0.3)
+
+# 3D Plot 2: Validation Loss
+ax2 = fig.add_subplot(132, projection='3d')
+for i, lmc_weight in enumerate(unique_lmc_weights):
+    subset = df_3d[df_3d['LMC Weight'] == lmc_weight]
+    ax2.plot(subset['Epoch'], [lmc_weight]*len(subset), subset['Validation Loss'], 
+             marker='s', color=colors_map[i], label=f'LMC {lmc_weight:.2f}', linewidth=2.5, markersize=6)
+
+ax2.set_xlabel('Epoch', fontsize=11, fontweight='bold')
+ax2.set_ylabel('LMC Weight', fontsize=11, fontweight='bold')
+ax2.set_zlabel('Validation Loss', fontsize=11, fontweight='bold')
+ax2.set_title('Validation Loss', fontsize=13, fontweight='bold')
+ax2.view_init(elev=25, azim=120)
+ax2.grid(True, alpha=0.3)
+
+# 3D Plot 3: Model LMC
+ax3 = fig.add_subplot(133, projection='3d')
+for i, lmc_weight in enumerate(unique_lmc_weights):
+    subset = df_3d[df_3d['LMC Weight'] == lmc_weight]
+    ax3.plot(subset['Epoch'], [lmc_weight]*len(subset), subset['Model LMC'], 
+             marker='^', color=colors_map[i], label=f'LMC {lmc_weight:.2f}', linewidth=2.5, markersize=6)
+
+ax3.set_xlabel('Epoch', fontsize=11, fontweight='bold')
+ax3.set_ylabel('LMC Weight', fontsize=11, fontweight='bold')
+ax3.set_zlabel('Model LMC', fontsize=11, fontweight='bold')
+ax3.set_title('Model LMC', fontsize=13, fontweight='bold')
+ax3.view_init(elev=25, azim=120)
+ax3.grid(True, alpha=0.3)
+
+fig.suptitle('3D Training Metrics: Epoch vs LMC Weight vs Metric Value', fontsize=15, fontweight='bold', y=1.00)
+plt.tight_layout()
+plt.savefig('plot_3d_training_curves_all_lmc_weights.png', dpi=300, bbox_inches='tight')
+print("\n3D Training curves plot saved as 'plot_3d_training_curves_all_lmc_weights.png'")
 plt.show()
