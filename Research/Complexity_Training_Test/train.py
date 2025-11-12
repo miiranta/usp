@@ -14,7 +14,6 @@ from tqdm import tqdm
 # ============================================================================
 
 class Config:
-    """Training configuration"""
     # Model hyperparameters
     HIDDEN_DIM = 200 # Must be divisible by NUM_ATTENTION_HEADS
     NUM_LAYERS = 2
@@ -28,7 +27,7 @@ class Config:
     SEQ_LENGTH = 16
     WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 0.5
-    MAX_SAMPLES = 5000
+    MAX_SAMPLES = None
     
     # LMC Complexity weight (0.0 = 100% loss optimization, 1.0 = 100% LMC maximization)
     LMC_WEIGHT = 0.0
@@ -47,9 +46,12 @@ def initialize_device():
     print(f"Using device: {device}")
     
     if torch.cuda.is_available():
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        num_gpus = torch.cuda.device_count()
+        print(f"Number of GPUs available: {num_gpus}")
+        for i in range(num_gpus):
+            print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
+            print(f"  Memory: {torch.cuda.get_device_properties(i).total_memory / 1e9:.2f} GB")
         print(f"CUDA Version: {torch.version.cuda}")
-        print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
         torch.cuda.empty_cache()
         torch.backends.cudnn.benchmark = True
     else:
@@ -90,10 +92,12 @@ class TextDataset(Dataset):
         self.tokenizer = tokenizer
         
         # Read and tokenize text
+        print(f"Tokenizing {file_path}...")
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
         
-        print(f"Tokenizing {file_path}...")
+        print(f"  File size: {len(text) / 1024 / 1024:.2f} MB")
+        
         encodings = tokenizer(
             text,
             return_tensors='pt',
@@ -107,11 +111,15 @@ class TextDataset(Dataset):
         
         self.input_ids = encodings['input_ids'][0]
         
-        if max_samples:
+        # Only limit if max_samples is explicitly set
+        if max_samples is not None:
             max_length = max_samples * seq_length
+            original_len = len(self.input_ids)
             self.input_ids = self.input_ids[:max_length]
-        
-        print(f"Dataset loaded: {len(self.input_ids)} tokens")
+            print(f"  Tokens before limit: {original_len:,}")
+            print(f"  Tokens after limit:  {len(self.input_ids):,} (max_samples={max_samples})")
+        else:
+            print(f"  Tokens loaded: {len(self.input_ids):,} (no limit)")
     
     def __len__(self):
         return max(0, len(self.input_ids) - self.seq_length)
@@ -290,17 +298,22 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
     loss_weight = 1.0 - config.LMC_WEIGHT
     lmc_weight = config.LMC_WEIGHT
     
+    # Get primary device (handles both single and multi-GPU)
+    primary_device = next(model.parameters()).device
+    
     progress_bar = tqdm(train_loader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
-        input_ids = batch['input_ids'].to(device)
-        labels = batch['labels'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
+        input_ids = batch['input_ids'].to(primary_device)
+        labels = batch['labels'].to(primary_device)
+        attention_mask = batch['attention_mask'].to(primary_device)
         
         # Forward pass with mixed precision
         with torch.amp.autocast('cuda'):
             logits = model(input_ids, attention_mask=attention_mask)
-            logits_flat = logits.view(-1, model.vocab_size)
+            # Handle both DataParallel and regular models
+            vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
+            logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
@@ -351,15 +364,20 @@ def validate(model, val_loader, device):
     model.eval()
     total_loss = 0.0
     
+    # Get primary device (handles both single and multi-GPU)
+    primary_device = next(model.parameters()).device
+    
     with torch.no_grad():
         progress_bar = tqdm(val_loader, desc="Validating")
         for batch in progress_bar:
-            input_ids = batch['input_ids'].to(device)
-            labels = batch['labels'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
+            input_ids = batch['input_ids'].to(primary_device)
+            labels = batch['labels'].to(primary_device)
+            attention_mask = batch['attention_mask'].to(primary_device)
             
             logits = model(input_ids, attention_mask=attention_mask)
-            logits_flat = logits.view(-1, model.vocab_size)
+            # Handle both DataParallel and regular models
+            vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
+            logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
@@ -372,15 +390,20 @@ def test(model, test_loader, device):
     model.eval()
     total_loss = 0.0
     
+    # Get primary device (handles both single and multi-GPU)
+    primary_device = next(model.parameters()).device
+    
     with torch.no_grad():
         progress_bar = tqdm(test_loader, desc="Testing")
         for batch in progress_bar:
-            input_ids = batch['input_ids'].to(device)
-            labels = batch['labels'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
+            input_ids = batch['input_ids'].to(primary_device)
+            labels = batch['labels'].to(primary_device)
+            attention_mask = batch['attention_mask'].to(primary_device)
             
             logits = model(input_ids, attention_mask=attention_mask)
-            logits_flat = logits.view(-1, model.vocab_size)
+            # Handle both DataParallel and regular models
+            vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
+            logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
@@ -404,16 +427,16 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values,
         
         # Summary metrics
         writer.writerow(['Metric', 'Value'])
-        writer.writerow(['Test Loss', f'{test_loss:.4f}'])
-        writer.writerow(['Test LMC Complexity', f'{test_metrics[0]:.4f}'])
-        writer.writerow(['Test Weights Entropy', f'{test_metrics[1]:.4f}'])
-        writer.writerow(['Test Weights Disequilibrium', f'{test_metrics[2]:.4f}'])
+        writer.writerow(['Test Loss', f'{test_loss:.16f}'])
+        writer.writerow(['Test LMC Complexity', f'{test_metrics[0]:.16f}'])
+        writer.writerow(['Test Weights Entropy', f'{test_metrics[1]:.16f}'])
+        writer.writerow(['Test Weights Disequilibrium', f'{test_metrics[2]:.16f}'])
         writer.writerow(['Test Weights Bins (Freedman-Diaconis)', f'{test_metrics[3]}'])
-        writer.writerow(['Final Training Loss', f'{train_losses[-1]:.4f}'])
-        writer.writerow(['Final Validation Loss', f'{val_losses[-1]:.4f}'])
-        writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.4f}'])
-        writer.writerow(['LMC Weight', f'{config.LMC_WEIGHT}'])
-        writer.writerow(['Loss Weight', f'{1.0 - config.LMC_WEIGHT}'])
+        writer.writerow(['Final Training Loss', f'{train_losses[-1]:.16f}'])
+        writer.writerow(['Final Validation Loss', f'{val_losses[-1]:.16f}'])
+        writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.16f}'])
+        writer.writerow(['LMC Weight', f'{config.LMC_WEIGHT:.16f}'])
+        writer.writerow(['Loss Weight', f'{1.0 - config.LMC_WEIGHT:.16f}'])
         writer.writerow([])
         
         # Epoch-by-epoch data
@@ -502,6 +525,18 @@ def run_training(output_dir, config):
     val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     
+    # Print dataset token summary
+    total_tokens = len(train_dataset.input_ids) + len(val_dataset.input_ids) + len(test_dataset.input_ids)
+    print(f"\n{'='*70}")
+    print(f"DATASET TOKEN SUMMARY")
+    print(f"{'='*70}")
+    print(f"Training tokens:   {len(train_dataset.input_ids):>20,}")
+    print(f"Validation tokens: {len(val_dataset.input_ids):>20,}")
+    print(f"Test tokens:       {len(test_dataset.input_ids):>20,}")
+    print(f"{'─'*70}")
+    print(f"Total tokens:      {total_tokens:>20,}")
+    print(f"{'='*70}\n")
+    
     # Create data loaders
     train_loader = DataLoader(
         train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
@@ -529,11 +564,19 @@ def run_training(output_dir, config):
         attention_backend=attention_backend
     ).to(device)
     
+    # Apply DataParallel if multiple GPUs are available
+    if torch.cuda.device_count() > 1:
+        print(f"\nUsing {torch.cuda.device_count()} GPUs with DataParallel")
+        model = torch.nn.DataParallel(model)
+    
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
-    if model.efficient_attention_enabled:
-        print(f"✓ Efficient attention enabled: {model.attention_backend}")
+    if hasattr(model, 'module'):
+        print(f"Efficient attention enabled: {model.module.efficient_attention_enabled}")
     else:
-        print(f"ℹ Using standard PyTorch attention")
+        if model.efficient_attention_enabled:
+            print(f"✓ Efficient attention enabled: {model.attention_backend}")
+        else:
+            print(f"ℹ Using standard PyTorch attention")
     
     # Optimizer and scheduler
     total_steps = len(train_loader) * config.EPOCHS // config.GRADIENT_ACCUMULATION_STEPS
