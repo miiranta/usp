@@ -230,8 +230,17 @@ def calculate_lmc_from_weights(model):
     
     # Calculate number of bins using Freedman-Diaconis rule
     n = len(weights)
-    q1 = torch.quantile(normalized_weights, 0.25)
-    q3 = torch.quantile(normalized_weights, 0.75)
+    
+    # Sample 10,000 random values to calculate IQR (memory efficient)
+    sample_size = min(10000, len(normalized_weights))
+    if len(normalized_weights) > sample_size:
+        sample_indices = torch.randperm(len(normalized_weights))[:sample_size]
+        sample = normalized_weights[sample_indices]
+    else:
+        sample = normalized_weights
+    
+    q1 = torch.quantile(sample, 0.25)
+    q3 = torch.quantile(sample, 0.75)
     iqr = q3 - q1
     
     if iqr == 0:
