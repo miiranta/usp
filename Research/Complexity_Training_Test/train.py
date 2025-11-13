@@ -51,7 +51,7 @@ class Config:
     NUM_WORKERS = 0  # DataLoader workers (0 to avoid issues with DDP)
     
     # Distributed training configuration
-    USE_DDP = False  # Use DistributedDataParallel instead of DataParallel
+    USE_DDP = True  # Use DistributedDataParallel instead of DataParallel
     
     # Debug configuration
     DEBUG = False  # Enable detailed debug output
