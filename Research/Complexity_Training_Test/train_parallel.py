@@ -900,8 +900,8 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
     
     # Create data loaders with DistributedSampler for multi-GPU
     if world_size > 1:
-        # Use fewer workers in distributed mode to avoid deadlocks
-        num_workers = min(2, config.NUM_WORKERS)
+        # Use 0 workers in distributed mode to avoid deadlocks
+        # DataLoader will use the main process for data loading
         
         train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
         val_sampler = DistributedSampler(val_dataset, num_replicas=world_size, rank=rank, shuffle=False)
@@ -909,15 +909,15 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
         
         train_loader = DataLoader(
             train_dataset, batch_size=config.BATCH_SIZE, sampler=train_sampler,
-            num_workers=num_workers, pin_memory=True, collate_fn=collate_fn, persistent_workers=True
+            num_workers=0, pin_memory=True, collate_fn=collate_fn
         )
         val_loader = DataLoader(
             val_dataset, batch_size=config.BATCH_SIZE, sampler=val_sampler,
-            num_workers=num_workers, pin_memory=True, collate_fn=collate_fn, persistent_workers=True
+            num_workers=0, pin_memory=True, collate_fn=collate_fn
         )
         test_loader = DataLoader(
             test_dataset, batch_size=config.BATCH_SIZE, sampler=test_sampler,
-            num_workers=num_workers, pin_memory=True, collate_fn=collate_fn, persistent_workers=True
+            num_workers=0, pin_memory=True, collate_fn=collate_fn
         )
     else:
         train_loader = DataLoader(
