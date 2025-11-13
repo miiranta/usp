@@ -23,13 +23,11 @@ class Config:
     NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
-    BATCH_SIZE = 64 
-    GRADIENT_ACCUMULATION_STEPS = 4 
+    BATCH_SIZE = 256 
     EPOCHS = 30
-    LEARNING_RATE = 3e-4
     SEQ_LENGTH = 128
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 100
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -37,10 +35,10 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 3
+    NUM_OF_RUN_PER_CALL = 1
     
     # LMC weight sampling configuration
-    LMC_SAMPLE_SIZE = 100000  # Sample 100k weights instead of all (much faster LMC calc)
+    LMC_SAMPLE_SIZE = 0
     
     # Device configuration
     GPU_INDEX = 1  # Which GPU to use (0, 1, 2, etc.)
@@ -50,10 +48,8 @@ class Config:
     # Performance optimizations
     USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
     
-    # Debug configuration
-    DEBUG = False  # Enable detailed debug output
-    
     LMC_WEIGHT = 0.0         # DONT CHANGE
+    LEARNING_RATE = 3e-4
 
 
 # ============================================================================
@@ -239,18 +235,12 @@ class TransformerLLM(nn.Module):
 # LMC COMPLEXITY CALCULATION
 # ============================================================================
 
-def calculate_lmc_from_weights(model, sample_size=0, debug=False):
-    if debug:
-        print(f"[DEBUG LMC] Starting LMC calculation, sample_size={sample_size}")
-    
+def calculate_lmc_from_weights(model, sample_size=0):
     # Collect ALL weights from the model
     all_weights = []
     for param in model.parameters():
         # Clone parameters to prevent CUDA graph from tracking these accesses
         all_weights.append(param.data.clone().view(-1))
-    
-    if debug:
-        print(f"[DEBUG LMC] Collected {len(all_weights)} parameter tensors")
     
     # Flatten all weights into a single tensor
     weights = torch.cat(all_weights)
@@ -317,65 +307,38 @@ def calculate_lmc_from_weights(model, sample_size=0, debug=False):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, device, config, scaler):
+def train_epoch(model, train_loader, optimizer, device, config):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
     total_combined_loss = 0.0
     batch_count = 0
     
-    if config.DEBUG:
-        print("[DEBUG] Starting train_epoch")
-        print(f"[DEBUG] Device: {device}")
-        print(f"[DEBUG] Model is DataParallel: {hasattr(model, 'module')}")
-    
     # Calculate loss/LMC weights (must sum to 1.0)
     loss_weight = 1.0 - config.LMC_WEIGHT
     lmc_weight = config.LMC_WEIGHT
     
-    progress_bar = tqdm(train_loader, desc="Training", disable=config.DEBUG)
+    progress_bar = tqdm(train_loader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
         # Mark step begin for CUDA graphs compatibility
         if hasattr(torch.compiler, 'cudagraph_mark_step_begin'):
             torch.compiler.cudagraph_mark_step_begin()
         
-        if config.DEBUG:
-            print(f"\n[DEBUG] Batch {batch_idx + 1}")
-            print(f"[DEBUG] Step 1: Moving data to device {device}")
-        
         # Use the explicit device parameter, not inferred from model (fixes DataParallel issues)
         input_ids = batch['input_ids'].to(device, non_blocking=True)
         labels = batch['labels'].to(device, non_blocking=True)
         attention_mask = batch['attention_mask'].to(device, non_blocking=True)
         
-        if config.DEBUG:
-            print(f"[DEBUG] Step 2: Data moved. Shapes - input_ids: {input_ids.shape}, labels: {labels.shape}")
-            print(f"[DEBUG] Step 3: Starting forward pass with mixed precision")
-        
-        # Forward pass with mixed precision
-        with torch.amp.autocast('cuda'):
-            if config.DEBUG:
-                print(f"[DEBUG] Step 3a: Calling model forward...")
-            logits = model(input_ids, attention_mask=attention_mask)
-            if config.DEBUG:
-                print(f"[DEBUG] Step 3b: Model forward complete. Logits shape: {logits.shape}")
-            vocab_size = model.vocab_size
-            logits_flat = logits.view(-1, vocab_size)
-            labels_flat = labels.view(-1)
-            if config.DEBUG:
-                print(f"[DEBUG] Step 3c: Computing CE loss...")
-            ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
-            if config.DEBUG:
-                print(f"[DEBUG] Step 3d: CE loss computed: {ce_loss.item():.16f}")
-        
-        if config.DEBUG:
-            print(f"[DEBUG] Step 4: Calculating LMC from weights...")
+        # Forward pass
+        logits = model(input_ids, attention_mask=attention_mask)
+        vocab_size = model.vocab_size
+        logits_flat = logits.view(-1, vocab_size)
+        labels_flat = labels.view(-1)
+        ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
         # Calculate LMC every batch (expensive but accurate)
-        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE, debug=config.DEBUG)
-        if config.DEBUG:
-            print(f"[DEBUG] Step 4a: LMC calculated: {lmc_value:.16f}")
+        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
 
         lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
         
@@ -389,23 +352,19 @@ def train_epoch(model, train_loader, optimizer, device, config, scaler):
         elif lmc_weight == 1:
             combined_loss = ce_loss / lmc_tensor
         
-        combined_loss = combined_loss / config.GRADIENT_ACCUMULATION_STEPS
-        
         # Backward pass
-        scaler.scale(combined_loss).backward()
+        combined_loss.backward()
+        
+        # Optimization step
+        torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
         
         # Accumulate metrics
         total_loss += ce_loss.detach().item()
         total_lmc += lmc_value
-        total_combined_loss += combined_loss.detach().item() * config.GRADIENT_ACCUMULATION_STEPS
+        total_combined_loss += combined_loss.detach().item()
         batch_count += 1
-        
-        # Optimization step
-        if (batch_idx + 1) % config.GRADIENT_ACCUMULATION_STEPS == 0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad(set_to_none=True)
         
         # Update progress bar
         progress_bar.set_postfix({
@@ -795,9 +754,6 @@ def run_training_single(output_dir, config, run_num):
         attention_backend=attention_backend
     ).to(device)
     
-    if config.DEBUG:
-        print(f"[DEBUG] Model device: {next(model.parameters()).device}")
-    
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
     if model.efficient_attention_enabled:
         print(f"✓ Efficient attention enabled: {model.attention_backend}")
@@ -818,7 +774,6 @@ def run_training_single(output_dir, config, run_num):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.5, patience=2, verbose=True
     )
-    scaler = torch.amp.GradScaler('cuda')
     
     print(f"Training on {device}")
     print(f"LMC weight: {config.LMC_WEIGHT:.16f} ({config.LMC_WEIGHT*100:.16f}% LMC, "
@@ -836,7 +791,7 @@ def run_training_single(output_dir, config, run_num):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
         train_loss, train_lmc, train_combined = train_epoch(
-            model, train_loader, optimizer, device, config, scaler
+            model, train_loader, optimizer, device, config
         )
         val_loss = validate(model, val_loader, device)
         
