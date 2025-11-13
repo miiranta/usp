@@ -24,15 +24,20 @@ class Config:
     # Training hyperparameters
     BATCH_SIZE = 512 
     GRADIENT_ACCUMULATION_STEPS = 2
-    EPOCHS = 10
+    EPOCHS = 20
     LEARNING_RATE = 3e-4
     SEQ_LENGTH = 4
     WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 500
+    MAX_SAMPLES = 1000
     
-    # LMC Complexity weight (0.0 = 100% loss optimization, 1.0 = 100% LMC maximization)
-    LMC_WEIGHT = 0.0
+    # LMC Complexity weight sweep configuration
+    # (0.0 = 100% loss optimization, 1.0 = 100% LMC maximization)
+    LMC_WEIGHT_START = 0.0   # Starting value
+    LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
+    LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.05 gives 0.0, 0.05, 0.10, ..., 1.0)
+    
+    LMC_WEIGHT = 0.0         # DONT CHANGE
     
     # Number of runs per configuration call
     NUM_OF_RUN_PER_CALL = 5
@@ -327,8 +332,22 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
         
         # Combined objective: weighted sum of loss minimization and LMC maximization
+        
+        # -----------
+        
         # We minimize: (1-lmc_weight)*loss - lmc_weight*lmc
-        combined_loss = loss_weight * ce_loss - lmc_weight * lmc_tensor
+        # combined_loss = loss_weight * ce_loss - lmc_weight * lmc_tensor
+        
+        # loss / lmc
+        if lmc_weight == 0.0:
+            combined_loss = ce_loss 
+        else:
+            combined_loss = lmc_tensor / lmc_weight
+            
+        # 
+        
+        # -----------
+        
         combined_loss = combined_loss / config.GRADIENT_ACCUMULATION_STEPS
         
         # Backward pass
@@ -853,10 +872,24 @@ def run_training(output_dir, config):
 
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    config = Config()
     
-    # Iterate through LMC weight values from 0.0 to 1.0 in steps of 0.05
-    for step in range(11):
-        lmc_weight = step * 0.05
+    # Generate LMC weight sweep using START, END, and STEP
+    num_steps = int(round((config.LMC_WEIGHT_END - config.LMC_WEIGHT_START) / config.LMC_WEIGHT_STEP)) + 1
+    lmc_weights = np.linspace(config.LMC_WEIGHT_START, config.LMC_WEIGHT_END, num_steps)
+    
+    print(f"\n{'='*80}")
+    print(f"LMC WEIGHT SWEEP CONFIGURATION")
+    print(f"{'='*80}")
+    print(f"START: {config.LMC_WEIGHT_START:.2f}")
+    print(f"END:   {config.LMC_WEIGHT_END:.2f}")
+    print(f"STEP:  {config.LMC_WEIGHT_STEP:.4f}")
+    print(f"Total configurations: {len(lmc_weights)}")
+    print(f"Weights: {[f'{w:.2f}' for w in lmc_weights]}")
+    print(f"{'='*80}\n")
+    
+    # Iterate through LMC weight values
+    for lmc_weight in lmc_weights:
         output_dir = os.path.join(script_dir, f'output/output_LMC_{lmc_weight:.2f}')
         
         if os.path.exists(output_dir):
