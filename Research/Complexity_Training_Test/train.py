@@ -22,8 +22,8 @@ class Config:
     NUM_ATTENTION_HEADS = 12 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
-    BATCH_SIZE = 64
-    GRADIENT_ACCUMULATION_STEPS = 8
+    BATCH_SIZE = 32 
+    GRADIENT_ACCUMULATION_STEPS = 16 
     EPOCHS = 50
     LEARNING_RATE = 3e-4
     SEQ_LENGTH = 512
@@ -40,7 +40,6 @@ class Config:
     NUM_OF_RUN_PER_CALL = 10
     
     # LMC weight sampling configuration
-    # Number of weights to sample for LMC calculation (0 = use all weights)
     LMC_SAMPLE_SIZE = 0
     
     # Device configuration
@@ -363,10 +362,23 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         
         if config.DEBUG:
             print(f"[DEBUG] Step 4: Calculating LMC from weights...")
-        # Calculate LMC complexity from model weights (per batch)
-        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE, debug=config.DEBUG)
-        if config.DEBUG:
-            print(f"[DEBUG] Step 4a: LMC calculated: {lmc_value:.4f}")
+        
+        # Only calculate LMC every 100 batches to save memory and time
+        # For LMC_WEIGHT=0, we don't need it at all during training
+        if lmc_weight > 0 and batch_idx % 100 == 0:
+            lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE, debug=config.DEBUG)
+            if config.DEBUG:
+                print(f"[DEBUG] Step 4a: LMC calculated: {lmc_value:.4f}")
+        else:
+            # Use last calculated LMC value (or default for first batches)
+            if not hasattr(train_epoch, 'last_lmc'):
+                train_epoch.last_lmc = 0.001  # Default initial value
+            lmc_value = train_epoch.last_lmc
+        
+        # Store for reuse
+        if lmc_weight > 0 and batch_idx % 100 == 0:
+            train_epoch.last_lmc = lmc_value
+        
         lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
         
         # Combined objective using different formulations based on lmc_weight
