@@ -60,10 +60,20 @@ class Config:
 # DEVICE INITIALIZATION
 # ============================================================================
 
-def setup_distributed(rank, world_size):
+def find_free_port():
+    """Find a free port for distributed training"""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        s.listen(1)
+        port = s.getsockname()[1]
+    return port
+
+
+def setup_distributed(rank, world_size, master_port):
     """Initialize distributed training environment"""
     os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
+    os.environ['MASTER_PORT'] = str(master_port)
     
     # Initialize process group
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
@@ -1029,9 +1039,9 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
         plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, config, run_num)
 
 
-def run_training_distributed(rank, world_size, output_dir, config, run_num):
+def run_training_distributed(rank, world_size, master_port, output_dir, config, run_num):
     """Distributed training wrapper for a single run"""
-    setup_distributed(rank, world_size)
+    setup_distributed(rank, world_size, master_port)
     
     try:
         run_training_single(output_dir, config, run_num, rank, world_size)
@@ -1059,10 +1069,13 @@ def run_training(output_dir, config):
         np.random.seed(seed)
         
         if world_size > 1:
+            # Find a free port for this run
+            master_port = find_free_port()
+            
             # Multi-GPU training with DistributedDataParallel
             mp.spawn(
                 run_training_distributed,
-                args=(world_size, output_dir, config, run_num),
+                args=(world_size, master_port, output_dir, config, run_num),
                 nprocs=world_size,
                 join=True
             )
