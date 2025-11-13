@@ -51,10 +51,10 @@ class Config:
     NUM_WORKERS = 0  # DataLoader workers (0 to avoid issues with DDP)
     
     # Distributed training configuration
-    USE_DDP = True  # Use DistributedDataParallel instead of DataParallel
+    USE_DDP = False  # Use DistributedDataParallel instead of DataParallel
     
     # Debug configuration
-    DEBUG = True  # Enable detailed debug output
+    DEBUG = False  # Enable detailed debug output
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
 
