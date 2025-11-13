@@ -772,7 +772,7 @@ def run_training_single(output_dir, config, run_num):
     # Optimizer and scheduler
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=2, verbose=True
+        optimizer, mode='min', factor=0.5, patience=2
     )
     
     print(f"Training on {device}")
