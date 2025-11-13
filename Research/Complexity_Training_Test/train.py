@@ -41,7 +41,7 @@ class Config:
     
     # LMC weight sampling configuration
     # Number of weights to sample for LMC calculation (0 = use all weights)
-    LMC_SAMPLE_SIZE = 0
+    LMC_SAMPLE_SIZE = 1000000
     
     # Device configuration
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -232,9 +232,12 @@ class TransformerLLM(nn.Module):
 # ============================================================================
 
 def calculate_lmc_from_weights(model, sample_size=0):
+    # Unwrap DataParallel if necessary to avoid GPU synchronization issues
+    actual_model = model.module if hasattr(model, 'module') else model
+    
     # Collect ALL weights from the model
     all_weights = []
-    for param in model.parameters():
+    for param in actual_model.parameters():
         all_weights.append(param.data.view(-1))
     
     # Flatten all weights into a single tensor
