@@ -363,22 +363,11 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         if config.DEBUG:
             print(f"[DEBUG] Step 4: Calculating LMC from weights...")
         
-        # Only calculate LMC every 100 batches to save memory and time
-        # For LMC_WEIGHT=0, we don't need it at all during training
-        if lmc_weight > 0 and batch_idx % 100 == 0:
-            lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE, debug=config.DEBUG)
-            if config.DEBUG:
-                print(f"[DEBUG] Step 4a: LMC calculated: {lmc_value:.16f}")
-        else:
-            # Use last calculated LMC value (or default for first batches)
-            if not hasattr(train_epoch, 'last_lmc'):
-                train_epoch.last_lmc = 0.001  # Default initial value
-            lmc_value = train_epoch.last_lmc
-        
-        # Store for reuse
-        if lmc_weight > 0 and batch_idx % 100 == 0:
-            train_epoch.last_lmc = lmc_value
-        
+        # Calculate LMC every batch (expensive but accurate)
+        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE, debug=config.DEBUG)
+        if config.DEBUG:
+            print(f"[DEBUG] Step 4a: LMC calculated: {lmc_value:.16f}")
+
         lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
         
         # Combined objective using different formulations based on lmc_weight
