@@ -33,7 +33,7 @@ class Config:
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 31.0     # Ending value (inclusive)
+    LMC_WEIGHT_END = 32.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
@@ -373,6 +373,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         # 29: lmc^(-loss)
         # 30: loss^(-1/lmc)
         # 31: lmc^(-1/loss)
+        # 32: loss * 0.9 - lmc * 0.1
         eps = 1e-8
         
         if lmc_weight == 0:
@@ -439,6 +440,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
             combined_loss = torch.pow(ce_loss + eps, -1.0 / (lmc_tensor + eps))
         elif lmc_weight == 31:
             combined_loss = torch.pow(lmc_tensor + eps, -1.0 / (ce_loss + eps))
+        elif lmc_weight == 32:
+            combined_loss = ce_loss * 0.9 - lmc_tensor * 0.1
         
         combined_loss = combined_loss / config.GRADIENT_ACCUMULATION_STEPS
         
