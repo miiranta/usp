@@ -18,11 +18,11 @@ from tqdm import tqdm
 class Config:
     # Model hyperparameters
     HIDDEN_DIM = 256
-    NUM_LAYERS = 8
+    NUM_LAYERS = 4
     NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
-    BATCH_SIZE = 32 
+    BATCH_SIZE = 64 
     GRADIENT_ACCUMULATION_STEPS = 4 
     EPOCHS = 30
     LEARNING_RATE = 3e-4
