@@ -153,16 +153,18 @@ def check_efficient_attention():
 # ============================================================================
 
 class TextDataset(Dataset):
-    def __init__(self, file_path, tokenizer, seq_length, max_samples=None):
+    def __init__(self, file_path, tokenizer, seq_length, max_samples=None, rank=0):
         self.seq_length = seq_length
         self.tokenizer = tokenizer
         
         # Read and tokenize text
-        print(f"Tokenizing {file_path}...")
+        if rank == 0:
+            print(f"Tokenizing {file_path}...")
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
         
-        print(f"  File size: {len(text) / 1024 / 1024:.2f} MB")
+        if rank == 0:
+            print(f"  File size: {len(text) / 1024 / 1024:.2f} MB")
         
         encodings = tokenizer(
             text,
@@ -182,10 +184,12 @@ class TextDataset(Dataset):
             max_length = max_samples * seq_length
             original_len = len(self.input_ids)
             self.input_ids = self.input_ids[:max_length]
-            print(f"  Tokens before limit: {original_len:,}")
-            print(f"  Tokens after limit:  {len(self.input_ids):,} (max_samples={max_samples})")
+            if rank == 0:
+                print(f"  Tokens before limit: {original_len:,}")
+                print(f"  Tokens after limit:  {len(self.input_ids):,} (max_samples={max_samples})")
         else:
-            print(f"  Tokens loaded: {len(self.input_ids):,} (no limit)")
+            if rank == 0:
+                print(f"  Tokens loaded: {len(self.input_ids):,} (no limit)")
     
     def __len__(self):
         return max(0, len(self.input_ids) - self.seq_length)
@@ -850,20 +854,25 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
 # ============================================================================
 
 def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
+    # Set device immediately
+    if world_size > 1:
+        device = torch.device(f'cuda:{rank}')
+    else:
+        device = Config.DEVICE
+    
     # Only print initialization messages on rank 0
     if rank == 0:
         # Initialize device
-        device = initialize_device(rank, world_size)
-        
+        initialize_device(rank, world_size)
         enable_efficient_attention, attention_backend = check_efficient_attention()
         print()
-        
-        # Initialize tokenizer
         print("Initializing RoBERTa tokenizer...")
-    else:
-        device = torch.device(f'cuda:{rank}')
+    
+    # ALL processes need to call this to avoid hanging
+    if world_size > 1 and rank != 0:
         enable_efficient_attention, attention_backend = check_efficient_attention()
     
+    # Tokenizer initialization - all ranks do this
     tokenizer = RobertaTokenizer.from_pretrained('roberta-base', use_fast=True)
     tokenizer.pad_token = tokenizer.eos_token
     
@@ -881,9 +890,9 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
         
         print("Loading datasets...")
     
-    train_dataset = TextDataset(train_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
-    val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
-    test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
+    train_dataset = TextDataset(train_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES, rank)
+    val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES, rank)
+    test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES, rank)
     
     # Print dataset token summary (only for first run on rank 0)
     if run_num == 1 and rank == 0:
@@ -933,6 +942,11 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
             num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
         )
     
+    # CRITICAL: Synchronize before model initialization to prevent deadlock
+    if world_size > 1:
+        torch.cuda.synchronize(device)
+        dist.barrier()
+    
     # Initialize model
     if rank == 0:
         print("\nInitializing Transformer model...")
@@ -947,6 +961,10 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
         enable_efficient_attention=enable_efficient_attention,
         attention_backend=attention_backend
     ).to(device)
+    
+    # Synchronize after model.to(device) before DDP wrapping
+    if world_size > 1:
+        torch.cuda.synchronize(device)
     
     # Wrap model with DDP for multi-GPU training
     if world_size > 1:
