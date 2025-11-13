@@ -5,6 +5,8 @@ import torch.nn as nn
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
 from transformers import RobertaTokenizer, get_linear_schedule_with_warmup
 from tqdm import tqdm
 
@@ -15,22 +17,25 @@ from tqdm import tqdm
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 200 # Must be divisible by NUM_ATTENTION_HEADS
+    HIDDEN_DIM = 100
     NUM_LAYERS = 2
     NUM_ATTENTION_HEADS = 4
     
     # Training hyperparameters
-    BATCH_SIZE = 512
-    GRADIENT_ACCUMULATION_STEPS = 1
-    EPOCHS = 30
-    LEARNING_RATE = 5e-4
-    SEQ_LENGTH = 16
+    BATCH_SIZE = 512 
+    GRADIENT_ACCUMULATION_STEPS = 2
+    EPOCHS = 10
+    LEARNING_RATE = 3e-4
+    SEQ_LENGTH = 4
     WARMUP_RATIO = 0.1
-    MAX_GRAD_NORM = 0.5
-    MAX_SAMPLES = None
+    MAX_GRAD_NORM = 1.0
+    MAX_SAMPLES = 500
     
     # LMC Complexity weight (0.0 = 100% loss optimization, 1.0 = 100% LMC maximization)
     LMC_WEIGHT = 0.0
+    
+    # Number of runs per configuration call
+    NUM_OF_RUN_PER_CALL = 5
     
     # Device configuration
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -418,9 +423,10 @@ def test(model, test_loader, device):
 
 def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, 
                        weights_entropy_values, weights_disequilibrium_values, 
-                       num_bins_values, test_loss, test_metrics, config):
+                       num_bins_values, test_loss, test_metrics, config, run_num=1):
     """Save training results to CSV file"""
-    csv_path = os.path.join(output_dir, 'z_loss_test_results_transformers.csv')
+    csv_filename = f'z_loss_test_results_transformers-{run_num}.csv'
+    csv_path = os.path.join(output_dir, csv_filename)
     
     with open(csv_path, 'w', newline='') as f:
         writer = csv.writer(f)
@@ -437,6 +443,7 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values,
         writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.16f}'])
         writer.writerow(['LMC Weight', f'{config.LMC_WEIGHT:.16f}'])
         writer.writerow(['Loss Weight', f'{1.0 - config.LMC_WEIGHT:.16f}'])
+        writer.writerow(['Run Number', f'{run_num}'])
         writer.writerow([])
         
         # Epoch-by-epoch data
@@ -456,8 +463,9 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values,
     print(f"Results saved to '{csv_path}'")
 
 
-def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, config):
-    plot_path = os.path.join(output_dir, 'z_loss_training_losses_transformers.png')
+def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, config, run_num=1):
+    plot_filename = f'z_loss_training_losses_transformers-{run_num}.png'
+    plot_path = os.path.join(output_dir, plot_filename)
     
     # Close any existing figures to prevent data carryover
     plt.close('all')
@@ -481,7 +489,8 @@ def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, co
     ax2.tick_params(axis='y', labelcolor='green')
     
     # Title and legend
-    plt.title('Transformer Model Training: Loss and LMC Complexity', fontsize=14, pad=20)
+    title = f'Transformer Model Training: Loss and LMC Complexity (Run {run_num})'
+    plt.title(title, fontsize=14, pad=20)
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')
@@ -492,14 +501,183 @@ def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, co
     print(f"Plot saved to '{plot_path}'")
 
 
+def aggregate_results_csv(output_dir, config):
+    """Aggregate results from all runs and create aggregate CSV"""
+    aggregate_data = {}
+    
+    # Read all run results
+    for run_num in range(1, config.NUM_OF_RUN_PER_CALL + 1):
+        csv_filename = f'z_loss_test_results_transformers-{run_num}.csv'
+        csv_path = os.path.join(output_dir, csv_filename)
+        
+        if not os.path.exists(csv_path):
+            print(f"Warning: {csv_path} not found, skipping run {run_num}")
+            continue
+        
+        with open(csv_path, 'r') as f:
+            reader = csv.reader(f)
+            rows = list(reader)
+            
+            # Find the epoch-by-epoch data section
+            epoch_start = None
+            for i, row in enumerate(rows):
+                if row and row[0] == 'Epoch':
+                    epoch_start = i + 1
+                    break
+            
+            if epoch_start is None:
+                continue
+            
+            # Parse epoch data
+            for i in range(epoch_start, len(rows)):
+                row = rows[i]
+                if not row or not row[0].isdigit():
+                    continue
+                
+                epoch = int(row[0])
+                if epoch not in aggregate_data:
+                    aggregate_data[epoch] = {
+                        'train_loss': [],
+                        'val_loss': [],
+                        'lmc': [],
+                        'entropy': [],
+                        'diseq': [],
+                        'bins': []
+                    }
+                
+                aggregate_data[epoch]['train_loss'].append(float(row[1]))
+                aggregate_data[epoch]['val_loss'].append(float(row[2]))
+                aggregate_data[epoch]['lmc'].append(float(row[3]))
+                aggregate_data[epoch]['entropy'].append(float(row[4]))
+                aggregate_data[epoch]['diseq'].append(float(row[5]))
+                aggregate_data[epoch]['bins'].append(float(row[6]))
+    
+    # Calculate statistics
+    aggregate_stats = {}
+    for epoch in sorted(aggregate_data.keys()):
+        stats_dict = {}
+        for metric in ['train_loss', 'val_loss', 'lmc', 'entropy', 'diseq', 'bins']:
+            values = np.array(aggregate_data[epoch][metric])
+            stats_dict[metric] = {
+                'mean': np.mean(values),
+                'std': np.std(values),
+                'min': np.min(values),
+                'max': np.max(values)
+            }
+        aggregate_stats[epoch] = stats_dict
+    
+    # Save aggregate CSV
+    csv_filename = 'z_loss_test_results_transformers-AGGREGATE.csv'
+    csv_path = os.path.join(output_dir, csv_filename)
+    
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        
+        # Summary
+        writer.writerow(['AGGREGATE RESULTS FROM', f'{config.NUM_OF_RUN_PER_CALL} RUNS'])
+        writer.writerow(['LMC Weight', f'{config.LMC_WEIGHT:.16f}'])
+        writer.writerow([])
+        
+        # Epoch-by-epoch data with statistics
+        header = ['Epoch', 
+                 'Train_Loss_Mean', 'Train_Loss_Std', 'Train_Loss_Min', 'Train_Loss_Max',
+                 'Val_Loss_Mean', 'Val_Loss_Std', 'Val_Loss_Min', 'Val_Loss_Max',
+                 'LMC_Mean', 'LMC_Std', 'LMC_Min', 'LMC_Max',
+                 'Entropy_Mean', 'Entropy_Std', 'Entropy_Min', 'Entropy_Max',
+                 'Diseq_Mean', 'Diseq_Std', 'Diseq_Min', 'Diseq_Max',
+                 'Bins_Mean', 'Bins_Std', 'Bins_Min', 'Bins_Max']
+        writer.writerow(header)
+        
+        for epoch in sorted(aggregate_stats.keys()):
+            row = [epoch]
+            for metric in ['train_loss', 'val_loss', 'lmc', 'entropy', 'diseq', 'bins']:
+                row.extend([
+                    f'{aggregate_stats[epoch][metric]["mean"]:.16f}',
+                    f'{aggregate_stats[epoch][metric]["std"]:.16f}',
+                    f'{aggregate_stats[epoch][metric]["min"]:.16f}',
+                    f'{aggregate_stats[epoch][metric]["max"]:.16f}'
+                ])
+            writer.writerow(row)
+    
+    print(f"Aggregate results saved to '{csv_path}'")
+    return aggregate_stats
+
+
+def plot_aggregate_results(output_dir, config, aggregate_stats):
+    """Plot aggregate results with 95% confidence intervals"""
+    if not aggregate_stats:
+        print("No aggregate stats to plot")
+        return
+    
+    plot_filename = 'z_loss_training_losses_transformers-AGGREGATE.png'
+    plot_path = os.path.join(output_dir, plot_filename)
+    
+    plt.close('all')
+    
+    epochs = sorted(aggregate_stats.keys())
+    
+    # Extract statistics
+    train_loss_mean = np.array([aggregate_stats[e]['train_loss']['mean'] for e in epochs])
+    train_loss_std = np.array([aggregate_stats[e]['train_loss']['std'] for e in epochs])
+    
+    val_loss_mean = np.array([aggregate_stats[e]['val_loss']['mean'] for e in epochs])
+    val_loss_std = np.array([aggregate_stats[e]['val_loss']['std'] for e in epochs])
+    
+    lmc_mean = np.array([aggregate_stats[e]['lmc']['mean'] for e in epochs])
+    lmc_std = np.array([aggregate_stats[e]['lmc']['std'] for e in epochs])
+    
+    # 95% confidence interval (1.96 * std for normal distribution)
+    ci_factor = 1.96
+    train_loss_ci = ci_factor * train_loss_std
+    val_loss_ci = ci_factor * val_loss_std
+    lmc_ci = ci_factor * lmc_std
+    
+    # Create figure with dual axes
+    fig, ax1 = plt.subplots(figsize=(12, 7))
+    
+    # Primary y-axis: Losses with confidence intervals
+    ax1.plot(epochs, train_loss_mean, label='Training Loss (Mean)', marker='o', color='blue', linewidth=2)
+    ax1.fill_between(epochs, train_loss_mean - train_loss_ci, train_loss_mean + train_loss_ci, 
+                     alpha=0.2, color='blue', label='Training Loss (95% CI)')
+    
+    ax1.plot(epochs, val_loss_mean, label='Validation Loss (Mean)', marker='s', color='orange', linewidth=2)
+    ax1.fill_between(epochs, val_loss_mean - val_loss_ci, val_loss_mean + val_loss_ci, 
+                     alpha=0.2, color='orange', label='Validation Loss (95% CI)')
+    
+    ax1.set_xlabel('Epoch', fontsize=12)
+    ax1.set_ylabel('Loss', fontsize=12, color='black')
+    ax1.tick_params(axis='y', labelcolor='black')
+    ax1.grid(True, alpha=0.3)
+    
+    # Secondary y-axis: LMC Complexity with confidence interval
+    ax2 = ax1.twinx()
+    ax2.plot(epochs, lmc_mean, label='Model LMC (Mean)', marker='D', color='green', linewidth=2.5)
+    ax2.fill_between(epochs, lmc_mean - lmc_ci, lmc_mean + lmc_ci, 
+                     alpha=0.2, color='green', label='Model LMC (95% CI)')
+    
+    ax2.set_ylabel('LMC Complexity (C = H × D)', fontsize=12, color='green')
+    ax2.tick_params(axis='y', labelcolor='green')
+    
+    # Title and legend
+    title = f'Aggregate Results: {config.NUM_OF_RUN_PER_CALL} Runs (LMC_WEIGHT={config.LMC_WEIGHT:.2f})'
+    plt.title(title, fontsize=14, pad=20, fontweight='bold')
+    
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='best', fontsize=10)
+    
+    plt.tight_layout()
+    plt.savefig(plot_path, dpi=100)
+    plt.close(fig)
+    print(f"Aggregate plot saved to '{plot_path}'")
+
+
 # ============================================================================
 # MAIN TRAINING PIPELINE
 # ============================================================================
 
-def run_training(output_dir, config):
-    os.makedirs(output_dir, exist_ok=True)
-    print(f"Output directory: {os.path.abspath(output_dir)}\n")
-    
+def run_training_single(output_dir, config, run_num):
+    """Run a single training iteration"""
     device = initialize_device()
     enable_efficient_attention, attention_backend = check_efficient_attention()
     print()
@@ -525,17 +703,18 @@ def run_training(output_dir, config):
     val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     
-    # Print dataset token summary
-    total_tokens = len(train_dataset.input_ids) + len(val_dataset.input_ids) + len(test_dataset.input_ids)
-    print(f"\n{'='*70}")
-    print(f"DATASET TOKEN SUMMARY")
-    print(f"{'='*70}")
-    print(f"Training tokens:   {len(train_dataset.input_ids):>20,}")
-    print(f"Validation tokens: {len(val_dataset.input_ids):>20,}")
-    print(f"Test tokens:       {len(test_dataset.input_ids):>20,}")
-    print(f"{'─'*70}")
-    print(f"Total tokens:      {total_tokens:>20,}")
-    print(f"{'='*70}\n")
+    # Print dataset token summary (only for first run)
+    if run_num == 1:
+        total_tokens = len(train_dataset.input_ids) + len(val_dataset.input_ids) + len(test_dataset.input_ids)
+        print(f"\n{'='*70}")
+        print(f"DATASET TOKEN SUMMARY")
+        print(f"{'='*70}")
+        print(f"Training tokens:   {len(train_dataset.input_ids):>20,}")
+        print(f"Validation tokens: {len(val_dataset.input_ids):>20,}")
+        print(f"Test tokens:       {len(test_dataset.input_ids):>20,}")
+        print(f"{'─'*70}")
+        print(f"Total tokens:      {total_tokens:>20,}")
+        print(f"{'='*70}\n")
     
     # Create data loaders
     train_loader = DataLoader(
@@ -631,13 +810,41 @@ def run_training(output_dir, config):
     print(f"Test Loss: {test_loss:.4f}")
     print(f"Test LMC: {test_metrics[0]:.8f} (bins={test_metrics[3]})\n")
     
-    # Save results
+    # Save results with run number
     save_results_to_csv(
         output_dir, train_losses, val_losses, lmc_values,
         weights_entropy_values, weights_disequilibrium_values, num_bins_values,
-        test_loss, test_metrics, config
+        test_loss, test_metrics, config, run_num
     )
-    plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, config)
+    plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, config, run_num)
+
+
+def run_training(output_dir, config):
+    """Run training NUM_OF_RUN_PER_CALL times"""
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"Output directory: {os.path.abspath(output_dir)}\n")
+    
+    # Run training NUM_OF_RUN_PER_CALL times
+    for run_num in range(1, config.NUM_OF_RUN_PER_CALL + 1):
+        print(f"\n{'='*80}")
+        print(f"Run {run_num}/{config.NUM_OF_RUN_PER_CALL}")
+        print(f"{'='*80}\n")
+        
+        # Set seed for reproducibility per run (different seed each run)
+        seed = 42 + run_num
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        
+        run_training_single(output_dir, config, run_num)
+    
+    # After all runs, aggregate results
+    if config.NUM_OF_RUN_PER_CALL > 1:
+        print(f"\n{'='*80}")
+        print(f"AGGREGATING RESULTS FROM {config.NUM_OF_RUN_PER_CALL} RUNS")
+        print(f"{'='*80}\n")
+        
+        aggregate_stats = aggregate_results_csv(output_dir, config)
+        plot_aggregate_results(output_dir, config, aggregate_stats)
 
 
 # ============================================================================
@@ -648,7 +855,7 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     
     # Iterate through LMC weight values from 0.0 to 1.0 in steps of 0.05
-    for step in range(21):
+    for step in range(11):
         lmc_weight = step * 0.05
         output_dir = os.path.join(script_dir, f'output/output_LMC_{lmc_weight:.2f}')
         
