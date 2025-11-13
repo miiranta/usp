@@ -9,6 +9,7 @@ import seaborn as sns
 from scipy import stats
 from transformers import RobertaTokenizer, get_linear_schedule_with_warmup
 from tqdm import tqdm
+import torchist
 
 
 # ============================================================================
@@ -252,7 +253,6 @@ def calculate_lmc_from_weights(model, sample_size=0, debug=False):
         sample_indices = torch.randperm(len(weights), device=weights.device)[:sample_size]
         weights = weights[sample_indices]
     
-    # Keep on GPU for faster computation (no CPU transfer needed)
     # Normalize weights to [0, 1] range
     weights_min = weights.min()
     weights_max = weights.max()
@@ -280,8 +280,8 @@ def calculate_lmc_from_weights(model, sample_size=0, debug=False):
         data_range = float(weights_max - weights_min)
         num_bins = max(1, int(np.ceil(data_range / bin_width)))
     
-    # Create histogram
-    hist, _ = torch.histogram(normalized_weights, bins=num_bins, range=(0.0, 1.0))
+    # Create histogram using GPU-accelerated torchist
+    hist = torchist.histogram(normalized_weights, bins=num_bins, low=0.0, upp=1.0)
     
     # Convert to probability distribution
     probs = hist.float() / hist.sum().float()
