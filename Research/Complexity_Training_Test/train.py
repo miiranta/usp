@@ -17,29 +17,27 @@ from tqdm import tqdm
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 100
-    NUM_LAYERS = 2
+    HIDDEN_DIM = 400
+    NUM_LAYERS = 3
     NUM_ATTENTION_HEADS = 4
     
     # Training hyperparameters
     BATCH_SIZE = 512 
     GRADIENT_ACCUMULATION_STEPS = 2
-    EPOCHS = 20
+    EPOCHS = 30
     LEARNING_RATE = 3e-4
-    SEQ_LENGTH = 4
+    SEQ_LENGTH = 32
     WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 1000
+    MAX_SAMPLES = None
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 37.0     # Ending value (inclusive)
+    LMC_WEIGHT_END = 4.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
-    LMC_WEIGHT = 0.0         # DONT CHANGE
-    
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 2
+    NUM_OF_RUN_PER_CALL = 10
     
     # LMC weight sampling configuration
     # Number of weights to sample for LMC calculation (0 = use all weights)
@@ -48,6 +46,8 @@ class Config:
     # Device configuration
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     NUM_WORKERS = 6  # DataLoader workers
+    
+    LMC_WEIGHT = 0.0         # DONT CHANGE
 
 
 # ============================================================================
@@ -342,122 +342,23 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         # Combined objective using different formulations based on lmc_weight
         # Use lmc_weight to select which loss formulation to use:
         # 0: loss
-        # 1: loss/2
-        # 2: loss/lmc
-        # 3: -log(loss)/log(lmc)
-        # 4: log(loss)/lmc
-        # 5: -loss/log(lmc)
-        # 6: log(loss*lmc)
-        # 7: log(loss/lmc)
-        # 8: log(loss)-log(lmc)
-        # 9: log(loss)+log(lmc)
-        # 10: loss-log(lmc)
-        # 11: loss+log(lmc)
-        # 12: log(loss)-lmc
-        # 13: log(loss)+lmc
-        # 14: -log(loss)*log(lmc)
-        # 15: -loss*log(lmc)
-        # 16: log(loss)*lmc
-        # 17: exp(loss)*lmc
-        # 18: loss*exp(lmc)
-        # 19: exp(loss)*exp(lmc)
-        # 20: exp(loss+lmc)
-        # 21: exp(loss-lmc)
-        # 22: exp(loss)*exp(-lmc)
-        # 23: -exp(-loss)*exp(lmc)
-        # 24: loss^lmc
-        # 25: lmc^loss
-        # 26: loss^(1/lmc)
-        # 27: lmc^(1/loss)
-        # 28: -loss^(-lmc)
-        # 29: lmc^(-loss)
-        # 30: loss^(-1/lmc)
-        # 31: -lmc^(-1/loss)
-        # 32: loss * 0.9 - lmc * 0.1
-        # 33: exp(loss)*lmc
-        # 34: loss*exp(lmc)
-        # 35: exp(loss*lmc)
-        # 36: exp(loss/lmc)
-        # 37: -exp(lmc/loss)
+        # 1: loss/lmc
+        # 2: exp(loss)
+        # 3: exp(loss+lmc)
+        # 4: exp(loss-lmc)
         
         eps = 1e-8
         
         if lmc_weight == 0:
             combined_loss = ce_loss
         elif lmc_weight == 1:
-            combined_loss = ce_loss / 2
+            combined_loss = ce_loss / lmc_tensor
         elif lmc_weight == 2:
-            combined_loss = ce_loss / (lmc_tensor + eps)
+            combined_loss = torch.exp(ce_loss)
         elif lmc_weight == 3:
-            combined_loss = -torch.log(ce_loss + eps) / (torch.log(lmc_tensor + eps) + eps)
-        elif lmc_weight == 4:
-            combined_loss = torch.log(ce_loss + eps) / (lmc_tensor + eps)
-        elif lmc_weight == 5:
-            combined_loss = -ce_loss / (torch.log(lmc_tensor + eps) + eps)
-        elif lmc_weight == 6:
-            combined_loss = torch.log(ce_loss * lmc_tensor + eps)
-        elif lmc_weight == 7:
-            combined_loss = torch.log((ce_loss / (lmc_tensor + eps)) + eps)
-        elif lmc_weight == 8:
-            combined_loss = torch.log(ce_loss + eps) - torch.log(lmc_tensor + eps)
-        elif lmc_weight == 9:
-            combined_loss = torch.log(ce_loss + eps) + torch.log(lmc_tensor + eps)
-        elif lmc_weight == 10:
-            combined_loss = ce_loss - torch.log(lmc_tensor + eps)
-        elif lmc_weight == 11:
-            combined_loss = ce_loss + torch.log(lmc_tensor + eps)
-        elif lmc_weight == 12:
-            combined_loss = torch.log(ce_loss + eps) - lmc_tensor
-        elif lmc_weight == 13:
-            combined_loss = torch.log(ce_loss + eps) + lmc_tensor
-        elif lmc_weight == 14:
-            combined_loss = -torch.log(ce_loss + eps) * torch.log(lmc_tensor + eps)
-        elif lmc_weight == 15:
-            combined_loss = -ce_loss * torch.log(lmc_tensor + eps)
-        elif lmc_weight == 16:
-            combined_loss = torch.log(ce_loss + eps) * lmc_tensor
-        elif lmc_weight == 17:
-            combined_loss = torch.exp(ce_loss) * lmc_tensor
-        elif lmc_weight == 18:
-            combined_loss = ce_loss * torch.exp(lmc_tensor)
-        elif lmc_weight == 19:
-            combined_loss = torch.exp(ce_loss) * torch.exp(lmc_tensor)
-        elif lmc_weight == 20:
             combined_loss = torch.exp(ce_loss + lmc_tensor)
-        elif lmc_weight == 21:
+        elif lmc_weight == 4:
             combined_loss = torch.exp(ce_loss - lmc_tensor)
-        elif lmc_weight == 22:
-            combined_loss = torch.exp(ce_loss) * torch.exp(-lmc_tensor)
-        elif lmc_weight == 23:
-            combined_loss = -torch.exp(-ce_loss) * torch.exp(lmc_tensor)
-        elif lmc_weight == 24:
-            combined_loss = torch.pow(ce_loss + eps, lmc_tensor + eps)
-        elif lmc_weight == 25:
-            combined_loss = torch.pow(lmc_tensor + eps, ce_loss + eps)
-        elif lmc_weight == 26:
-            combined_loss = torch.pow(ce_loss + eps, 1.0 / (lmc_tensor + eps))
-        elif lmc_weight == 27:
-            combined_loss = torch.pow(lmc_tensor + eps, 1.0 / (ce_loss + eps))
-        elif lmc_weight == 28:
-            combined_loss = -torch.pow(ce_loss + eps, -(lmc_tensor + eps))
-        elif lmc_weight == 29:
-            combined_loss = torch.pow(lmc_tensor + eps, -(ce_loss + eps))
-        elif lmc_weight == 30:
-            combined_loss = torch.pow(ce_loss + eps, -1.0 / (lmc_tensor + eps))
-        elif lmc_weight == 31:
-            combined_loss = -torch.pow(lmc_tensor + eps, -1.0 / (ce_loss + eps))
-        elif lmc_weight == 32:
-            combined_loss = ce_loss * 0.9 - lmc_tensor * 0.1
-        elif lmc_weight == 33:
-            combined_loss = torch.exp(ce_loss) * lmc_tensor
-        elif lmc_weight == 34:
-            combined_loss = ce_loss * torch.exp(lmc_tensor)
-        elif lmc_weight == 35:
-            combined_loss = torch.exp(ce_loss * lmc_tensor)
-        elif lmc_weight == 36:
-            combined_loss = torch.exp(ce_loss / (lmc_tensor + eps))
-        elif lmc_weight == 37:
-            combined_loss = -torch.exp(lmc_tensor / (ce_loss + eps))
         
         combined_loss = combined_loss / config.GRADIENT_ACCUMULATION_STEPS
         
