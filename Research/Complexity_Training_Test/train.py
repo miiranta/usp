@@ -2,8 +2,11 @@ import os
 import csv
 import torch
 import torch.nn as nn
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.distributed import DistributedSampler
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
@@ -45,7 +48,13 @@ class Config:
     
     # Device configuration
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    NUM_WORKERS = 0  # DataLoader workers (0 to avoid deadlock with DataParallel)
+    NUM_WORKERS = 0  # DataLoader workers (0 to avoid issues with DDP)
+    
+    # Distributed training configuration
+    USE_DDP = True  # Use DistributedDataParallel instead of DataParallel
+    
+    # Debug configuration
+    DEBUG = True  # Enable detailed debug output
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
 
@@ -53,6 +62,25 @@ class Config:
 # ============================================================================
 # DEVICE INITIALIZATION
 # ============================================================================
+
+def setup_ddp():
+    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+        rank = int(os.environ['RANK'])
+        world_size = int(os.environ['WORLD_SIZE'])
+        local_rank = int(os.environ.get('LOCAL_RANK', 0))
+        
+        # Initialize the process group
+        dist.init_process_group(backend='nccl')
+        torch.cuda.set_device(local_rank)
+        
+        return True, rank, world_size, local_rank
+    else:
+        # Not running with DDP (single GPU or multi-GPU with DataParallel)
+        return False, 0, 1, 0
+
+def cleanup_ddp():
+    if dist.is_initialized():
+        dist.destroy_process_group()
 
 def initialize_device():
     device = Config.DEVICE
@@ -231,14 +259,20 @@ class TransformerLLM(nn.Module):
 # LMC COMPLEXITY CALCULATION
 # ============================================================================
 
-def calculate_lmc_from_weights(model, sample_size=0):
+def calculate_lmc_from_weights(model, sample_size=0, debug=False):
     # Unwrap DataParallel if necessary to avoid GPU synchronization issues
     actual_model = model.module if hasattr(model, 'module') else model
+    
+    if debug:
+        print(f"[DEBUG LMC] Starting LMC calculation, sample_size={sample_size}")
     
     # Collect ALL weights from the model
     all_weights = []
     for param in actual_model.parameters():
         all_weights.append(param.data.view(-1))
+    
+    if debug:
+        print(f"[DEBUG LMC] Collected {len(all_weights)} parameter tensors")
     
     # Flatten all weights into a single tensor
     weights = torch.cat(all_weights)
@@ -316,29 +350,54 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
     total_combined_loss = 0.0
     batch_count = 0
     
+    if config.DEBUG:
+        print("[DEBUG] Starting train_epoch")
+        print(f"[DEBUG] Device: {device}")
+        print(f"[DEBUG] Model is DataParallel: {hasattr(model, 'module')}")
+    
     # Calculate loss/LMC weights (must sum to 1.0)
     loss_weight = 1.0 - config.LMC_WEIGHT
     lmc_weight = config.LMC_WEIGHT
     
-    progress_bar = tqdm(train_loader, desc="Training")
+    progress_bar = tqdm(train_loader, desc="Training", disable=config.DEBUG)
     
     for batch_idx, batch in enumerate(progress_bar):
+        if config.DEBUG:
+            print(f"\n[DEBUG] Batch {batch_idx + 1}")
+            print(f"[DEBUG] Step 1: Moving data to device {device}")
+        
         # Use the explicit device parameter, not inferred from model (fixes DataParallel issues)
         input_ids = batch['input_ids'].to(device)
         labels = batch['labels'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         
+        if config.DEBUG:
+            print(f"[DEBUG] Step 2: Data moved. Shapes - input_ids: {input_ids.shape}, labels: {labels.shape}")
+            print(f"[DEBUG] Step 3: Starting forward pass with mixed precision")
+        
         # Forward pass with mixed precision
         with torch.amp.autocast('cuda'):
+            if config.DEBUG:
+                print(f"[DEBUG] Step 3a: Calling model forward...")
             logits = model(input_ids, attention_mask=attention_mask)
+            if config.DEBUG:
+                print(f"[DEBUG] Step 3b: Model forward complete. Logits shape: {logits.shape}")
             # Handle both DataParallel and regular models
             vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
+            if config.DEBUG:
+                print(f"[DEBUG] Step 3c: Computing CE loss...")
             ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
+            if config.DEBUG:
+                print(f"[DEBUG] Step 3d: CE loss computed: {ce_loss.item():.4f}")
         
+        if config.DEBUG:
+            print(f"[DEBUG] Step 4: Calculating LMC from weights...")
         # Calculate LMC complexity from model weights (per batch)
-        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE, debug=config.DEBUG)
+        if config.DEBUG:
+            print(f"[DEBUG] Step 4a: LMC calculated: {lmc_value:.4f}")
         lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
         
         # Combined objective using different formulations based on lmc_weight
@@ -710,13 +769,36 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
 # ============================================================================
 
 def run_training_single(output_dir, config, run_num):
-    """Run a single training iteration"""
-    device = initialize_device()
+    # Setup DDP if enabled
+    is_ddp, rank, world_size, local_rank = setup_ddp()
+    
+    # Only print from rank 0 in DDP mode
+    is_main_process = (rank == 0)
+    
+    if is_ddp:
+        device = torch.device(f'cuda:{local_rank}')
+        if is_main_process:
+            print(f"\nUsing DistributedDataParallel (DDP)")
+            print(f"World size: {world_size}")
+            print(f"Rank: {rank}, Local rank: {local_rank}")
+    else:
+        device = config.DEVICE
+        if config.DEBUG:
+            print(f"\n[DEBUG] Not using DDP (single process)")
+    
+    # Initialize device
+    if is_main_process:
+        device_initialized = initialize_device()
+        if not is_ddp:
+            device = device_initialized
+    
     enable_efficient_attention, attention_backend = check_efficient_attention()
-    print()
+    if is_main_process:
+        print()
     
     # Initialize tokenizer
-    print("Initializing RoBERTa tokenizer...")
+    if is_main_process:
+        print("Initializing RoBERTa tokenizer...")
     tokenizer = RobertaTokenizer.from_pretrained('roberta-base', use_fast=True)
     tokenizer.pad_token = tokenizer.eos_token
     
@@ -728,10 +810,12 @@ def run_training_single(output_dir, config, run_num):
     
     for path in [train_path, val_path, test_path]:
         if not os.path.exists(path):
-            print(f"Error: Dataset file '{path}' not found!")
+            if is_main_process:
+                print(f"Error: Dataset file '{path}' not found!")
             return
     
-    print("Loading datasets...")
+    if is_main_process:
+        print("Loading datasets...")
     train_dataset = TextDataset(train_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
@@ -749,22 +833,42 @@ def run_training_single(output_dir, config, run_num):
         print(f"Total tokens:      {total_tokens:>20,}")
         print(f"{'='*70}\n")
     
-    # Create data loaders
-    train_loader = DataLoader(
-        train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
-    )
-    val_loader = DataLoader(
-        val_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
-    )
-    test_loader = DataLoader(
-        test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
-    )
+    # Create data loaders with DDP support
+    if is_ddp:
+        train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
+        val_sampler = DistributedSampler(val_dataset, num_replicas=world_size, rank=rank, shuffle=False)
+        test_sampler = DistributedSampler(test_dataset, num_replicas=world_size, rank=rank, shuffle=False)
+        
+        train_loader = DataLoader(
+            train_dataset, batch_size=config.BATCH_SIZE, sampler=train_sampler,
+            num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        )
+        val_loader = DataLoader(
+            val_dataset, batch_size=config.BATCH_SIZE, sampler=val_sampler,
+            num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        )
+        test_loader = DataLoader(
+            test_dataset, batch_size=config.BATCH_SIZE, sampler=test_sampler,
+            num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        )
+    else:
+        # Standard data loaders for single-GPU or DataParallel
+        train_loader = DataLoader(
+            train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
+            num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        )
+        val_loader = DataLoader(
+            val_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
+            num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        )
+        test_loader = DataLoader(
+            test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
+            num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        )
     
     # Initialize model
-    print("\nInitializing Transformer model...")
+    if is_main_process:
+        print("\nInitializing Transformer model...")
     vocab_size = len(tokenizer)
     model = TransformerLLM(
         vocab_size=vocab_size,
@@ -776,19 +880,33 @@ def run_training_single(output_dir, config, run_num):
         attention_backend=attention_backend
     ).to(device)
     
-    # Apply DataParallel if multiple GPUs are available
-    if torch.cuda.device_count() > 1:
-        print(f"\nUsing {torch.cuda.device_count()} GPUs with DataParallel")
-        model = torch.nn.DataParallel(model)
+    # Apply DDP or DataParallel for multi-GPU training
+    if is_ddp:
+        # Use DistributedDataParallel (recommended)
+        model = DDP(model, device_ids=[local_rank], output_device=local_rank)
+        if is_main_process:
+            print(f"\nUsing DistributedDataParallel (DDP) with {world_size} GPUs")
+    elif torch.cuda.device_count() > 1 and not config.USE_DDP:
+        # Fallback to DataParallel if DDP is disabled
+        if is_main_process:
+            print(f"\nUsing {torch.cuda.device_count()} GPUs with DataParallel")
+        model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())), output_device=0)
+        model = model.to(device)
     
-    print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
-    if hasattr(model, 'module'):
-        print(f"Efficient attention enabled: {model.module.efficient_attention_enabled}")
-    else:
-        if model.efficient_attention_enabled:
-            print(f"✓ Efficient attention enabled: {model.attention_backend}")
+    if config.DEBUG and is_main_process:
+        print(f"[DEBUG] Model device: {next(model.parameters()).device}")
+        print(f"[DEBUG] Is DDP: {isinstance(model, DDP)}")
+        print(f"[DEBUG] Is DataParallel: {isinstance(model, torch.nn.DataParallel)}")
+    
+    if is_main_process:
+        print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+        if hasattr(model, 'module'):
+            print(f"Efficient attention enabled: {model.module.efficient_attention_enabled}")
         else:
-            print(f"ℹ Using standard PyTorch attention")
+            if model.efficient_attention_enabled:
+                print(f"✓ Efficient attention enabled: {model.attention_backend}")
+            else:
+                print(f"ℹ Using standard PyTorch attention")
     
     # Optimizer and scheduler
     total_steps = len(train_loader) * config.EPOCHS // config.GRADIENT_ACCUMULATION_STEPS
@@ -832,24 +950,31 @@ def run_training_single(output_dir, config, run_num):
         weights_disequilibrium_values.append(weights_diseq)
         num_bins_values.append(num_bins)
         
-        print(f"Training Loss: {train_loss:.4f}, Combined: {train_combined:.4f}")
-        print(f"Validation Loss: {val_loss:.4f}")
-        print(f"Model LMC (per-epoch weights): {weights_lmc:.8f}")
+        if is_main_process:
+            print(f"Training Loss: {train_loss:.4f}, Combined: {train_combined:.4f}")
+            print(f"Validation Loss: {val_loss:.4f}")
+            print(f"Model LMC (per-epoch weights): {weights_lmc:.8f}")
     
     # Test
-    print("\nEvaluating on test set...")
+    if is_main_process:
+        print("\nEvaluating on test set...")
     test_loss = test(model, test_loader, device)
     test_metrics = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-    print(f"Test Loss: {test_loss:.4f}")
-    print(f"Test LMC: {test_metrics[0]:.8f} (bins={test_metrics[3]})\n")
+    if is_main_process:
+        print(f"Test Loss: {test_loss:.4f}")
+        print(f"Test LMC: {test_metrics[0]:.8f} (bins={test_metrics[3]})\n")
     
-    # Save results with run number
-    save_results_to_csv(
-        output_dir, train_losses, val_losses, lmc_values,
-        weights_entropy_values, weights_disequilibrium_values, num_bins_values,
-        test_loss, test_metrics, config, run_num
-    )
-    plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, config, run_num)
+    # Save results with run number (only on main process)
+    if is_main_process:
+        save_results_to_csv(
+            output_dir, train_losses, val_losses, lmc_values,
+            weights_entropy_values, weights_disequilibrium_values, num_bins_values,
+            test_loss, test_metrics, config, run_num
+        )
+        plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, config, run_num)
+    
+    # Cleanup DDP
+    cleanup_ddp()
 
 
 def run_training(output_dir, config):
