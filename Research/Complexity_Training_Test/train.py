@@ -47,6 +47,9 @@ class Config:
     DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     NUM_WORKERS = 8  # DataLoader workers
     
+    # Performance optimizations
+    USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
+    
     # Debug configuration
     DEBUG = False  # Enable detailed debug output
     
@@ -333,9 +336,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
             print(f"[DEBUG] Step 1: Moving data to device {device}")
         
         # Use the explicit device parameter, not inferred from model (fixes DataParallel issues)
-        input_ids = batch['input_ids'].to(device)
-        labels = batch['labels'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
+        input_ids = batch['input_ids'].to(device, non_blocking=True)
+        labels = batch['labels'].to(device, non_blocking=True)
+        attention_mask = batch['attention_mask'].to(device, non_blocking=True)
         
         if config.DEBUG:
             print(f"[DEBUG] Step 2: Data moved. Shapes - input_ids: {input_ids.shape}, labels: {labels.shape}")
@@ -394,10 +397,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
             scaler.step(optimizer)
             scaler.update()
             scheduler.step()
-            optimizer.zero_grad()
-            
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            optimizer.zero_grad(set_to_none=True)
         
         # Update progress bar
         progress_bar.set_postfix({
@@ -757,18 +757,21 @@ def run_training_single(output_dir, config, run_num):
         print(f"Total tokens:      {total_tokens:>20,}")
         print(f"{'='*70}\n")
     
-    # Create data loaders
+    # Create data loaders with persistent workers for faster epoch transitions
     train_loader = DataLoader(
         train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn,
+        persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
     val_loader = DataLoader(
         val_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn,
+        persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
     test_loader = DataLoader(
         test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn,
+        persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
     
     # Initialize model
@@ -792,6 +795,15 @@ def run_training_single(output_dir, config, run_num):
         print(f"✓ Efficient attention enabled: {model.attention_backend}")
     else:
         print(f"ℹ Using standard PyTorch attention")
+    
+    # Compile model for faster execution (PyTorch 2.0+)
+    if config.USE_COMPILE and hasattr(torch, 'compile'):
+        try:
+            print("Compiling model with torch.compile (first epoch will be slower)...")
+            model = torch.compile(model, mode='reduce-overhead')
+            print("✓ Model compiled successfully")
+        except Exception as e:
+            print(f"⚠ Could not compile model: {e}")
     
     # Optimizer and scheduler
     total_steps = len(train_loader) * config.EPOCHS // config.GRADIENT_ACCUMULATION_STEPS
