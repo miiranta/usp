@@ -61,8 +61,49 @@ class Config:
 
 def ddp_setup():
     """Initialize DDP using environment variables set by torchrun"""
-    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
-    dist.init_process_group(backend="nccl")
+    local_rank = int(os.environ["LOCAL_RANK"])
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    
+    # Set NCCL environment variables for better debugging and compatibility
+    os.environ['NCCL_DEBUG'] = 'INFO'
+    os.environ['NCCL_DEBUG_SUBSYS'] = 'ALL'
+    os.environ['NCCL_IB_DISABLE'] = '1'  # Disable InfiniBand
+    os.environ['NCCL_P2P_DISABLE'] = '1'  # Disable P2P (use host memory path)
+    os.environ['NCCL_SHM_DISABLE'] = '0'  # Enable shared memory
+    
+    if rank == 0:
+        print(f"[DDP Setup] Initializing process group...")
+        print(f"[DDP Setup]   Rank: {rank}/{world_size}")
+        print(f"[DDP Setup]   Local Rank: {local_rank}")
+        print(f"[DDP Setup]   Backend: NCCL")
+    
+    torch.cuda.set_device(local_rank)
+    
+    try:
+        dist.init_process_group(backend="nccl", timeout=torch.distributed.timedelta(seconds=1800))
+        
+        if rank == 0:
+            print(f"[DDP Setup] Process group initialized successfully")
+            
+        # Test basic communication
+        if rank == 0:
+            print(f"[DDP Setup] Testing GPU communication...")
+        
+        test_tensor = torch.ones(1, device=f'cuda:{local_rank}') * rank
+        dist.all_reduce(test_tensor, op=dist.ReduceOp.SUM)
+        expected = sum(range(world_size))
+        
+        if rank == 0:
+            print(f"[DDP Setup] Communication test result: {test_tensor.item():.0f} (expected: {expected})")
+            if abs(test_tensor.item() - expected) < 0.01:
+                print(f"[DDP Setup] ✓ GPU communication working correctly")
+            else:
+                print(f"[DDP Setup] ✗ GPU communication test failed!")
+        
+    except Exception as e:
+        print(f"[Rank {rank}] ERROR during DDP setup: {e}")
+        raise
 
 
 def cleanup_distributed():
@@ -947,6 +988,10 @@ def run_training_single(output_dir, config, run_num):
         print("\nInitializing Transformer model...")
     
     vocab_size = len(tokenizer)
+    
+    if rank == 0:
+        print(f"[Model Init] Creating model on device: cuda:{local_rank}")
+    
     model = TransformerLLM(
         vocab_size=vocab_size,
         hidden_dim=config.HIDDEN_DIM,
@@ -957,10 +1002,24 @@ def run_training_single(output_dir, config, run_num):
         attention_backend=attention_backend
     ).to(device)
     
+    if rank == 0:
+        print(f"[Model Init] Model created and moved to device")
+    
     # Wrap model with DDP for multi-GPU training
     # DDP handles all necessary synchronization internally
     if world_size > 1:
-        model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters=False)
+        if rank == 0:
+            print(f"[Model Init] Wrapping model with DDP...")
+        
+        # Try wrapping with DDP
+        try:
+            model = DDP(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
+            if rank == 0:
+                print(f"[Model Init] ✓ DDP wrapper created successfully")
+        except Exception as e:
+            print(f"[Rank {rank}] ERROR during DDP wrapping: {e}")
+            cleanup_distributed()
+            raise
     
     if config.DEBUG and rank == 0:
         print(f"[DEBUG] Model device: {next(model.parameters()).device}")
