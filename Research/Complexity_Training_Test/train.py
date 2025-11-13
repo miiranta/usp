@@ -358,7 +358,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
                 print(f"[DEBUG] Step 3c: Computing CE loss...")
             ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             if config.DEBUG:
-                print(f"[DEBUG] Step 3d: CE loss computed: {ce_loss.item():.4f}")
+                print(f"[DEBUG] Step 3d: CE loss computed: {ce_loss.item():.16f}")
         
         if config.DEBUG:
             print(f"[DEBUG] Step 4: Calculating LMC from weights...")
@@ -368,7 +368,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         if lmc_weight > 0 and batch_idx % 100 == 0:
             lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE, debug=config.DEBUG)
             if config.DEBUG:
-                print(f"[DEBUG] Step 4a: LMC calculated: {lmc_value:.4f}")
+                print(f"[DEBUG] Step 4a: LMC calculated: {lmc_value:.16f}")
         else:
             # Use last calculated LMC value (or default for first batches)
             if not hasattr(train_epoch, 'last_lmc'):
@@ -415,9 +415,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         
         # Update progress bar
         progress_bar.set_postfix({
-            'loss': f'{total_loss / batch_count:.4f}',
-            'lmc': f'{total_lmc / batch_count:.8f}',
-            'combined': f'{total_combined_loss / batch_count:.4f}'
+            'loss': f'{total_loss / batch_count:.16f}',
+            'lmc': f'{total_lmc / batch_count:.16f}',
+            'combined': f'{total_combined_loss / batch_count:.16f}'
         })
     
     avg_loss = total_loss / batch_count
@@ -530,7 +530,7 @@ def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, co
     # Primary y-axis: Losses
     ax1.plot(epochs, train_losses, label='Training Loss', marker='o', color='blue')
     ax1.plot(epochs, val_losses, label='Validation Loss', marker='s', color='orange')
-    ax1.axhline(y=test_loss, color='red', linestyle='--', label=f'Test Loss ({test_loss:.4f})')
+    ax1.axhline(y=test_loss, color='red', linestyle='--', label=f'Test Loss ({test_loss:.16f})')
     ax1.set_xlabel('Epoch', fontsize=12)
     ax1.set_ylabel('Loss', fontsize=12, color='black')
     ax1.tick_params(axis='y', labelcolor='black')
@@ -713,7 +713,7 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
     ax2.tick_params(axis='y', labelcolor='green')
     
     # Title and legend
-    title = f'Aggregate Results: {config.NUM_OF_RUN_PER_CALL} Runs (LMC_WEIGHT={config.LMC_WEIGHT:.2f})'
+    title = f'Aggregate Results: {config.NUM_OF_RUN_PER_CALL} Runs (LMC_WEIGHT={config.LMC_WEIGHT:.16f})'
     plt.title(title, fontsize=14, pad=20, fontweight='bold')
     
     lines1, labels1 = ax1.get_legend_handles_labels()
@@ -819,8 +819,8 @@ def run_training_single(output_dir, config, run_num):
     
     print(f"Training on {device}")
     print(f"Total steps: {total_steps}, Warmup steps: {num_warmup_steps}")
-    print(f"LMC weight: {config.LMC_WEIGHT} ({config.LMC_WEIGHT*100:.0f}% LMC, "
-          f"{(1-config.LMC_WEIGHT)*100:.0f}% loss)\n")
+    print(f"LMC weight: {config.LMC_WEIGHT:.16f} ({config.LMC_WEIGHT*100:.16f}% LMC, "
+          f"{(1-config.LMC_WEIGHT)*100:.16f}% loss)\n")
     
     # Training loop
     train_losses = []
@@ -849,16 +849,16 @@ def run_training_single(output_dir, config, run_num):
         weights_disequilibrium_values.append(weights_diseq)
         num_bins_values.append(num_bins)
         
-        print(f"Training Loss: {train_loss:.4f}, Combined: {train_combined:.4f}")
-        print(f"Validation Loss: {val_loss:.4f}")
-        print(f"Model LMC (per-epoch weights): {weights_lmc:.8f}")
+        print(f"Training Loss: {train_loss:.16f}, Combined: {train_combined:.16f}")
+        print(f"Validation Loss: {val_loss:.16f}")
+        print(f"Model LMC (per-epoch weights): {weights_lmc:.16f}")
     
     # Test
     print("\nEvaluating on test set...")
     test_loss = test(model, test_loader, device)
     test_metrics = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-    print(f"Test Loss: {test_loss:.4f}")
-    print(f"Test LMC: {test_metrics[0]:.8f} (bins={test_metrics[3]})\n")
+    print(f"Test Loss: {test_loss:.16f}")
+    print(f"Test LMC: {test_metrics[0]:.16f} (bins={test_metrics[3]})\n")
     
     # Save results with run number
     save_results_to_csv(
@@ -912,19 +912,19 @@ def main():
     print(f"\n{'='*80}")
     print(f"LMC WEIGHT SWEEP CONFIGURATION")
     print(f"{'='*80}")
-    print(f"START: {config.LMC_WEIGHT_START:.2f}")
-    print(f"END:   {config.LMC_WEIGHT_END:.2f}")
-    print(f"STEP:  {config.LMC_WEIGHT_STEP:.4f}")
+    print(f"START: {config.LMC_WEIGHT_START:.16f}")
+    print(f"END:   {config.LMC_WEIGHT_END:.16f}")
+    print(f"STEP:  {config.LMC_WEIGHT_STEP:.16f}")
     print(f"Total configurations: {len(lmc_weights)}")
-    print(f"Weights: {[f'{w:.2f}' for w in lmc_weights]}")
+    print(f"Weights: {[f'{w:.16f}' for w in lmc_weights]}")
     print(f"{'='*80}\n")
     
     # Iterate through LMC weight values
     for lmc_weight in lmc_weights:
-        output_dir = os.path.join(script_dir, f'output/output_LMC_{lmc_weight:.2f}')
+        output_dir = os.path.join(script_dir, f'output/output_LMC_{lmc_weight:.16f}')
         
         if os.path.exists(output_dir):
-            print(f"Skipping LMC_WEIGHT={lmc_weight:.2f}, output already exists.\n")
+            print(f"Skipping LMC_WEIGHT={lmc_weight:.16f}, output already exists.\n")
             continue
         
         # Create config with current LMC weight
@@ -932,7 +932,7 @@ def main():
         config.LMC_WEIGHT = lmc_weight
         
         print(f"\n{'='*80}")
-        print(f"Starting training with LMC_WEIGHT = {lmc_weight:.2f}")
+        print(f"Starting training with LMC_WEIGHT = {lmc_weight:.16f}")
         print(f"{'='*80}\n")
         
         run_training(output_dir, config)
