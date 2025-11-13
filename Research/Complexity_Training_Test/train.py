@@ -45,7 +45,7 @@ class Config:
     
     # Device configuration
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    NUM_WORKERS = 6  # DataLoader workers
+    NUM_WORKERS = 0  # DataLoader workers (0 to avoid deadlock with DataParallel)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
 
