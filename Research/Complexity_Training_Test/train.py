@@ -245,7 +245,8 @@ def calculate_lmc_from_weights(model, sample_size=0):
     
     # Apply sampling if sample_size > 0
     if sample_size > 0 and len(weights) > sample_size:
-        sample_indices = torch.randperm(len(weights))[:sample_size]
+        # Create random indices on the same device as weights to avoid CPU-GPU deadlock
+        sample_indices = torch.randperm(len(weights), device=weights.device)[:sample_size]
         weights = weights[sample_indices]
     
     # Move to CPU for histogram calculation (if on GPU)
@@ -319,15 +320,13 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
     loss_weight = 1.0 - config.LMC_WEIGHT
     lmc_weight = config.LMC_WEIGHT
     
-    # Get primary device (handles both single and multi-GPU)
-    primary_device = next(model.parameters()).device
-    
     progress_bar = tqdm(train_loader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
-        input_ids = batch['input_ids'].to(primary_device)
-        labels = batch['labels'].to(primary_device)
-        attention_mask = batch['attention_mask'].to(primary_device)
+        # Use the explicit device parameter, not inferred from model (fixes DataParallel issues)
+        input_ids = batch['input_ids'].to(device)
+        labels = batch['labels'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
         
         # Forward pass with mixed precision
         with torch.amp.autocast('cuda'):
