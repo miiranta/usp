@@ -17,16 +17,16 @@ from tqdm import tqdm
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 512
+    HIDDEN_DIM = 256
     NUM_LAYERS = 8
-    NUM_ATTENTION_HEADS = 8 # Standard ratio (hidden_dim / num_heads = 64)
+    NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
     BATCH_SIZE = 32 
     GRADIENT_ACCUMULATION_STEPS = 4 
     EPOCHS = 30
     LEARNING_RATE = 3e-4
-    SEQ_LENGTH = 256
+    SEQ_LENGTH = 128
     WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = None
@@ -37,7 +37,7 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 3  # Reduced from 10 for faster experimentation
+    NUM_OF_RUN_PER_CALL = 10
     
     # LMC weight sampling configuration
     LMC_SAMPLE_SIZE = 100000  # Sample 100k weights instead of all (much faster LMC calc)
