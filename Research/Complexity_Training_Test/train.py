@@ -17,8 +17,8 @@ from tqdm import tqdm
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 400
-    NUM_LAYERS = 3
+    HIDDEN_DIM = 200
+    NUM_LAYERS = 2
     NUM_ATTENTION_HEADS = 4
     
     # Training hyperparameters
@@ -26,7 +26,7 @@ class Config:
     GRADIENT_ACCUMULATION_STEPS = 2
     EPOCHS = 30
     LEARNING_RATE = 3e-4
-    SEQ_LENGTH = 32
+    SEQ_LENGTH = 16
     WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = None
@@ -37,7 +37,7 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 10
+    NUM_OF_RUN_PER_CALL = 2
     
     # LMC weight sampling configuration
     # Number of weights to sample for LMC calculation (0 = use all weights)
