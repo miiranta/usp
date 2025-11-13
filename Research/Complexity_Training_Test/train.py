@@ -44,7 +44,8 @@ class Config:
     LMC_SAMPLE_SIZE = 100000  # Sample 100k weights instead of all (much faster LMC calc)
     
     # Device configuration
-    DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    GPU_INDEX = 1  # Which GPU to use (0, 1, 2, etc.)
+    DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
     NUM_WORKERS = 8  # DataLoader workers
     
     # Performance optimizations
@@ -65,10 +66,11 @@ def initialize_device():
     print(f"Using device: {device}")
     
     if torch.cuda.is_available():
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
-        print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+        gpu_index = Config.GPU_INDEX
+        print(f"GPU: {torch.cuda.get_device_name(gpu_index)}")
+        print(f"Memory: {torch.cuda.get_device_properties(gpu_index).total_memory / 1e9:.2f} GB")
         print(f"CUDA Version: {torch.version.cuda}")
-        torch.cuda.set_device(0)
+        torch.cuda.set_device(gpu_index)
         torch.cuda.empty_cache()
         
         torch.backends.cudnn.allow_tf32 = True
