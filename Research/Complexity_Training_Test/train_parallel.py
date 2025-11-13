@@ -75,9 +75,16 @@ def setup_distributed(rank, world_size, master_port):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = str(master_port)
     
-    # Initialize process group
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    # Set device first before initializing process group
     torch.cuda.set_device(rank)
+    
+    # Initialize process group with explicit device specification
+    dist.init_process_group(
+        backend="nccl",
+        rank=rank,
+        world_size=world_size,
+        device_id=torch.device(f'cuda:{rank}')
+    )
 
 
 def cleanup_distributed():
@@ -878,10 +885,6 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
     val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     
-    # Synchronize after dataset loading in multi-GPU mode
-    if world_size > 1:
-        dist.barrier()
-    
     # Print dataset token summary (only for first run on rank 0)
     if run_num == 1 and rank == 0:
         total_tokens = len(train_dataset.input_ids) + len(val_dataset.input_ids) + len(test_dataset.input_ids)
@@ -930,10 +933,6 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
             num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
         )
     
-    # Synchronize all processes after dataloader creation
-    if world_size > 1:
-        dist.barrier()
-    
     # Initialize model
     if rank == 0:
         print("\nInitializing Transformer model...")
@@ -952,8 +951,6 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
     # Wrap model with DDP for multi-GPU training
     if world_size > 1:
         model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters=False)
-        # Synchronize all processes after DDP initialization
-        dist.barrier()
     
     if config.DEBUG and rank == 0:
         print(f"[DEBUG] Model device: {next(model.parameters()).device}")
