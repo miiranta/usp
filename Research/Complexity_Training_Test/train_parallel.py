@@ -78,12 +78,11 @@ def setup_distributed(rank, world_size, master_port):
     # Set device first before initializing process group
     torch.cuda.set_device(rank)
     
-    # Initialize process group with explicit device specification
+    # Initialize process group - NCCL will use the device set by torch.cuda.set_device
     dist.init_process_group(
         backend="nccl",
         rank=rank,
-        world_size=world_size,
-        device_id=torch.device(f'cuda:{rank}')
+        world_size=world_size
     )
 
 
@@ -942,11 +941,6 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
             num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
         )
     
-    # CRITICAL: Synchronize before model initialization to prevent deadlock
-    if world_size > 1:
-        torch.cuda.synchronize(device)
-        dist.barrier()
-    
     # Initialize model
     if rank == 0:
         print("\nInitializing Transformer model...")
@@ -962,11 +956,8 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
         attention_backend=attention_backend
     ).to(device)
     
-    # Synchronize after model.to(device) before DDP wrapping
-    if world_size > 1:
-        torch.cuda.synchronize(device)
-    
     # Wrap model with DDP for multi-GPU training
+    # DDP handles all necessary synchronization internally
     if world_size > 1:
         model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters=False)
     
