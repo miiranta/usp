@@ -3,7 +3,6 @@ import csv
 import torch
 import torch.nn as nn
 import torch.distributed as dist
-import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
@@ -60,35 +59,16 @@ class Config:
 # DEVICE INITIALIZATION
 # ============================================================================
 
-def find_free_port():
-    """Find a free port for distributed training"""
-    import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
-        s.listen(1)
-        port = s.getsockname()[1]
-    return port
-
-
-def setup_distributed(rank, world_size, master_port):
-    """Initialize distributed training environment"""
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = str(master_port)
-    
-    # Set device first before initializing process group
-    torch.cuda.set_device(rank)
-    
-    # Initialize process group - NCCL will use the device set by torch.cuda.set_device
-    dist.init_process_group(
-        backend="nccl",
-        rank=rank,
-        world_size=world_size
-    )
+def ddp_setup():
+    """Initialize DDP using environment variables set by torchrun"""
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+    dist.init_process_group(backend="nccl")
 
 
 def cleanup_distributed():
     """Clean up distributed training environment"""
-    dist.destroy_process_group()
+    if dist.is_initialized():
+        dist.destroy_process_group()
 
 
 def initialize_device(rank=None, world_size=None):
@@ -852,23 +832,44 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
 # MAIN TRAINING PIPELINE
 # ============================================================================
 
-def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
-    # Set device immediately
-    if world_size > 1:
-        device = torch.device(f'cuda:{rank}')
+def run_training_single(output_dir, config, run_num):
+    """Single training run - works for both single GPU and DDP"""
+    # Check if we're in distributed mode (launched by torchrun)
+    is_distributed = 'RANK' in os.environ and 'WORLD_SIZE' in os.environ
+    
+    if is_distributed:
+        # Initialize DDP
+        ddp_setup()
+        rank = int(os.environ["RANK"])
+        local_rank = int(os.environ["LOCAL_RANK"])
+        world_size = int(os.environ["WORLD_SIZE"])
+        device = torch.device(f'cuda:{local_rank}')
     else:
+        # Single GPU/CPU mode
+        rank = 0
+        local_rank = 0
+        world_size = 1
         device = Config.DEVICE
     
     # Only print initialization messages on rank 0
     if rank == 0:
-        # Initialize device
-        initialize_device(rank, world_size)
+        if world_size > 1:
+            print(f"\n{'='*70}")
+            print(f"MULTI-GPU TRAINING MODE (DDP)")
+            print(f"{'='*70}")
+            print(f"Number of GPUs: {world_size}")
+            for i in range(world_size):
+                print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
+                print(f"    Memory: {torch.cuda.get_device_properties(i).total_memory / 1e9:.2f} GB")
+            print(f"CUDA Version: {torch.version.cuda}")
+            print(f"{'='*70}\n")
+        
         enable_efficient_attention, attention_backend = check_efficient_attention()
         print()
         print("Initializing RoBERTa tokenizer...")
     
-    # ALL processes need to call this to avoid hanging
-    if world_size > 1 and rank != 0:
+    # ALL processes need to call this
+    if is_distributed and rank != 0:
         enable_efficient_attention, attention_backend = check_efficient_attention()
     
     # Tokenizer initialization - all ranks do this
@@ -1043,54 +1044,46 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
             test_loss, test_metrics, config, run_num
         )
         plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, config, run_num)
-
-
-def run_training_distributed(rank, world_size, master_port, output_dir, config, run_num):
-    """Distributed training wrapper for a single run"""
-    setup_distributed(rank, world_size, master_port)
     
-    try:
-        run_training_single(output_dir, config, run_num, rank, world_size)
-    finally:
+    # Cleanup DDP if used
+    if is_distributed:
         cleanup_distributed()
 
 
 def run_training(output_dir, config):
-    """Run training NUM_OF_RUN_PER_CALL times"""
-    os.makedirs(output_dir, exist_ok=True)
-    print(f"Output directory: {os.path.abspath(output_dir)}\n")
+    """Run training NUM_OF_RUN_PER_CALL times
     
-    # Detect number of GPUs
-    world_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
+    For multi-GPU: Launch this script with torchrun:
+        torchrun --nproc_per_node=2 train_parallel.py
+    
+    For single GPU: Just run normally:
+        python train_parallel.py
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Check if running in distributed mode
+    is_distributed = 'RANK' in os.environ and 'WORLD_SIZE' in os.environ
+    rank = int(os.environ.get("RANK", 0))
+    
+    if rank == 0:
+        print(f"Output directory: {os.path.abspath(output_dir)}\n")
     
     # Run training NUM_OF_RUN_PER_CALL times
     for run_num in range(1, config.NUM_OF_RUN_PER_CALL + 1):
-        print(f"\n{'='*80}")
-        print(f"Run {run_num}/{config.NUM_OF_RUN_PER_CALL}")
-        print(f"{'='*80}\n")
+        if rank == 0:
+            print(f"\n{'='*80}")
+            print(f"Run {run_num}/{config.NUM_OF_RUN_PER_CALL}")
+            print(f"{'='*80}\n")
         
         # Set seed for reproducibility per run (different seed each run)
         seed = 42 + run_num
         torch.manual_seed(seed)
         np.random.seed(seed)
         
-        if world_size > 1:
-            # Find a free port for this run
-            master_port = find_free_port()
-            
-            # Multi-GPU training with DistributedDataParallel
-            mp.spawn(
-                run_training_distributed,
-                args=(world_size, master_port, output_dir, config, run_num),
-                nprocs=world_size,
-                join=True
-            )
-        else:
-            # Single GPU or CPU training
-            run_training_single(output_dir, config, run_num)
+        run_training_single(output_dir, config, run_num)
     
-    # After all runs, aggregate results
-    if config.NUM_OF_RUN_PER_CALL > 1:
+    # After all runs, aggregate results (only on rank 0)
+    if rank == 0 and config.NUM_OF_RUN_PER_CALL > 1:
         print(f"\n{'='*80}")
         print(f"AGGREGATING RESULTS FROM {config.NUM_OF_RUN_PER_CALL} RUNS")
         print(f"{'='*80}\n")
