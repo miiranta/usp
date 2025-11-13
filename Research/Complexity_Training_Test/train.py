@@ -25,7 +25,7 @@ class Config:
     NUM_ATTENTION_HEADS = 4
     
     # Training hyperparameters
-    BATCH_SIZE = 512 
+    BATCH_SIZE = 2048 
     GRADIENT_ACCUMULATION_STEPS = 2
     EPOCHS = 30
     LEARNING_RATE = 3e-4
