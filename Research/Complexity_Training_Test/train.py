@@ -33,7 +33,7 @@ class Config:
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 23.0     # Ending value (inclusive)
+    LMC_WEIGHT_END = 31.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
@@ -365,6 +365,14 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         # 21: exp(loss-lmc)
         # 22: exp(loss)*exp(-lmc)
         # 23: exp(-loss)*exp(lmc)
+        # 24: loss^lmc
+        # 25: lmc^loss
+        # 26: loss^(1/lmc)
+        # 27: lmc^(1/loss)
+        # 28: loss^(-lmc)
+        # 29: lmc^(-loss)
+        # 30: loss^(-1/lmc)
+        # 31: lmc^(-1/loss)
         eps = 1e-8
         
         if lmc_weight == 0:
@@ -415,6 +423,22 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
             combined_loss = torch.exp(ce_loss) * torch.exp(-lmc_tensor)
         elif lmc_weight == 23:
             combined_loss = torch.exp(-ce_loss) * torch.exp(lmc_tensor)
+        elif lmc_weight == 24:
+            combined_loss = torch.pow(ce_loss + eps, lmc_tensor + eps)
+        elif lmc_weight == 25:
+            combined_loss = torch.pow(lmc_tensor + eps, ce_loss + eps)
+        elif lmc_weight == 26:
+            combined_loss = torch.pow(ce_loss + eps, 1.0 / (lmc_tensor + eps))
+        elif lmc_weight == 27:
+            combined_loss = torch.pow(lmc_tensor + eps, 1.0 / (ce_loss + eps))
+        elif lmc_weight == 28:
+            combined_loss = torch.pow(ce_loss + eps, -(lmc_tensor + eps))
+        elif lmc_weight == 29:
+            combined_loss = torch.pow(lmc_tensor + eps, -(ce_loss + eps))
+        elif lmc_weight == 30:
+            combined_loss = torch.pow(ce_loss + eps, -1.0 / (lmc_tensor + eps))
+        elif lmc_weight == 31:
+            combined_loss = torch.pow(lmc_tensor + eps, -1.0 / (ce_loss + eps))
         
         combined_loss = combined_loss / config.GRADIENT_ACCUMULATION_STEPS
         
