@@ -252,10 +252,7 @@ def calculate_lmc_from_weights(model, sample_size=0, debug=False):
         sample_indices = torch.randperm(len(weights), device=weights.device)[:sample_size]
         weights = weights[sample_indices]
     
-    # Move to CPU for histogram calculation (if on GPU)
-    if weights.is_cuda:
-        weights = weights.cpu()
-    
+    # Keep on GPU for faster computation (no CPU transfer needed)
     # Normalize weights to [0, 1] range
     weights_min = weights.min()
     weights_max = weights.max()
