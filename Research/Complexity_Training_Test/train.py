@@ -42,6 +42,11 @@ class Config:
     # Number of runs per configuration call
     NUM_OF_RUN_PER_CALL = 5
     
+    # LMC weight sampling configuration
+    # Number of weights to sample for LMC calculation (0 = use all weights)
+    # For 10% sampling, calculate as: total_params * 0.1
+    LMC_SAMPLE_SIZE = 0
+    
     # Device configuration
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     NUM_WORKERS = 6  # DataLoader workers
@@ -228,7 +233,7 @@ class TransformerLLM(nn.Module):
 # LMC COMPLEXITY CALCULATION
 # ============================================================================
 
-def calculate_lmc_from_weights(model):
+def calculate_lmc_from_weights(model, sample_size=0):
     # Collect ALL weights from the model
     all_weights = []
     for param in model.parameters():
@@ -236,6 +241,11 @@ def calculate_lmc_from_weights(model):
     
     # Flatten all weights into a single tensor
     weights = torch.cat(all_weights)
+    
+    # Apply sampling if sample_size > 0
+    if sample_size > 0 and len(weights) > sample_size:
+        sample_indices = torch.randperm(len(weights))[:sample_size]
+        weights = weights[sample_indices]
     
     # Move to CPU for histogram calculation (if on GPU)
     if weights.is_cuda:
@@ -250,9 +260,9 @@ def calculate_lmc_from_weights(model):
     n = len(weights)
     
     # Sample 10,000 random values to calculate IQR (memory efficient)
-    sample_size = min(10000, len(normalized_weights))
-    if len(normalized_weights) > sample_size:
-        sample_indices = torch.randperm(len(normalized_weights))[:sample_size]
+    sample_size_iqr = min(10000, len(normalized_weights))
+    if len(normalized_weights) > sample_size_iqr:
+        sample_indices = torch.randperm(len(normalized_weights))[:sample_size_iqr]
         sample = normalized_weights[sample_indices]
     else:
         sample = normalized_weights
@@ -327,8 +337,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
             labels_flat = labels.view(-1)
             ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
-        # Calculate LMC complexity from ALL model weights (per batch)
-        lmc_value, _, _, _ = calculate_lmc_from_weights(model)
+        # Calculate LMC complexity from model weights (per batch)
+        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
         lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
         
         # Combined objective: weighted sum of loss minimization and LMC maximization
@@ -808,7 +818,7 @@ def run_training_single(output_dir, config, run_num):
         val_loss = validate(model, val_loader, device)
         
         # Calculate detailed weight statistics for CSV and plotting
-        weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model)
+        weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
         
         # Store metrics
         train_losses.append(train_loss)
@@ -825,7 +835,7 @@ def run_training_single(output_dir, config, run_num):
     # Test
     print("\nEvaluating on test set...")
     test_loss = test(model, test_loader, device)
-    test_metrics = calculate_lmc_from_weights(model)
+    test_metrics = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
     print(f"Test Loss: {test_loss:.4f}")
     print(f"Test LMC: {test_metrics[0]:.8f} (bins={test_metrics[3]})\n")
     
