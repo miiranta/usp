@@ -242,7 +242,8 @@ def calculate_lmc_from_weights(model, sample_size=0, debug=False):
     # Collect ALL weights from the model
     all_weights = []
     for param in model.parameters():
-        all_weights.append(param.data.view(-1))
+        # Clone parameters to prevent CUDA graph from tracking these accesses
+        all_weights.append(param.data.clone().view(-1))
     
     if debug:
         print(f"[DEBUG LMC] Collected {len(all_weights)} parameter tensors")
@@ -331,6 +332,10 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
     progress_bar = tqdm(train_loader, desc="Training", disable=config.DEBUG)
     
     for batch_idx, batch in enumerate(progress_bar):
+        # Mark step begin for CUDA graphs compatibility
+        if hasattr(torch.compiler, 'cudagraph_mark_step_begin'):
+            torch.compiler.cudagraph_mark_step_begin()
+        
         if config.DEBUG:
             print(f"\n[DEBUG] Batch {batch_idx + 1}")
             print(f"[DEBUG] Step 1: Moving data to device {device}")
@@ -800,7 +805,7 @@ def run_training_single(output_dir, config, run_num):
     if config.USE_COMPILE and hasattr(torch, 'compile'):
         try:
             print("Compiling model with torch.compile (first epoch will be slower)...")
-            model = torch.compile(model, mode='reduce-overhead')
+            model = torch.compile(model, mode='default')
             print("✓ Model compiled successfully")
         except Exception as e:
             print(f"⚠ Could not compile model: {e}")
