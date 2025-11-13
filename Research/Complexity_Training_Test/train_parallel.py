@@ -868,6 +868,10 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
     val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     
+    # Synchronize after dataset loading in multi-GPU mode
+    if world_size > 1:
+        dist.barrier()
+    
     # Print dataset token summary (only for first run on rank 0)
     if run_num == 1 and rank == 0:
         total_tokens = len(train_dataset.input_ids) + len(val_dataset.input_ids) + len(test_dataset.input_ids)
@@ -883,21 +887,24 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
     
     # Create data loaders with DistributedSampler for multi-GPU
     if world_size > 1:
+        # Use fewer workers in distributed mode to avoid deadlocks
+        num_workers = min(2, config.NUM_WORKERS)
+        
         train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
         val_sampler = DistributedSampler(val_dataset, num_replicas=world_size, rank=rank, shuffle=False)
         test_sampler = DistributedSampler(test_dataset, num_replicas=world_size, rank=rank, shuffle=False)
         
         train_loader = DataLoader(
             train_dataset, batch_size=config.BATCH_SIZE, sampler=train_sampler,
-            num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+            num_workers=num_workers, pin_memory=True, collate_fn=collate_fn, persistent_workers=True
         )
         val_loader = DataLoader(
             val_dataset, batch_size=config.BATCH_SIZE, sampler=val_sampler,
-            num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+            num_workers=num_workers, pin_memory=True, collate_fn=collate_fn, persistent_workers=True
         )
         test_loader = DataLoader(
             test_dataset, batch_size=config.BATCH_SIZE, sampler=test_sampler,
-            num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+            num_workers=num_workers, pin_memory=True, collate_fn=collate_fn, persistent_workers=True
         )
     else:
         train_loader = DataLoader(
@@ -912,6 +919,10 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
             test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
             num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
         )
+    
+    # Synchronize all processes after dataloader creation
+    if world_size > 1:
+        dist.barrier()
     
     # Initialize model
     if rank == 0:
@@ -931,6 +942,8 @@ def run_training_single(output_dir, config, run_num, rank=0, world_size=1):
     # Wrap model with DDP for multi-GPU training
     if world_size > 1:
         model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters=False)
+        # Synchronize all processes after DDP initialization
+        dist.barrier()
     
     if config.DEBUG and rank == 0:
         print(f"[DEBUG] Model device: {next(model.parameters()).device}")
