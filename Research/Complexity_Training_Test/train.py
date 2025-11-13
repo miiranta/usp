@@ -35,7 +35,7 @@ class Config:
     # (0.0 = 100% loss optimization, 1.0 = 100% LMC maximization)
     LMC_WEIGHT_START = 0.0   # Starting value
     LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
-    LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.05 gives 0.0, 0.05, 0.10, ..., 1.0)
+    LMC_WEIGHT_STEP = 0.05   # Step size (e.g., 0.05 gives 0.0, 0.05, 0.10, ..., 1.0)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
     
@@ -342,7 +342,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         if lmc_weight == 0.0:
             combined_loss = ce_loss 
         else:
-            combined_loss = ce_loss / lmc_tensor
+            combined_loss = (ce_loss * loss_weight) / (lmc_tensor * lmc_weight)
             
         # 
         
