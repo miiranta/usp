@@ -7,7 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
-from transformers import RobertaTokenizer, get_linear_schedule_with_warmup
+from transformers import RobertaTokenizer
 from tqdm import tqdm
 import torchist
 
@@ -28,7 +28,6 @@ class Config:
     EPOCHS = 30
     LEARNING_RATE = 3e-4
     SEQ_LENGTH = 128
-    WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = None
     
@@ -318,7 +317,7 @@ def calculate_lmc_from_weights(model, sample_size=0, debug=False):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, scaler):
+def train_epoch(model, train_loader, optimizer, device, config, scaler):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
@@ -407,7 +406,6 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
-            scheduler.step()
         
         # Update progress bar
         progress_bar.set_postfix({
@@ -816,17 +814,13 @@ def run_training_single(output_dir, config, run_num):
             print(f"⚠ Could not compile model: {e}")
     
     # Optimizer and scheduler
-    total_steps = len(train_loader) * config.EPOCHS // config.GRADIENT_ACCUMULATION_STEPS
-    num_warmup_steps = int(config.WARMUP_RATIO * total_steps)
-    
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE)
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=total_steps
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.5, patience=2, verbose=True
     )
     scaler = torch.amp.GradScaler('cuda')
     
     print(f"Training on {device}")
-    print(f"Total steps: {total_steps}, Warmup steps: {num_warmup_steps}")
     print(f"LMC weight: {config.LMC_WEIGHT:.16f} ({config.LMC_WEIGHT*100:.16f}% LMC, "
           f"{(1-config.LMC_WEIGHT)*100:.16f}% loss)\n")
     
@@ -842,9 +836,12 @@ def run_training_single(output_dir, config, run_num):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
         train_loss, train_lmc, train_combined = train_epoch(
-            model, train_loader, optimizer, scheduler, device, config, scaler
+            model, train_loader, optimizer, device, config, scaler
         )
         val_loss = validate(model, val_loader, device)
+        
+        # Update learning rate based on validation loss
+        scheduler.step(val_loss)
         
         # Calculate detailed weight statistics for CSV and plotting
         weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
