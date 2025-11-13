@@ -406,8 +406,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
             scaler.step(optimizer)
             scaler.update()
-            scheduler.step()
             optimizer.zero_grad(set_to_none=True)
+            scheduler.step()
         
         # Update progress bar
         progress_bar.set_postfix({
