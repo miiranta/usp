@@ -18,16 +18,16 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 128
+    HIDDEN_DIM = 32
     NUM_LAYERS = 4
-    NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
+    NUM_ATTENTION_HEADS = 2 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
     BATCH_SIZE = 64 
     EPOCHS = 5
-    SEQ_LENGTH = 32
+    SEQ_LENGTH = 2
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 1000
+    MAX_SAMPLES = None
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -158,7 +158,8 @@ def collate_fn(batch):
     """Collate function for DataLoader"""
     input_ids = torch.stack([item['input_ids'] for item in batch])
     labels = torch.stack([item['labels'] for item in batch])
-    attention_mask = (input_ids == 0)  # True for padding tokens
+    # Note: pad_token_id will be set by TextDataset, using -100 for labels padding
+    attention_mask = (labels == -100)  # True for padding positions
     
     return {
         'input_ids': input_ids,
@@ -307,7 +308,7 @@ def calculate_lmc_from_weights(model, sample_size=0):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, device, config):
+def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
@@ -332,7 +333,6 @@ def train_epoch(model, train_loader, optimizer, device, config):
         
         # Forward pass
         logits = model(input_ids, attention_mask=attention_mask)
-        vocab_size = model.vocab_size
         logits_flat = logits.view(-1, vocab_size)
         labels_flat = labels.view(-1)
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
@@ -380,7 +380,7 @@ def train_epoch(model, train_loader, optimizer, device, config):
     return avg_loss, avg_lmc, avg_combined
 
 
-def validate(model, val_loader, device):
+def validate(model, val_loader, device, vocab_size):
     model.eval()
     total_loss = 0.0
     
@@ -392,7 +392,6 @@ def validate(model, val_loader, device):
             attention_mask = batch['attention_mask'].to(device)
             
             logits = model(input_ids, attention_mask=attention_mask)
-            vocab_size = model.vocab_size
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
@@ -402,7 +401,7 @@ def validate(model, val_loader, device):
     return total_loss / len(val_loader)
 
 
-def test(model, test_loader, device):
+def test(model, test_loader, device, vocab_size):
     model.eval()
     total_loss = 0.0
     
@@ -414,7 +413,6 @@ def test(model, test_loader, device):
             attention_mask = batch['attention_mask'].to(device)
             
             logits = model(input_ids, attention_mask=attention_mask)
-            vocab_size = model.vocab_size
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
@@ -760,6 +758,9 @@ def run_training_single(output_dir, config, run_num):
     else:
         print(f"ℹ Using standard PyTorch attention")
     
+    # Store vocab_size before compilation (compile wraps model)
+    vocab_size = model.vocab_size
+    
     # Compile model for faster execution (PyTorch 2.0+)
     if config.USE_COMPILE and hasattr(torch, 'compile'):
         try:
@@ -791,9 +792,9 @@ def run_training_single(output_dir, config, run_num):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
         train_loss, train_lmc, train_combined = train_epoch(
-            model, train_loader, optimizer, device, config
+            model, train_loader, optimizer, device, config, vocab_size
         )
-        val_loss = validate(model, val_loader, device)
+        val_loss = validate(model, val_loader, device, vocab_size)
         
         # Update learning rate based on validation loss
         scheduler.step(val_loss)
@@ -815,7 +816,7 @@ def run_training_single(output_dir, config, run_num):
     
     # Test
     print("\nEvaluating on test set...")
-    test_loss = test(model, test_loader, device)
+    test_loss = test(model, test_loader, device, vocab_size)
     test_metrics = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
     print(f"Test Loss: {test_loss:.16f}")
     print(f"Test LMC: {test_metrics[0]:.16f} (bins={test_metrics[3]})\n")
