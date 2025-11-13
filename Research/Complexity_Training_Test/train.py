@@ -38,7 +38,7 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 10
+    NUM_OF_RUN_PER_CALL = 2
     
     # LMC weight sampling configuration
     LMC_SAMPLE_SIZE = 100000  # Sample 100k weights instead of all (much faster LMC calc)
