@@ -18,8 +18,8 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 32
-    NUM_LAYERS = 4
+    HIDDEN_DIM = 128
+    NUM_LAYERS = 3
     NUM_ATTENTION_HEADS = 2 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
@@ -27,7 +27,7 @@ class Config:
     EPOCHS = 5
     SEQ_LENGTH = 2
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 10000
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
