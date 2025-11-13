@@ -30,7 +30,7 @@ class Config:
     SEQ_LENGTH = 128
     WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 4000
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -70,6 +70,9 @@ def initialize_device():
         print(f"CUDA Version: {torch.version.cuda}")
         torch.cuda.set_device(0)
         torch.cuda.empty_cache()
+        
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
     else:
         print("WARNING: CUDA is not available! Using CPU instead.")
