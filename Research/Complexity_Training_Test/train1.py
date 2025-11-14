@@ -725,8 +725,8 @@ def run_training_single(output_dir, config, run_num):
     
     print("Loading datasets...")
     train_dataset = TextDataset(train_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
-    val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
-    test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
+    val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, None) 
+    test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, None) 
     
     # Print dataset token summary (only for first run)
     if run_num == 1:
