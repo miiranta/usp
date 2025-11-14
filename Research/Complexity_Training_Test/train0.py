@@ -18,16 +18,16 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 256
-    NUM_LAYERS = 2
-    NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
+    HIDDEN_DIM = 512         
+    NUM_LAYERS = 4            
+    NUM_ATTENTION_HEADS = 8   # (match hidden_dim/64)
     
     # Training hyperparameters
-    BATCH_SIZE = 64 
+    BATCH_SIZE = 32           
     EPOCHS = 30
     SEQ_LENGTH = 16
-    MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 10000
+    MAX_GRAD_NORM = 10.0      
+    MAX_SAMPLES = 2000        
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -52,7 +52,7 @@ class Config:
     USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
-    LEARNING_RATE = 5e-4
+    LEARNING_RATE = 1e-3     # Was 5e-4 → 1e-3 (higher for faster overfitting)
 
 
 # ============================================================================
