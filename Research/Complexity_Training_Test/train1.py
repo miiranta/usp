@@ -345,7 +345,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         
         if lmc_weight == 0:
             combined_loss = ce_loss
-        elif lmc_weight == 1:
+        elif lmc_weight == 1 or lmc_weight == 2:
             combined_loss = ce_loss / lmc_value
         
         # Backward pass
