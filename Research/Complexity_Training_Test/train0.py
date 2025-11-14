@@ -23,7 +23,7 @@ class Config:
     NUM_ATTENTION_HEADS = 8 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
-    BATCH_SIZE = 32 
+    BATCH_SIZE = 16 
     EPOCHS = 20
     SEQ_LENGTH = 256
     MAX_GRAD_NORM = 1.0
