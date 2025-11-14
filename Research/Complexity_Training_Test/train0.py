@@ -18,12 +18,12 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 512
-    NUM_LAYERS = 4        
+    HIDDEN_DIM = 768
+    NUM_LAYERS = 2        
     NUM_ATTENTION_HEADS = 8   # (match hidden_dim/64)
     
     # Training hyperparameters
-    BATCH_SIZE = 512           
+    BATCH_SIZE = 32           
     EPOCHS = 25
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = None
@@ -31,7 +31,7 @@ class Config:
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 2.0     # Ending value (inclusive)
+    LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
@@ -166,7 +166,7 @@ class TransformerLLM(nn.Module):
             nhead=num_attention_heads,
             dim_feedforward=hidden_dim * 4,
             batch_first=True,
-            dropout=0.0,
+            dropout=0.1,
             activation='gelu'
         )
         
@@ -174,7 +174,7 @@ class TransformerLLM(nn.Module):
         if enable_efficient_attention and attention_backend in ["xformers", "flash_attn"]:
             try:
                 encoder_layer.self_attn = nn.MultiheadAttention(
-                    hidden_dim, num_attention_heads, dropout=0.0, batch_first=True
+                    hidden_dim, num_attention_heads, dropout=0.1, batch_first=True
                 )
                 # xFormers/flash_attn will optimize this automatically during forward pass
             except Exception as e:
