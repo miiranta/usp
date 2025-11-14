@@ -31,7 +31,7 @@ class Config:
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
+    LMC_WEIGHT_END = 2.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
@@ -685,6 +685,13 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
 def run_training_single(output_dir, config, run_num):
     # Initialize device
     device = initialize_device()
+    
+    # Override COMPLEXITY_UPDATE_INTERVAL for LMC_WEIGHT == 2
+    if config.LMC_WEIGHT == 2.0:
+        config.COMPLEXITY_UPDATE_INTERVAL = 2
+        print(f"ℹ LMC_WEIGHT is 2.0, setting COMPLEXITY_UPDATE_INTERVAL to 2\n")
+    else:
+        config.COMPLEXITY_UPDATE_INTERVAL = 1
     
     enable_efficient_attention, attention_backend = check_efficient_attention()
     print()
