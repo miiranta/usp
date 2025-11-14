@@ -177,7 +177,7 @@ class TransformerLLM(nn.Module):
             nhead=num_attention_heads,
             dim_feedforward=hidden_dim * 4,
             batch_first=True,
-            dropout=0.0,
+            dropout=0.3,
             activation='gelu'
         )
         
@@ -185,7 +185,7 @@ class TransformerLLM(nn.Module):
         if enable_efficient_attention and attention_backend in ["xformers", "flash_attn"]:
             try:
                 encoder_layer.self_attn = nn.MultiheadAttention(
-                    hidden_dim, num_attention_heads, dropout=0.0, batch_first=True
+                    hidden_dim, num_attention_heads, dropout=0.3, batch_first=True
                 )
                 # xFormers/flash_attn will optimize this automatically during forward pass
             except Exception as e:
