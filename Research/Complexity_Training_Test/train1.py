@@ -185,7 +185,7 @@ class TransformerLLM(nn.Module):
             nhead=num_attention_heads,
             dim_feedforward=hidden_dim * 4,
             batch_first=True,
-            dropout=0.3,
+            dropout=0.1,
             activation='gelu'
         )
         
