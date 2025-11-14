@@ -355,12 +355,11 @@ def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
         
-        # Accumulate metrics (weighted by batch size)
-        batch_size = input_ids.size(0)
-        total_loss += ce_loss.detach().item() * batch_size
-        total_lmc += lmc_value * batch_size
-        total_combined_loss += combined_loss.detach().item() * batch_size
-        total_samples += batch_size
+        # Accumulate metrics (losses are already means from CrossEntropyLoss)
+        total_loss += ce_loss.detach().item()
+        total_lmc += lmc_value
+        total_combined_loss += combined_loss.detach().item()
+        total_samples += 1  # Count batches, not samples
         
         # Update progress bar
         progress_bar.set_postfix({
@@ -392,9 +391,9 @@ def validate(model, val_loader, device, vocab_size):
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
-            batch_size = input_ids.size(0)
-            total_loss += loss.item() * batch_size
-            total_samples += batch_size
+            # Loss is already a mean, just accumulate it
+            total_loss += loss.item()
+            total_samples += 1  # Count batches
     
     return total_loss / total_samples if total_samples > 0 else 0.0
 
@@ -415,9 +414,9 @@ def test(model, test_loader, device, vocab_size):
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
-            batch_size = input_ids.size(0)
-            total_loss += loss.item() * batch_size
-            total_samples += batch_size
+            # Loss is already a mean, just accumulate it
+            total_loss += loss.item()
+            total_samples += 1  # Count batches
     
     return total_loss / total_samples if total_samples > 0 else 0.0
 
@@ -724,7 +723,7 @@ def run_training_single(output_dir, config, run_num):
     
     # Create data loaders with persistent workers for faster epoch transitions
     train_loader = DataLoader(
-        train_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
+        train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
         num_workers=config.NUM_WORKERS, pin_memory=True,
         persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
