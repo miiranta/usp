@@ -7,9 +7,8 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
-from transformers import RobertaTokenizer
+from transformers import RobertaTokenizer, get_linear_schedule_with_warmup
 from tqdm import tqdm
-import torchist
 
 
 # ============================================================================
@@ -18,41 +17,37 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 256
-    NUM_LAYERS = 4
-    NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
+    HIDDEN_DIM = 200
+    NUM_LAYERS = 2
+    NUM_ATTENTION_HEADS = 4
     
     # Training hyperparameters
-    BATCH_SIZE = 64 
+    BATCH_SIZE = 512 
+    GRADIENT_ACCUMULATION_STEPS = 2
     EPOCHS = 30
-    SEQ_LENGTH = 32
+    LEARNING_RATE = 3e-4
+    SEQ_LENGTH = 8
+    WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 10000
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 2.0     # Ending value (inclusive)
+    LMC_WEIGHT_END = 4.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 5
+    NUM_OF_RUN_PER_CALL = 2
     
     # LMC weight sampling configuration
+    # Number of weights to sample for LMC calculation (0 = use all weights)
     LMC_SAMPLE_SIZE = 0
     
-    # Complexity calculation interval
-    COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
-    
     # Device configuration
-    GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.)
-    DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
-    NUM_WORKERS = 8  # DataLoader workers
-    
-    # Performance optimizations
-    USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
+    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    NUM_WORKERS = 6  # DataLoader workers
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
-    LEARNING_RATE = 1e-4
 
 
 # ============================================================================
@@ -64,15 +59,13 @@ def initialize_device():
     print(f"Using device: {device}")
     
     if torch.cuda.is_available():
-        gpu_index = Config.GPU_INDEX
-        print(f"GPU: {torch.cuda.get_device_name(gpu_index)}")
-        print(f"Memory: {torch.cuda.get_device_properties(gpu_index).total_memory / 1e9:.2f} GB")
+        num_gpus = torch.cuda.device_count()
+        print(f"Number of GPUs available: {num_gpus}")
+        for i in range(num_gpus):
+            print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
+            print(f"  Memory: {torch.cuda.get_device_properties(i).total_memory / 1e9:.2f} GB")
         print(f"CUDA Version: {torch.version.cuda}")
-        torch.cuda.set_device(gpu_index)
         torch.cuda.empty_cache()
-        
-        torch.backends.cudnn.allow_tf32 = True
-        torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
     else:
         print("WARNING: CUDA is not available! Using CPU instead.")
@@ -111,6 +104,7 @@ class TextDataset(Dataset):
         self.seq_length = seq_length
         self.tokenizer = tokenizer
         
+        # Read and tokenize text
         print(f"Tokenizing {file_path}...")
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
@@ -130,6 +124,7 @@ class TextDataset(Dataset):
         
         self.input_ids = encodings['input_ids'][0]
         
+        # Only limit if max_samples is explicitly set
         if max_samples is not None:
             max_length = max_samples * seq_length
             original_len = len(self.input_ids)
@@ -146,7 +141,26 @@ class TextDataset(Dataset):
         input_ids = self.input_ids[idx:idx + self.seq_length]
         target_ids = self.input_ids[idx + 1:idx + self.seq_length + 1]
         
+        # Pad if necessary
+        if len(input_ids) < self.seq_length:
+            padding = self.seq_length - len(input_ids)
+            input_ids = torch.cat([input_ids, torch.zeros(padding, dtype=torch.long)])
+            target_ids = torch.cat([target_ids, torch.full((padding,), -100, dtype=torch.long)])
+        
         return {'input_ids': input_ids, 'labels': target_ids}
+
+
+def collate_fn(batch):
+    """Collate function for DataLoader"""
+    input_ids = torch.stack([item['input_ids'] for item in batch])
+    labels = torch.stack([item['labels'] for item in batch])
+    attention_mask = (input_ids == 0)  # True for padding tokens
+    
+    return {
+        'input_ids': input_ids,
+        'labels': labels,
+        'attention_mask': attention_mask
+    }
 
 
 # ============================================================================
@@ -166,7 +180,7 @@ class TransformerLLM(nn.Module):
             nhead=num_attention_heads,
             dim_feedforward=hidden_dim * 4,
             batch_first=True,
-            dropout=0.0,
+            dropout=0.3,
             activation='gelu'
         )
         
@@ -174,7 +188,7 @@ class TransformerLLM(nn.Module):
         if enable_efficient_attention and attention_backend in ["xformers", "flash_attn"]:
             try:
                 encoder_layer.self_attn = nn.MultiheadAttention(
-                    hidden_dim, num_attention_heads, dropout=0.0, batch_first=True
+                    hidden_dim, num_attention_heads, dropout=0.1, batch_first=True
                 )
                 # xFormers/flash_attn will optimize this automatically during forward pass
             except Exception as e:
@@ -188,7 +202,7 @@ class TransformerLLM(nn.Module):
         self.efficient_attention_enabled = enable_efficient_attention
         self.attention_backend = attention_backend
     
-    def forward(self, input_ids):
+    def forward(self, input_ids, attention_mask=None):
         seq_length = input_ids.size(1)
         positions = torch.arange(seq_length, device=input_ids.device).unsqueeze(0)
         
@@ -201,10 +215,11 @@ class TransformerLLM(nn.Module):
             diagonal=1
         ).bool()
         
-        # Transformer (no attention_mask needed - no padding)
+        # Transformer
         transformer_out = self.transformer(
             embeddings,
-            mask=causal_mask
+            mask=causal_mask,
+            src_key_padding_mask=attention_mask
         )
         
         # Language model head
@@ -220,17 +235,19 @@ def calculate_lmc_from_weights(model, sample_size=0):
     # Collect ALL weights from the model
     all_weights = []
     for param in model.parameters():
-        # Clone parameters to prevent CUDA graph from tracking these accesses
-        all_weights.append(param.data.clone().view(-1))
+        all_weights.append(param.data.view(-1))
     
     # Flatten all weights into a single tensor
     weights = torch.cat(all_weights)
     
     # Apply sampling if sample_size > 0
     if sample_size > 0 and len(weights) > sample_size:
-        # Create random indices on the same device as weights to avoid CPU-GPU deadlock
-        sample_indices = torch.randperm(len(weights), device=weights.device)[:sample_size]
+        sample_indices = torch.randperm(len(weights))[:sample_size]
         weights = weights[sample_indices]
+    
+    # Move to CPU for histogram calculation (if on GPU)
+    if weights.is_cuda:
+        weights = weights.cpu()
     
     # Normalize weights to [0, 1] range
     weights_min = weights.min()
@@ -241,7 +258,7 @@ def calculate_lmc_from_weights(model, sample_size=0):
     n = len(weights)
     
     # Sample 10,000 random values to calculate IQR (memory efficient)
-    sample_size_iqr = min(100000, len(normalized_weights))
+    sample_size_iqr = min(10000, len(normalized_weights))
     if len(normalized_weights) > sample_size_iqr:
         sample_indices = torch.randperm(len(normalized_weights))[:sample_size_iqr]
         sample = normalized_weights[sample_indices]
@@ -259,8 +276,8 @@ def calculate_lmc_from_weights(model, sample_size=0):
         data_range = float(weights_max - weights_min)
         num_bins = max(1, int(np.ceil(data_range / bin_width)))
     
-    # Create histogram using GPU-accelerated torchist
-    hist = torchist.histogram(normalized_weights, bins=num_bins, low=0.0, upp=1.0)
+    # Create histogram
+    hist, _ = torch.histogram(normalized_weights, bins=num_bins, range=(0.0, 1.0))
     
     # Convert to probability distribution
     probs = hist.float() / hist.sum().float()
@@ -288,124 +305,147 @@ def calculate_lmc_from_weights(model, sample_size=0):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, scaler):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
     total_combined_loss = 0.0
-    total_samples = 0
+    batch_count = 0
     
     # Calculate loss/LMC weights (must sum to 1.0)
     loss_weight = 1.0 - config.LMC_WEIGHT
     lmc_weight = config.LMC_WEIGHT
     
-    # Initialize LMC value (will be updated every COMPLEXITY_UPDATE_INTERVAL batches)
-    lmc_value = None
+    # Get primary device (handles both single and multi-GPU)
+    primary_device = next(model.parameters()).device
     
     progress_bar = tqdm(train_loader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
-        # Mark step begin for CUDA graphs compatibility
-        if hasattr(torch.compiler, 'cudagraph_mark_step_begin'):
-            torch.compiler.cudagraph_mark_step_begin()
+        input_ids = batch['input_ids'].to(primary_device)
+        labels = batch['labels'].to(primary_device)
+        attention_mask = batch['attention_mask'].to(primary_device)
         
-        # Use the explicit device parameter, not inferred from model (fixes DataParallel issues)
-        input_ids = batch['input_ids'].to(device, non_blocking=True)
-        labels = batch['labels'].to(device, non_blocking=True)
+        # Forward pass with mixed precision
+        with torch.amp.autocast('cuda'):
+            logits = model(input_ids, attention_mask=attention_mask)
+            # Handle both DataParallel and regular models
+            vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
+            logits_flat = logits.view(-1, vocab_size)
+            labels_flat = labels.view(-1)
+            ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
-        # Forward pass
-        logits = model(input_ids)
-        logits_flat = logits.view(-1, vocab_size)
-        labels_flat = labels.view(-1)
-        ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
-        
-        # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
-        if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
-            lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        # Calculate LMC complexity from model weights (per batch)
+        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
         
         # Combined objective using different formulations based on lmc_weight
         # Use lmc_weight to select which loss formulation to use:
         # 0: loss
         # 1: loss/lmc
+        # 2: exp(loss)
+        # 3: exp(loss+lmc)
+        # 4: exp(loss-lmc)
+        
+        eps = 1e-8
         
         if lmc_weight == 0:
             combined_loss = ce_loss
-        elif lmc_weight == 1 or lmc_weight == 2:
-            combined_loss = ce_loss / lmc_value
+        elif lmc_weight == 1:
+            combined_loss = ce_loss / lmc_tensor
+        elif lmc_weight == 2:
+            combined_loss = torch.exp(ce_loss)
+        elif lmc_weight == 3:
+            combined_loss = torch.exp(ce_loss + lmc_tensor)
+        elif lmc_weight == 4:
+            combined_loss = torch.exp(ce_loss - lmc_tensor)
+        
+        combined_loss = combined_loss / config.GRADIENT_ACCUMULATION_STEPS
         
         # Backward pass
-        combined_loss.backward()
+        scaler.scale(combined_loss).backward()
         
-        # Optimization step
-        torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
-        optimizer.step()
-        scheduler.step()
-        optimizer.zero_grad(set_to_none=True)
-        
-        # Accumulate metrics (losses are already means from CrossEntropyLoss)
+        # Accumulate metrics
         total_loss += ce_loss.detach().item()
         total_lmc += lmc_value
-        total_combined_loss += combined_loss.detach().item()
-        total_samples += 1  # Count batches, not samples
+        total_combined_loss += combined_loss.detach().item() * config.GRADIENT_ACCUMULATION_STEPS
+        batch_count += 1
+        
+        # Optimization step
+        if (batch_idx + 1) % config.GRADIENT_ACCUMULATION_STEPS == 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
+            scaler.step(optimizer)
+            scaler.update()
+            scheduler.step()
+            optimizer.zero_grad()
+            
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
         
         # Update progress bar
         progress_bar.set_postfix({
-            'loss': f'{total_loss / total_samples:.16f}',
-            'lmc': f'{total_lmc / total_samples:.16f}',
-            'combined': f'{total_combined_loss / total_samples:.16f}'
+            'loss': f'{total_loss / batch_count:.4f}',
+            'lmc': f'{total_lmc / batch_count:.8f}',
+            'combined': f'{total_combined_loss / batch_count:.4f}'
         })
     
-    avg_loss = total_loss / total_samples
-    avg_lmc = total_lmc / total_samples
-    avg_combined = total_combined_loss / total_samples
+    avg_loss = total_loss / batch_count
+    avg_lmc = total_lmc / batch_count
+    avg_combined = total_combined_loss / batch_count
     
     return avg_loss, avg_lmc, avg_combined
 
 
-def validate(model, val_loader, device, vocab_size):
+def validate(model, val_loader, device):
     model.eval()
     total_loss = 0.0
-    total_samples = 0
+    
+    # Get primary device (handles both single and multi-GPU)
+    primary_device = next(model.parameters()).device
     
     with torch.no_grad():
         progress_bar = tqdm(val_loader, desc="Validating")
         for batch in progress_bar:
-            input_ids = batch['input_ids'].to(device, non_blocking=True)
-            labels = batch['labels'].to(device, non_blocking=True)
+            input_ids = batch['input_ids'].to(primary_device)
+            labels = batch['labels'].to(primary_device)
+            attention_mask = batch['attention_mask'].to(primary_device)
             
-            logits = model(input_ids)
+            logits = model(input_ids, attention_mask=attention_mask)
+            # Handle both DataParallel and regular models
+            vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
-            # Loss is already a mean, just accumulate it
             total_loss += loss.item()
-            total_samples += 1  # Count batches
     
-    return total_loss / total_samples if total_samples > 0 else 0.0
+    return total_loss / len(val_loader)
 
 
-def test(model, test_loader, device, vocab_size):
+def test(model, test_loader, device):
     model.eval()
     total_loss = 0.0
-    total_samples = 0
+    
+    # Get primary device (handles both single and multi-GPU)
+    primary_device = next(model.parameters()).device
     
     with torch.no_grad():
         progress_bar = tqdm(test_loader, desc="Testing")
         for batch in progress_bar:
-            input_ids = batch['input_ids'].to(device, non_blocking=True)
-            labels = batch['labels'].to(device, non_blocking=True)
+            input_ids = batch['input_ids'].to(primary_device)
+            labels = batch['labels'].to(primary_device)
+            attention_mask = batch['attention_mask'].to(primary_device)
             
-            logits = model(input_ids)
+            logits = model(input_ids, attention_mask=attention_mask)
+            # Handle both DataParallel and regular models
+            vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
-            # Loss is already a mean, just accumulate it
             total_loss += loss.item()
-            total_samples += 1  # Count batches
     
-    return total_loss / total_samples if total_samples > 0 else 0.0
+    return total_loss / len(test_loader)
 
 
 # ============================================================================
@@ -467,7 +507,7 @@ def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, co
     # Primary y-axis: Losses
     ax1.plot(epochs, train_losses, label='Training Loss', marker='o', color='blue')
     ax1.plot(epochs, val_losses, label='Validation Loss', marker='s', color='orange')
-    ax1.axhline(y=test_loss, color='red', linestyle='--', label=f'Test Loss ({test_loss:.16f})')
+    ax1.axhline(y=test_loss, color='red', linestyle='--', label=f'Test Loss ({test_loss:.4f})')
     ax1.set_xlabel('Epoch', fontsize=12)
     ax1.set_ylabel('Loss', fontsize=12, color='black')
     ax1.tick_params(axis='y', labelcolor='black')
@@ -650,7 +690,7 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
     ax2.tick_params(axis='y', labelcolor='green')
     
     # Title and legend
-    title = f'Aggregate Results: {config.NUM_OF_RUN_PER_CALL} Runs (LMC_WEIGHT={config.LMC_WEIGHT:.16f})'
+    title = f'Aggregate Results: {config.NUM_OF_RUN_PER_CALL} Runs (LMC_WEIGHT={config.LMC_WEIGHT:.2f})'
     plt.title(title, fontsize=14, pad=20, fontweight='bold')
     
     lines1, labels1 = ax1.get_legend_handles_labels()
@@ -668,16 +708,8 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
 # ============================================================================
 
 def run_training_single(output_dir, config, run_num):
-    # Initialize device
+    """Run a single training iteration"""
     device = initialize_device()
-    
-    # Override COMPLEXITY_UPDATE_INTERVAL for LMC_WEIGHT == 2
-    if config.LMC_WEIGHT == 2.0:
-        config.COMPLEXITY_UPDATE_INTERVAL = 2
-        print(f"ℹ LMC_WEIGHT is 2.0, setting COMPLEXITY_UPDATE_INTERVAL to 2\n")
-    else:
-        config.COMPLEXITY_UPDATE_INTERVAL = 1
-    
     enable_efficient_attention, attention_backend = check_efficient_attention()
     print()
     
@@ -699,8 +731,8 @@ def run_training_single(output_dir, config, run_num):
     
     print("Loading datasets...")
     train_dataset = TextDataset(train_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
-    val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, None) 
-    test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, None) 
+    val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
+    test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     
     # Print dataset token summary (only for first run)
     if run_num == 1:
@@ -715,21 +747,18 @@ def run_training_single(output_dir, config, run_num):
         print(f"Total tokens:      {total_tokens:>20,}")
         print(f"{'='*70}\n")
     
-    # Create data loaders with persistent workers for faster epoch transitions
+    # Create data loaders
     train_loader = DataLoader(
         train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
-        num_workers=config.NUM_WORKERS, pin_memory=True,
-        persistent_workers=True if config.NUM_WORKERS > 0 else False
+        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
     )
     val_loader = DataLoader(
         val_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True,
-        persistent_workers=True if config.NUM_WORKERS > 0 else False
+        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
     )
     test_loader = DataLoader(
         test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True,
-        persistent_workers=True if config.NUM_WORKERS > 0 else False
+        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
     )
     
     # Initialize model
@@ -745,43 +774,34 @@ def run_training_single(output_dir, config, run_num):
         attention_backend=attention_backend
     ).to(device)
     
+    # Apply DataParallel if multiple GPUs are available
+    if torch.cuda.device_count() > 1:
+        print(f"\nUsing {torch.cuda.device_count()} GPUs with DataParallel")
+        model = torch.nn.DataParallel(model)
+    
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
-    if model.efficient_attention_enabled:
-        print(f"✓ Efficient attention enabled: {model.attention_backend}")
+    if hasattr(model, 'module'):
+        print(f"Efficient attention enabled: {model.module.efficient_attention_enabled}")
     else:
-        print(f"ℹ Using standard PyTorch attention")
-    
-    # Store vocab_size before compilation (compile wraps model)
-    vocab_size = model.vocab_size
-    
-    # Compile model for faster execution (PyTorch 2.0+)
-    if config.USE_COMPILE and hasattr(torch, 'compile'):
-        try:
-            print("Compiling model with torch.compile (first epoch will be slower)...")
-            model = torch.compile(model, mode='default')
-            print("✓ Model compiled successfully")
-        except Exception as e:
-            print(f"⚠ Could not compile model: {e}")
+        if model.efficient_attention_enabled:
+            print(f"✓ Efficient attention enabled: {model.attention_backend}")
+        else:
+            print(f"ℹ Using standard PyTorch attention")
     
     # Optimizer and scheduler
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE)
+    total_steps = len(train_loader) * config.EPOCHS // config.GRADIENT_ACCUMULATION_STEPS
+    num_warmup_steps = int(config.WARMUP_RATIO * total_steps)
     
-    # Calculate total training steps for OneCycleLR
-    total_steps = len(train_loader) * config.EPOCHS
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        optimizer,
-        max_lr=config.LEARNING_RATE,
-        total_steps=total_steps,
-        pct_start=0.1,
-        anneal_strategy='cos',
-        cycle_momentum=True,
-        base_momentum=0.85,
-        max_momentum=0.95
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=total_steps
     )
+    scaler = torch.amp.GradScaler('cuda')
     
     print(f"Training on {device}")
-    print(f"LMC weight: {config.LMC_WEIGHT:.16f} ({config.LMC_WEIGHT*100:.16f}% LMC, "
-          f"{(1-config.LMC_WEIGHT)*100:.16f}% loss)\n")
+    print(f"Total steps: {total_steps}, Warmup steps: {num_warmup_steps}")
+    print(f"LMC weight: {config.LMC_WEIGHT} ({config.LMC_WEIGHT*100:.0f}% LMC, "
+          f"{(1-config.LMC_WEIGHT)*100:.0f}% loss)\n")
     
     # Training loop
     train_losses = []
@@ -795,9 +815,9 @@ def run_training_single(output_dir, config, run_num):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
         train_loss, train_lmc, train_combined = train_epoch(
-            model, train_loader, optimizer, scheduler, device, config, vocab_size
+            model, train_loader, optimizer, scheduler, device, config, scaler
         )
-        val_loss = validate(model, val_loader, device, vocab_size)
+        val_loss = validate(model, val_loader, device)
         
         # Calculate detailed weight statistics for CSV and plotting
         weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
@@ -810,16 +830,16 @@ def run_training_single(output_dir, config, run_num):
         weights_disequilibrium_values.append(weights_diseq)
         num_bins_values.append(num_bins)
         
-        print(f"Training Loss: {train_loss:.16f}, Combined: {train_combined:.16f}")
-        print(f"Validation Loss: {val_loss:.16f}")
-        print(f"Model LMC (per-epoch weights): {weights_lmc:.16f}")
+        print(f"Training Loss: {train_loss:.4f}, Combined: {train_combined:.4f}")
+        print(f"Validation Loss: {val_loss:.4f}")
+        print(f"Model LMC (per-epoch weights): {weights_lmc:.8f}")
     
     # Test
     print("\nEvaluating on test set...")
-    test_loss = test(model, test_loader, device, vocab_size)
+    test_loss = test(model, test_loader, device)
     test_metrics = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-    print(f"Test Loss: {test_loss:.16f}")
-    print(f"Test LMC: {test_metrics[0]:.16f} (bins={test_metrics[3]})\n")
+    print(f"Test Loss: {test_loss:.4f}")
+    print(f"Test LMC: {test_metrics[0]:.8f} (bins={test_metrics[3]})\n")
     
     # Save results with run number
     save_results_to_csv(
@@ -873,19 +893,19 @@ def main():
     print(f"\n{'='*80}")
     print(f"LMC WEIGHT SWEEP CONFIGURATION")
     print(f"{'='*80}")
-    print(f"START: {config.LMC_WEIGHT_START:.16f}")
-    print(f"END:   {config.LMC_WEIGHT_END:.16f}")
-    print(f"STEP:  {config.LMC_WEIGHT_STEP:.16f}")
+    print(f"START: {config.LMC_WEIGHT_START:.2f}")
+    print(f"END:   {config.LMC_WEIGHT_END:.2f}")
+    print(f"STEP:  {config.LMC_WEIGHT_STEP:.4f}")
     print(f"Total configurations: {len(lmc_weights)}")
-    print(f"Weights: {[f'{w:.16f}' for w in lmc_weights]}")
+    print(f"Weights: {[f'{w:.2f}' for w in lmc_weights]}")
     print(f"{'='*80}\n")
     
     # Iterate through LMC weight values
     for lmc_weight in lmc_weights:
-        output_dir = os.path.join(script_dir, f'output/output_LMC_{lmc_weight:.16f}')
+        output_dir = os.path.join(script_dir, f'output/output_LMC_{lmc_weight:.2f}')
         
         if os.path.exists(output_dir):
-            print(f"Skipping LMC_WEIGHT={lmc_weight:.16f}, output already exists.\n")
+            print(f"Skipping LMC_WEIGHT={lmc_weight:.2f}, output already exists.\n")
             continue
         
         # Create config with current LMC weight
@@ -893,7 +913,7 @@ def main():
         config.LMC_WEIGHT = lmc_weight
         
         print(f"\n{'='*80}")
-        print(f"Starting training with LMC_WEIGHT = {lmc_weight:.16f}")
+        print(f"Starting training with LMC_WEIGHT = {lmc_weight:.2f}")
         print(f"{'='*80}\n")
         
         run_training(output_dir, config)
