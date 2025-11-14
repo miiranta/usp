@@ -19,7 +19,7 @@ import torchist
 class Config:
     # Model hyperparameters
     HIDDEN_DIM = 512
-    NUM_LAYERS = 6
+    NUM_LAYERS = 4
     NUM_ATTENTION_HEADS = 8 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
@@ -35,10 +35,10 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 3
+    NUM_OF_RUN_PER_CALL = 5
     
     # LMC weight sampling configuration
-    LMC_SAMPLE_SIZE = 100000
+    LMC_SAMPLE_SIZE = 10000000
     
     # Device configuration
     GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.)
@@ -329,13 +329,8 @@ def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
         # Calculate LMC every batch (expensive but accurate)
-        lmc_value = None
-        if lmc_weight > 0:
-            lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-            lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
-        else:
-            lmc_value = 0.0
-            lmc_tensor = torch.tensor(1.0, dtype=torch.float32, device=device)
+        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
         
         # Combined objective using different formulations based on lmc_weight
         # Use lmc_weight to select which loss formulation to use:
