@@ -19,13 +19,13 @@ import torchist
 class Config:
     # Model hyperparameters
     HIDDEN_DIM = 256
-    NUM_LAYERS = 4
+    NUM_LAYERS = 2
     NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
     BATCH_SIZE = 64 
     EPOCHS = 30
-    SEQ_LENGTH = 32
+    SEQ_LENGTH = 16
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 10000
     
@@ -52,7 +52,7 @@ class Config:
     USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
-    LEARNING_RATE = 1e-4
+    LEARNING_RATE = 5e-4
 
 
 # ============================================================================
@@ -241,7 +241,7 @@ def calculate_lmc_from_weights(model, sample_size=0):
     n = len(weights)
     
     # Sample 10,000 random values to calculate IQR (memory efficient)
-    sample_size_iqr = min(100000, len(normalized_weights))
+    sample_size_iqr = min(10000, len(normalized_weights))
     if len(normalized_weights) > sample_size_iqr:
         sample_indices = torch.randperm(len(normalized_weights))[:sample_size_iqr]
         sample = normalized_weights[sample_indices]
