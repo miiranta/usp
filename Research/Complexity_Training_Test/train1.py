@@ -41,7 +41,7 @@ class Config:
     LMC_SAMPLE_SIZE = 0
     
     # Complexity calculation interval
-    COMPLEXITY_UPDATE_INTERVAL = 64  # Calculate LMC every X batches (1 = every batch)
+    COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
     
     # Device configuration
     GPU_INDEX = 1  # Which GPU to use (0, 1, 2, etc.)
@@ -256,7 +256,7 @@ def calculate_lmc_from_weights(model, sample_size=0):
     n = len(weights)
     
     # Sample 10,000 random values to calculate IQR (memory efficient)
-    sample_size_iqr = min(10000, len(normalized_weights))
+    sample_size_iqr = min(100000, len(normalized_weights))
     if len(normalized_weights) > sample_size_iqr:
         sample_indices = torch.randperm(len(normalized_weights))[:sample_size_iqr]
         sample = normalized_weights[sample_indices]
