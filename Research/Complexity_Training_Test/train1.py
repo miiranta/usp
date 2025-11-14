@@ -383,13 +383,14 @@ def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
 def validate(model, val_loader, device, vocab_size):
     model.eval()
     total_loss = 0.0
+    batch_count = 0
     
     with torch.no_grad():
         progress_bar = tqdm(val_loader, desc="Validating")
         for batch in progress_bar:
-            input_ids = batch['input_ids'].to(device)
-            labels = batch['labels'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
+            input_ids = batch['input_ids'].to(device, non_blocking=True)
+            labels = batch['labels'].to(device, non_blocking=True)
+            attention_mask = batch['attention_mask'].to(device, non_blocking=True)
             
             logits = model(input_ids, attention_mask=attention_mask)
             logits_flat = logits.view(-1, vocab_size)
@@ -397,20 +398,22 @@ def validate(model, val_loader, device, vocab_size):
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
             total_loss += loss.item()
+            batch_count += 1
     
-    return total_loss / len(val_loader)
+    return total_loss / batch_count if batch_count > 0 else 0.0
 
 
 def test(model, test_loader, device, vocab_size):
     model.eval()
     total_loss = 0.0
+    batch_count = 0
     
     with torch.no_grad():
         progress_bar = tqdm(test_loader, desc="Testing")
         for batch in progress_bar:
-            input_ids = batch['input_ids'].to(device)
-            labels = batch['labels'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
+            input_ids = batch['input_ids'].to(device, non_blocking=True)
+            labels = batch['labels'].to(device, non_blocking=True)
+            attention_mask = batch['attention_mask'].to(device, non_blocking=True)
             
             logits = model(input_ids, attention_mask=attention_mask)
             logits_flat = logits.view(-1, vocab_size)
@@ -418,8 +421,9 @@ def test(model, test_loader, device, vocab_size):
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
             total_loss += loss.item()
+            batch_count += 1
     
-    return total_loss / len(test_loader)
+    return total_loss / batch_count if batch_count > 0 else 0.0
 
 
 # ============================================================================
