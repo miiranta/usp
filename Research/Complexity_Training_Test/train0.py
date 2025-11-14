@@ -154,6 +154,20 @@ class TextDataset(Dataset):
         return {'input_ids': input_ids, 'labels': target_ids}
 
 
+def collate_fn(batch):
+    """Collate function for DataLoader"""
+    input_ids = torch.stack([item['input_ids'] for item in batch])
+    labels = torch.stack([item['labels'] for item in batch])
+    # Note: pad_token_id will be set by TextDataset, using -100 for labels padding
+    attention_mask = (labels == -100)  # True for padding positions
+    
+    return {
+        'input_ids': input_ids,
+        'labels': labels,
+        'attention_mask': attention_mask
+    }
+
+
 # ============================================================================
 # MODEL
 # ============================================================================
