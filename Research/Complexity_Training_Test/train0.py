@@ -300,7 +300,7 @@ def calculate_lmc_from_weights(model, sample_size=0):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
@@ -348,6 +348,7 @@ def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
         # Optimization step
         torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
         optimizer.step()
+        scheduler.step()
         optimizer.zero_grad(set_to_none=True)
         
         # Accumulate metrics (losses are already means from CrossEntropyLoss)
@@ -766,8 +767,18 @@ def run_training_single(output_dir, config, run_num):
     
     # Optimizer and scheduler
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=2
+    
+    # Calculate total training steps for OneCycleLR
+    total_steps = len(train_loader) * config.EPOCHS
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=config.LEARNING_RATE,
+        total_steps=total_steps,
+        pct_start=0.1,
+        anneal_strategy='cos',
+        cycle_momentum=True,
+        base_momentum=0.85,
+        max_momentum=0.95
     )
     
     print(f"Training on {device}")
@@ -786,12 +797,9 @@ def run_training_single(output_dir, config, run_num):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
         train_loss, train_lmc, train_combined = train_epoch(
-            model, train_loader, optimizer, device, config, vocab_size
+            model, train_loader, optimizer, scheduler, device, config, vocab_size
         )
         val_loss = validate(model, val_loader, device, vocab_size)
-        
-        # Update learning rate based on validation loss
-        scheduler.step(val_loss)
         
         # Calculate detailed weight statistics for CSV and plotting
         weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
