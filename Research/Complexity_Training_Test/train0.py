@@ -27,7 +27,7 @@ class Config:
     EPOCHS = 30
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 10000
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -38,7 +38,7 @@ class Config:
     NUM_OF_RUN_PER_CALL = 5
     
     # LMC weight sampling configuration
-    LMC_SAMPLE_SIZE = 0
+    LMC_SAMPLE_SIZE = 10000
     
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
