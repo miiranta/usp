@@ -38,10 +38,10 @@ class Config:
     NUM_OF_RUN_PER_CALL = 3
     
     # LMC weight sampling configuration
-    LMC_SAMPLE_SIZE = 100000
+    LMC_SAMPLE_SIZE = 10000
     
     # Complexity calculation interval
-    COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
+    COMPLEXITY_UPDATE_INTERVAL = 16  # Calculate LMC every X batches (1 = every batch)
     
     # Device configuration
     GPU_INDEX = 1  # Which GPU to use (0, 1, 2, etc.)
@@ -52,7 +52,7 @@ class Config:
     USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
-    LEARNING_RATE = 1e-3     # Was 5e-4 → 1e-3 (higher for faster overfitting)
+    LEARNING_RATE = 1e-3     
 
 
 # ============================================================================
