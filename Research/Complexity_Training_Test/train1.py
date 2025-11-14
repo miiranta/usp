@@ -324,7 +324,7 @@ def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
     total_loss = 0.0
     total_lmc = 0.0
     total_combined_loss = 0.0
-    batch_count = 0
+    total_samples = 0
     
     # Calculate loss/LMC weights (must sum to 1.0)
     loss_weight = 1.0 - config.LMC_WEIGHT
@@ -375,22 +375,23 @@ def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
         
-        # Accumulate metrics
-        total_loss += ce_loss.detach().item()
-        total_lmc += lmc_value
-        total_combined_loss += combined_loss.detach().item()
-        batch_count += 1
+        # Accumulate metrics (weighted by batch size)
+        batch_size = input_ids.size(0)
+        total_loss += ce_loss.detach().item() * batch_size
+        total_lmc += lmc_value * batch_size
+        total_combined_loss += combined_loss.detach().item() * batch_size
+        total_samples += batch_size
         
         # Update progress bar
         progress_bar.set_postfix({
-            'loss': f'{total_loss / batch_count:.16f}',
-            'lmc': f'{total_lmc / batch_count:.16f}',
-            'combined': f'{total_combined_loss / batch_count:.16f}'
+            'loss': f'{total_loss / total_samples:.16f}',
+            'lmc': f'{total_lmc / total_samples:.16f}',
+            'combined': f'{total_combined_loss / total_samples:.16f}'
         })
     
-    avg_loss = total_loss / batch_count
-    avg_lmc = total_lmc / batch_count
-    avg_combined = total_combined_loss / batch_count
+    avg_loss = total_loss / total_samples
+    avg_lmc = total_lmc / total_samples
+    avg_combined = total_combined_loss / total_samples
     
     return avg_loss, avg_lmc, avg_combined
 
@@ -398,7 +399,7 @@ def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
 def validate(model, val_loader, device, vocab_size):
     model.eval()
     total_loss = 0.0
-    batch_count = 0
+    total_samples = 0
     
     with torch.no_grad():
         progress_bar = tqdm(val_loader, desc="Validating")
@@ -412,16 +413,17 @@ def validate(model, val_loader, device, vocab_size):
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
-            total_loss += loss.item()
-            batch_count += 1
+            batch_size = input_ids.size(0)
+            total_loss += loss.item() * batch_size
+            total_samples += batch_size
     
-    return total_loss / batch_count if batch_count > 0 else 0.0
+    return total_loss / total_samples if total_samples > 0 else 0.0
 
 
 def test(model, test_loader, device, vocab_size):
     model.eval()
     total_loss = 0.0
-    batch_count = 0
+    total_samples = 0
     
     with torch.no_grad():
         progress_bar = tqdm(test_loader, desc="Testing")
@@ -435,10 +437,11 @@ def test(model, test_loader, device, vocab_size):
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
-            total_loss += loss.item()
-            batch_count += 1
+            batch_size = input_ids.size(0)
+            total_loss += loss.item() * batch_size
+            total_samples += batch_size
     
-    return total_loss / batch_count if batch_count > 0 else 0.0
+    return total_loss / total_samples if total_samples > 0 else 0.0
 
 
 # ============================================================================
