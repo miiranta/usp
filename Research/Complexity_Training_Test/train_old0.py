@@ -29,22 +29,23 @@ class Config:
     SEQ_LENGTH = 8
     WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 10000
+    MAX_SAMPLES = None
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 4.0     # Ending value (inclusive)
+    LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 2
+    NUM_OF_RUN_PER_CALL = 10
     
     # LMC weight sampling configuration
     # Number of weights to sample for LMC calculation (0 = use all weights)
     LMC_SAMPLE_SIZE = 0
     
     # Device configuration
-    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    GPU_INDEX = 0 
+    DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
     NUM_WORKERS = 6  # DataLoader workers
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
@@ -57,14 +58,21 @@ class Config:
 def initialize_device():
     device = Config.DEVICE
     print(f"Using device: {device}")
-    
+
     if torch.cuda.is_available():
-        num_gpus = torch.cuda.device_count()
-        print(f"Number of GPUs available: {num_gpus}")
-        for i in range(num_gpus):
-            print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
-            print(f"  Memory: {torch.cuda.get_device_properties(i).total_memory / 1e9:.2f} GB")
-        print(f"CUDA Version: {torch.version.cuda}")
+        gpu_index = Config.GPU_INDEX
+        try:
+            print(f"Selected GPU index: {gpu_index}")
+            print(f"GPU: {torch.cuda.get_device_name(gpu_index)}")
+            print(f"Memory: {torch.cuda.get_device_properties(gpu_index).total_memory / 1e9:.16f} GB")
+            print(f"CUDA Version: {torch.version.cuda}")
+            torch.cuda.set_device(gpu_index)
+        except Exception:
+            num_gpus = torch.cuda.device_count()
+            print(f"Number of GPUs available: {num_gpus}")
+            for i in range(num_gpus):
+                print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
+                print(f"  Memory: {torch.cuda.get_device_properties(i).total_memory / 1e9:.16f} GB")
         torch.cuda.empty_cache()
         torch.backends.cudnn.benchmark = True
     else:
@@ -75,7 +83,6 @@ def initialize_device():
 
 
 def check_efficient_attention():
-    """Check for efficient attention libraries (xFormers/flash_attn)"""
     if not torch.cuda.is_available():
         return False, "pytorch"
     
@@ -104,12 +111,11 @@ class TextDataset(Dataset):
         self.seq_length = seq_length
         self.tokenizer = tokenizer
         
-        # Read and tokenize text
         print(f"Tokenizing {file_path}...")
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
         
-        print(f"  File size: {len(text) / 1024 / 1024:.2f} MB")
+        print(f"  File size: {len(text) / 1024 / 1024:.16f} MB")
         
         encodings = tokenizer(
             text,
@@ -124,7 +130,6 @@ class TextDataset(Dataset):
         
         self.input_ids = encodings['input_ids'][0]
         
-        # Only limit if max_samples is explicitly set
         if max_samples is not None:
             max_length = max_samples * seq_length
             original_len = len(self.input_ids)
@@ -149,20 +154,6 @@ class TextDataset(Dataset):
         
         return {'input_ids': input_ids, 'labels': target_ids}
 
-
-def collate_fn(batch):
-    """Collate function for DataLoader"""
-    input_ids = torch.stack([item['input_ids'] for item in batch])
-    labels = torch.stack([item['labels'] for item in batch])
-    attention_mask = (input_ids == 0)  # True for padding tokens
-    
-    return {
-        'input_ids': input_ids,
-        'labels': labels,
-        'attention_mask': attention_mask
-    }
-
-
 # ============================================================================
 # MODEL
 # ============================================================================
@@ -184,13 +175,11 @@ class TransformerLLM(nn.Module):
             activation='gelu'
         )
         
-        # Enable efficient attention backend if available
         if enable_efficient_attention and attention_backend in ["xformers", "flash_attn"]:
             try:
                 encoder_layer.self_attn = nn.MultiheadAttention(
                     hidden_dim, num_attention_heads, dropout=0.1, batch_first=True
                 )
-                # xFormers/flash_attn will optimize this automatically during forward pass
             except Exception as e:
                 print(f"Warning: Could not enable {attention_backend} attention: {e}")
         
@@ -257,7 +246,7 @@ def calculate_lmc_from_weights(model, sample_size=0):
     # Calculate number of bins using Freedman-Diaconis rule
     n = len(weights)
     
-    # Sample 10,000 random values to calculate IQR (memory efficient)
+    # Sample 10,000 random values to calculate IQR
     sample_size_iqr = min(10000, len(normalized_weights))
     if len(normalized_weights) > sample_size_iqr:
         sample_indices = torch.randperm(len(normalized_weights))[:sample_size_iqr]
@@ -326,10 +315,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         labels = batch['labels'].to(primary_device)
         attention_mask = batch['attention_mask'].to(primary_device)
         
-        # Forward pass with mixed precision
         with torch.amp.autocast('cuda'):
             logits = model(input_ids, attention_mask=attention_mask)
-            # Handle both DataParallel and regular models
             vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
@@ -343,9 +330,6 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         # Use lmc_weight to select which loss formulation to use:
         # 0: loss
         # 1: loss/lmc
-        # 2: exp(loss)
-        # 3: exp(loss+lmc)
-        # 4: exp(loss-lmc)
         
         eps = 1e-8
         
@@ -353,12 +337,6 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
             combined_loss = ce_loss
         elif lmc_weight == 1:
             combined_loss = ce_loss / lmc_tensor
-        elif lmc_weight == 2:
-            combined_loss = torch.exp(ce_loss)
-        elif lmc_weight == 3:
-            combined_loss = torch.exp(ce_loss + lmc_tensor)
-        elif lmc_weight == 4:
-            combined_loss = torch.exp(ce_loss - lmc_tensor)
         
         combined_loss = combined_loss / config.GRADIENT_ACCUMULATION_STEPS
         
@@ -384,9 +362,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         
         # Update progress bar
         progress_bar.set_postfix({
-            'loss': f'{total_loss / batch_count:.4f}',
-            'lmc': f'{total_lmc / batch_count:.8f}',
-            'combined': f'{total_combined_loss / batch_count:.4f}'
+            'loss': f'{total_loss / batch_count:.16f}',
+            'lmc': f'{total_lmc / batch_count:.16f}',
+            'combined': f'{total_combined_loss / batch_count:.16f}'
         })
     
     avg_loss = total_loss / batch_count
@@ -507,7 +485,7 @@ def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, co
     # Primary y-axis: Losses
     ax1.plot(epochs, train_losses, label='Training Loss', marker='o', color='blue')
     ax1.plot(epochs, val_losses, label='Validation Loss', marker='s', color='orange')
-    ax1.axhline(y=test_loss, color='red', linestyle='--', label=f'Test Loss ({test_loss:.4f})')
+    ax1.axhline(y=test_loss, color='red', linestyle='--', label=f'Test Loss ({test_loss:.16f})')
     ax1.set_xlabel('Epoch', fontsize=12)
     ax1.set_ylabel('Loss', fontsize=12, color='black')
     ax1.tick_params(axis='y', labelcolor='black')
@@ -690,7 +668,7 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
     ax2.tick_params(axis='y', labelcolor='green')
     
     # Title and legend
-    title = f'Aggregate Results: {config.NUM_OF_RUN_PER_CALL} Runs (LMC_WEIGHT={config.LMC_WEIGHT:.2f})'
+    title = f'Aggregate Results: {config.NUM_OF_RUN_PER_CALL} Runs (LMC_WEIGHT={config.LMC_WEIGHT:.16f})'
     plt.title(title, fontsize=14, pad=20, fontweight='bold')
     
     lines1, labels1 = ax1.get_legend_handles_labels()
@@ -750,15 +728,15 @@ def run_training_single(output_dir, config, run_num):
     # Create data loaders
     train_loader = DataLoader(
         train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        num_workers=config.NUM_WORKERS, pin_memory=True
     )
     val_loader = DataLoader(
         val_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        num_workers=config.NUM_WORKERS, pin_memory=True
     )
     test_loader = DataLoader(
         test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn
+        num_workers=config.NUM_WORKERS, pin_memory=True
     )
     
     # Initialize model
@@ -830,16 +808,16 @@ def run_training_single(output_dir, config, run_num):
         weights_disequilibrium_values.append(weights_diseq)
         num_bins_values.append(num_bins)
         
-        print(f"Training Loss: {train_loss:.4f}, Combined: {train_combined:.4f}")
-        print(f"Validation Loss: {val_loss:.4f}")
-        print(f"Model LMC (per-epoch weights): {weights_lmc:.8f}")
+        print(f"Training Loss: {train_loss:.16f}, Combined: {train_combined:.16f}")
+        print(f"Validation Loss: {val_loss:.16f}")
+        print(f"Model LMC (per-epoch weights): {weights_lmc:.16f}")
     
     # Test
     print("\nEvaluating on test set...")
     test_loss = test(model, test_loader, device)
     test_metrics = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-    print(f"Test Loss: {test_loss:.4f}")
-    print(f"Test LMC: {test_metrics[0]:.8f} (bins={test_metrics[3]})\n")
+    print(f"Test Loss: {test_loss:.16f}")
+    print(f"Test LMC: {test_metrics[0]:.16f} (bins={test_metrics[3]})\n")
     
     # Save results with run number
     save_results_to_csv(
@@ -893,19 +871,19 @@ def main():
     print(f"\n{'='*80}")
     print(f"LMC WEIGHT SWEEP CONFIGURATION")
     print(f"{'='*80}")
-    print(f"START: {config.LMC_WEIGHT_START:.2f}")
-    print(f"END:   {config.LMC_WEIGHT_END:.2f}")
-    print(f"STEP:  {config.LMC_WEIGHT_STEP:.4f}")
+    print(f"START: {config.LMC_WEIGHT_START:.16f}")
+    print(f"END:   {config.LMC_WEIGHT_END:.16f}")
+    print(f"STEP:  {config.LMC_WEIGHT_STEP:.16f}")
     print(f"Total configurations: {len(lmc_weights)}")
-    print(f"Weights: {[f'{w:.2f}' for w in lmc_weights]}")
+    print(f"Weights: {[f'{w:.16f}' for w in lmc_weights]}")
     print(f"{'='*80}\n")
     
     # Iterate through LMC weight values
     for lmc_weight in lmc_weights:
-        output_dir = os.path.join(script_dir, f'output/output_LMC_{lmc_weight:.2f}')
+        output_dir = os.path.join(script_dir, f'output/output_LMC_{lmc_weight:.16f}')
         
         if os.path.exists(output_dir):
-            print(f"Skipping LMC_WEIGHT={lmc_weight:.2f}, output already exists.\n")
+            print(f"Skipping LMC_WEIGHT={lmc_weight:.16f}, output already exists.\n")
             continue
         
         # Create config with current LMC weight
@@ -913,7 +891,7 @@ def main():
         config.LMC_WEIGHT = lmc_weight
         
         print(f"\n{'='*80}")
-        print(f"Starting training with LMC_WEIGHT = {lmc_weight:.2f}")
+        print(f"Starting training with LMC_WEIGHT = {lmc_weight:.16f}")
         print(f"{'='*80}\n")
         
         run_training(output_dir, config)
