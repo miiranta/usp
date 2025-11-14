@@ -23,7 +23,7 @@ class Config:
     NUM_ATTENTION_HEADS = 8 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
-    BATCH_SIZE = 32 
+    BATCH_SIZE = 64 
     EPOCHS = 30
     SEQ_LENGTH = 128
     MAX_GRAD_NORM = 1.0
@@ -35,7 +35,7 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 5
+    NUM_OF_RUN_PER_CALL = 10
     
     # LMC weight sampling configuration
     LMC_SAMPLE_SIZE = 10000000
@@ -177,7 +177,7 @@ class TransformerLLM(nn.Module):
             nhead=num_attention_heads,
             dim_feedforward=hidden_dim * 4,
             batch_first=True,
-            dropout=0.1,
+            dropout=0.2,
             activation='gelu'
         )
         
@@ -185,7 +185,7 @@ class TransformerLLM(nn.Module):
         if enable_efficient_attention and attention_backend in ["xformers", "flash_attn"]:
             try:
                 encoder_layer.self_attn = nn.MultiheadAttention(
-                    hidden_dim, num_attention_heads, dropout=0.1, batch_first=True
+                    hidden_dim, num_attention_heads, dropout=0.2, batch_first=True
                 )
                 # xFormers/flash_attn will optimize this automatically during forward pass
             except Exception as e:
