@@ -38,7 +38,7 @@ class Config:
     NUM_OF_RUN_PER_CALL = 10
     
     # LMC weight sampling configuration
-    LMC_SAMPLE_SIZE = 10000000
+    LMC_SAMPLE_SIZE = 0
     
     # Device configuration
     GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.)
