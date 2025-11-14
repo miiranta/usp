@@ -27,7 +27,7 @@ class Config:
     EPOCHS = 10
     SEQ_LENGTH = 128
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 40000
+    MAX_SAMPLES = 4000
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -152,20 +152,6 @@ class TextDataset(Dataset):
             target_ids = torch.cat([target_ids, torch.full((padding,), -100, dtype=torch.long)])
         
         return {'input_ids': input_ids, 'labels': target_ids}
-
-
-def collate_fn(batch):
-    """Collate function for DataLoader"""
-    input_ids = torch.stack([item['input_ids'] for item in batch])
-    labels = torch.stack([item['labels'] for item in batch])
-    # Note: pad_token_id will be set by TextDataset, using -100 for labels padding
-    attention_mask = (labels == -100)  # True for padding positions
-    
-    return {
-        'input_ids': input_ids,
-        'labels': labels,
-        'attention_mask': attention_mask
-    }
 
 
 # ============================================================================
@@ -329,10 +315,9 @@ def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
         # Use the explicit device parameter, not inferred from model (fixes DataParallel issues)
         input_ids = batch['input_ids'].to(device, non_blocking=True)
         labels = batch['labels'].to(device, non_blocking=True)
-        attention_mask = batch['attention_mask'].to(device, non_blocking=True)
         
         # Forward pass
-        logits = model(input_ids, attention_mask=attention_mask)
+        logits = model(input_ids)
         logits_flat = logits.view(-1, vocab_size)
         labels_flat = labels.view(-1)
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
@@ -395,9 +380,8 @@ def validate(model, val_loader, device, vocab_size):
         for batch in progress_bar:
             input_ids = batch['input_ids'].to(device, non_blocking=True)
             labels = batch['labels'].to(device, non_blocking=True)
-            attention_mask = batch['attention_mask'].to(device, non_blocking=True)
             
-            logits = model(input_ids, attention_mask=attention_mask)
+            logits = model(input_ids)
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
@@ -419,9 +403,8 @@ def test(model, test_loader, device, vocab_size):
         for batch in progress_bar:
             input_ids = batch['input_ids'].to(device, non_blocking=True)
             labels = batch['labels'].to(device, non_blocking=True)
-            attention_mask = batch['attention_mask'].to(device, non_blocking=True)
             
-            logits = model(input_ids, attention_mask=attention_mask)
+            logits = model(input_ids)
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
@@ -736,17 +719,17 @@ def run_training_single(output_dir, config, run_num):
     # Create data loaders with persistent workers for faster epoch transitions
     train_loader = DataLoader(
         train_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn,
+        num_workers=config.NUM_WORKERS, pin_memory=True,
         persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
     val_loader = DataLoader(
         val_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn,
+        num_workers=config.NUM_WORKERS, pin_memory=True,
         persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
     test_loader = DataLoader(
         test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn,
+        num_workers=config.NUM_WORKERS, pin_memory=True,
         persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
     
