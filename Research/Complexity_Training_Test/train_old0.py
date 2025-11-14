@@ -313,10 +313,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
     for batch_idx, batch in enumerate(progress_bar):
         input_ids = batch['input_ids'].to(primary_device)
         labels = batch['labels'].to(primary_device)
-        attention_mask = batch['attention_mask'].to(primary_device)
         
         with torch.amp.autocast('cuda'):
-            logits = model(input_ids, attention_mask=attention_mask)
+            logits = model(input_ids)
             vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
@@ -386,9 +385,8 @@ def validate(model, val_loader, device):
         for batch in progress_bar:
             input_ids = batch['input_ids'].to(primary_device)
             labels = batch['labels'].to(primary_device)
-            attention_mask = batch['attention_mask'].to(primary_device)
             
-            logits = model(input_ids, attention_mask=attention_mask)
+            logits = model(input_ids)
             # Handle both DataParallel and regular models
             vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
             logits_flat = logits.view(-1, vocab_size)
@@ -412,9 +410,8 @@ def test(model, test_loader, device):
         for batch in progress_bar:
             input_ids = batch['input_ids'].to(primary_device)
             labels = batch['labels'].to(primary_device)
-            attention_mask = batch['attention_mask'].to(primary_device)
             
-            logits = model(input_ids, attention_mask=attention_mask)
+            logits = model(input_ids)
             # Handle both DataParallel and regular models
             vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
             logits_flat = logits.view(-1, vocab_size)
