@@ -18,14 +18,14 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 768
+    HIDDEN_DIM = 512
     NUM_LAYERS = 2        
     NUM_ATTENTION_HEADS = 8   # (match hidden_dim/64)
     
     # Training hyperparameters
     BATCH_SIZE = 32           
     EPOCHS = 25
-    SEQ_LENGTH = 32
+    SEQ_LENGTH = 16
     MAX_GRAD_NORM = None
     MAX_SAMPLES = None        
     
