@@ -746,7 +746,7 @@ def run_training_single(output_dir, config, run_num):
     
     # Create data loaders with persistent workers for faster epoch transitions
     train_loader = DataLoader(
-        train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
+        train_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
         num_workers=config.NUM_WORKERS, pin_memory=True, collate_fn=collate_fn,
         persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
