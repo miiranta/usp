@@ -18,16 +18,16 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 128
-    NUM_LAYERS = 3
-    NUM_ATTENTION_HEADS = 2 # Standard ratio (hidden_dim / num_heads = 64)
+    HIDDEN_DIM = 256
+    NUM_LAYERS = 4
+    NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
     BATCH_SIZE = 64 
     EPOCHS = 5
     SEQ_LENGTH = 2
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 10000
+    MAX_SAMPLES = 40000
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -38,7 +38,7 @@ class Config:
     NUM_OF_RUN_PER_CALL = 2
     
     # LMC weight sampling configuration
-    LMC_SAMPLE_SIZE = 1000000
+    LMC_SAMPLE_SIZE = 100000
     
     # Device configuration
     GPU_INDEX = 1  # Which GPU to use (0, 1, 2, etc.)
