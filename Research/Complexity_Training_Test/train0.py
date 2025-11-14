@@ -137,46 +137,21 @@ class TextDataset(Dataset):
             print(f"  Tokens after limit:  {len(self.input_ids):,} (max_samples={max_samples})")
         else:
             print(f"  Tokens loaded: {len(self.input_ids):,} (no limit)")
-        
-        # Create non-overlapping chunks with stride equal to seq_length
-        # This reduces highly correlated examples and speeds up epoch passes
-        stride = seq_length
-        chunks = []
-        for start in range(0, len(self.input_ids) - seq_length, stride):
-            chunk = self.input_ids[start:start + seq_length + 1]  # +1 for label shift
-            chunks.append(chunk)
-        
-        if chunks:
-            self.chunks = torch.stack(chunks)  # shape (num_examples, seq_length+1)
-            print(f"  Created {len(chunks):,} chunks with stride={stride}")
-        else:
-            # Fallback: create single chunk if not enough tokens
-            self.chunks = self.input_ids.unsqueeze(0)
-            print(f"  Warning: Not enough tokens for chunking. Created 1 chunk.")
     
     def __len__(self):
-        return len(self.chunks)
+        return max(0, len(self.input_ids) - self.seq_length)
     
     def __getitem__(self, idx):
-        chunk = self.chunks[idx]
-        input_ids = chunk[:self.seq_length]
-        target_ids = chunk[1:self.seq_length + 1]
+        input_ids = self.input_ids[idx:idx + self.seq_length]
+        target_ids = self.input_ids[idx + 1:idx + self.seq_length + 1]
+        
+        # Pad if necessary
+        if len(input_ids) < self.seq_length:
+            padding = self.seq_length - len(input_ids)
+            input_ids = torch.cat([input_ids, torch.zeros(padding, dtype=torch.long)])
+            target_ids = torch.cat([target_ids, torch.full((padding,), -100, dtype=torch.long)])
         
         return {'input_ids': input_ids, 'labels': target_ids}
-
-
-def collate_fn(batch):
-    """Collate function for DataLoader"""
-    input_ids = torch.stack([item['input_ids'] for item in batch])
-    labels = torch.stack([item['labels'] for item in batch])
-    # Note: pad_token_id will be set by TextDataset, using -100 for labels padding
-    attention_mask = (labels == -100)  # True for padding positions
-    
-    return {
-        'input_ids': input_ids,
-        'labels': labels,
-        'attention_mask': attention_mask
-    }
 
 
 # ============================================================================
