@@ -41,7 +41,7 @@ class Config:
     LMC_SAMPLE_SIZE = 0
     
     # Complexity calculation interval
-    COMPLEXITY_UPDATE_INTERVAL = 16  # Calculate LMC every X batches (1 = every batch)
+    COMPLEXITY_UPDATE_INTERVAL = 64  # Calculate LMC every X batches (1 = every batch)
     
     # Device configuration
     GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.)
@@ -337,7 +337,6 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
         if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
             lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-        lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
         
         # Combined objective using different formulations based on lmc_weight
         # Use lmc_weight to select which loss formulation to use:
@@ -347,7 +346,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         if lmc_weight == 0:
             combined_loss = ce_loss
         elif lmc_weight == 1:
-            combined_loss = ce_loss / lmc_tensor
+            combined_loss = ce_loss / lmc_value
         
         # Backward pass
         combined_loss.backward()
