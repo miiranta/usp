@@ -18,9 +18,9 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 512
+    HIDDEN_DIM = 256
     NUM_LAYERS = 4
-    NUM_ATTENTION_HEADS = 8 # Standard ratio (hidden_dim / num_heads = 64)
+    NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
     BATCH_SIZE = 32 
@@ -39,6 +39,9 @@ class Config:
     
     # LMC weight sampling configuration
     LMC_SAMPLE_SIZE = 0
+    
+    # Complexity calculation interval
+    COMPLEXITY_UPDATE_INTERVAL = 16  # Calculate LMC every X batches (1 = every batch)
     
     # Device configuration
     GPU_INDEX = 1  # Which GPU to use (0, 1, 2, etc.)
@@ -311,6 +314,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     loss_weight = 1.0 - config.LMC_WEIGHT
     lmc_weight = config.LMC_WEIGHT
     
+    # Initialize LMC value (will be updated every COMPLEXITY_UPDATE_INTERVAL batches)
+    lmc_value = None
+    
     progress_bar = tqdm(train_loader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
@@ -328,8 +334,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         labels_flat = labels.view(-1)
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
-        # Calculate LMC every batch (expensive but accurate)
-        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
+        if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
+            lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
         lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
         
         # Combined objective using different formulations based on lmc_weight
