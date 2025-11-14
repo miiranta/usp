@@ -23,9 +23,9 @@ class Config:
     NUM_ATTENTION_HEADS = 8   # (match hidden_dim/64)
     
     # Training hyperparameters
-    BATCH_SIZE = 32           
-    EPOCHS = 25
-    SEQ_LENGTH = 16
+    BATCH_SIZE = 64           
+    EPOCHS = 20
+    SEQ_LENGTH = 64
     MAX_GRAD_NORM = None
     MAX_SAMPLES = None        
     
@@ -46,7 +46,7 @@ class Config:
     # Device configuration
     GPU_INDEX = 1  # Which GPU to use (0, 1, 2, etc.)
     DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
-    NUM_WORKERS = 8  # DataLoader workers
+    NUM_WORKERS = 32  # DataLoader workers
     
     # Performance optimizations
     USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
