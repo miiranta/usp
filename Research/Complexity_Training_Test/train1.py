@@ -18,16 +18,16 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 256
-    NUM_LAYERS = 4
-    NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
+    HIDDEN_DIM = 512
+    NUM_LAYERS = 4        
+    NUM_ATTENTION_HEADS = 8   # (match hidden_dim/64)
     
     # Training hyperparameters
-    BATCH_SIZE = 64 
+    BATCH_SIZE = 64           
     EPOCHS = 30
     SEQ_LENGTH = 128
-    MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_GRAD_NORM = None
+    MAX_SAMPLES = None        
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -38,7 +38,7 @@ class Config:
     NUM_OF_RUN_PER_CALL = 5
     
     # LMC weight sampling configuration
-    LMC_SAMPLE_SIZE = 0
+    LMC_SAMPLE_SIZE = 10000
     
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
@@ -52,7 +52,7 @@ class Config:
     USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
-    LEARNING_RATE = 1e-4
+    LEARNING_RATE = 1e-3     # Was 5e-4 → 1e-3 (higher for faster overfitting)
 
 
 # ============================================================================
@@ -138,27 +138,13 @@ class TextDataset(Dataset):
             print(f"  Tokens after limit:  {len(self.input_ids):,} (max_samples={max_samples})")
         else:
             print(f"  Tokens loaded: {len(self.input_ids):,} (no limit)")
-        
-        stride = seq_length
-        chunks = []
-        for start in range(0, len(self.input_ids) - seq_length, stride):
-            chunk = self.input_ids[start:start + seq_length + 1]
-            chunks.append(chunk)
-        
-        if chunks:
-            self.chunks = torch.stack(chunks)
-            print(f"  Created {len(chunks):,} chunks with stride={stride}")
-        else:
-            self.chunks = self.input_ids.unsqueeze(0)
-            print(f"  Warning: Not enough tokens for chunking. Created 1 chunk.")
     
     def __len__(self):
-        return len(self.chunks)
+        return max(0, len(self.input_ids) - self.seq_length)
     
     def __getitem__(self, idx):
-        chunk = self.chunks[idx]
-        input_ids = chunk[:self.seq_length]
-        target_ids = chunk[1:self.seq_length + 1]
+        input_ids = self.input_ids[idx:idx + self.seq_length]
+        target_ids = self.input_ids[idx + 1:idx + self.seq_length + 1]
         
         return {'input_ids': input_ids, 'labels': target_ids}
 
@@ -180,7 +166,7 @@ class TransformerLLM(nn.Module):
             nhead=num_attention_heads,
             dim_feedforward=hidden_dim * 4,
             batch_first=True,
-            dropout=0.2,
+            dropout=0.0,
             activation='gelu'
         )
         
@@ -188,7 +174,7 @@ class TransformerLLM(nn.Module):
         if enable_efficient_attention and attention_backend in ["xformers", "flash_attn"]:
             try:
                 encoder_layer.self_attn = nn.MultiheadAttention(
-                    hidden_dim, num_attention_heads, dropout=0.2, batch_first=True
+                    hidden_dim, num_attention_heads, dropout=0.0, batch_first=True
                 )
                 # xFormers/flash_attn will optimize this automatically during forward pass
             except Exception as e:
@@ -202,7 +188,7 @@ class TransformerLLM(nn.Module):
         self.efficient_attention_enabled = enable_efficient_attention
         self.attention_backend = attention_backend
     
-    def forward(self, input_ids, attention_mask=None):
+    def forward(self, input_ids):
         seq_length = input_ids.size(1)
         positions = torch.arange(seq_length, device=input_ids.device).unsqueeze(0)
         
@@ -215,11 +201,10 @@ class TransformerLLM(nn.Module):
             diagonal=1
         ).bool()
         
-        # Transformer
+        # Transformer (no attention_mask needed - no padding)
         transformer_out = self.transformer(
             embeddings,
-            mask=causal_mask,
-            src_key_padding_mask=attention_mask
+            mask=causal_mask
         )
         
         # Language model head
@@ -256,7 +241,7 @@ def calculate_lmc_from_weights(model, sample_size=0):
     n = len(weights)
     
     # Sample 10,000 random values to calculate IQR (memory efficient)
-    sample_size_iqr = min(100000, len(normalized_weights))
+    sample_size_iqr = min(10000, len(normalized_weights))
     if len(normalized_weights) > sample_size_iqr:
         sample_indices = torch.randperm(len(normalized_weights))[:sample_size_iqr]
         sample = normalized_weights[sample_indices]
@@ -351,8 +336,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Backward pass
         combined_loss.backward()
         
-        # Optimization step
-        torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
+        # Optimization step (no gradient clipping for maximum overfitting)
+        if config.MAX_GRAD_NORM is not None:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad(set_to_none=True)
