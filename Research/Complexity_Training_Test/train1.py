@@ -23,7 +23,7 @@ class Config:
     NUM_ATTENTION_HEADS = 8   # (match hidden_dim/64)
     
     # Training hyperparameters
-    BATCH_SIZE = 256           
+    BATCH_SIZE = 512           
     EPOCHS = 30
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = None
