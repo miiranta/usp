@@ -17,7 +17,7 @@ test_losses_std = []
 test_lmc_mean = []
 test_lmc_std = []
 
-# Dictionary to store training curves for each LMC weight
+# Dictionary to store training curves for each LMC weigh
 training_data = {}
 
 # Get all folders in the output directory
