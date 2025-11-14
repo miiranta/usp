@@ -17,15 +17,15 @@ import torchist
 # ============================================================================
 
 class Config:
-    # Model hyperparameters
-    HIDDEN_DIM = 256
-    NUM_LAYERS = 4
-    NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
+     # Model hyperparameters
+    HIDDEN_DIM = 64
+    NUM_LAYERS = 2
+    NUM_ATTENTION_HEADS = 2 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
     BATCH_SIZE = 64 
-    EPOCHS = 5
-    SEQ_LENGTH = 2
+    EPOCHS = 10
+    SEQ_LENGTH = 128
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = None
     
@@ -49,7 +49,7 @@ class Config:
     USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
-    LEARNING_RATE = 3e-4
+    LEARNING_RATE = 1e-4
 
 
 # ============================================================================
@@ -137,19 +137,30 @@ class TextDataset(Dataset):
             print(f"  Tokens after limit:  {len(self.input_ids):,} (max_samples={max_samples})")
         else:
             print(f"  Tokens loaded: {len(self.input_ids):,} (no limit)")
+        
+        # Create non-overlapping chunks with stride equal to seq_length
+        # This reduces highly correlated examples and speeds up epoch passes
+        stride = seq_length
+        chunks = []
+        for start in range(0, len(self.input_ids) - seq_length, stride):
+            chunk = self.input_ids[start:start + seq_length + 1]  # +1 for label shift
+            chunks.append(chunk)
+        
+        if chunks:
+            self.chunks = torch.stack(chunks)  # shape (num_examples, seq_length+1)
+            print(f"  Created {len(chunks):,} chunks with stride={stride}")
+        else:
+            # Fallback: create single chunk if not enough tokens
+            self.chunks = self.input_ids.unsqueeze(0)
+            print(f"  Warning: Not enough tokens for chunking. Created 1 chunk.")
     
     def __len__(self):
-        return max(0, len(self.input_ids) - self.seq_length)
+        return len(self.chunks)
     
     def __getitem__(self, idx):
-        input_ids = self.input_ids[idx:idx + self.seq_length]
-        target_ids = self.input_ids[idx + 1:idx + self.seq_length + 1]
-        
-        # Pad if necessary
-        if len(input_ids) < self.seq_length:
-            padding = self.seq_length - len(input_ids)
-            input_ids = torch.cat([input_ids, torch.zeros(padding, dtype=torch.long)])
-            target_ids = torch.cat([target_ids, torch.full((padding,), -100, dtype=torch.long)])
+        chunk = self.chunks[idx]
+        input_ids = chunk[:self.seq_length]
+        target_ids = chunk[1:self.seq_length + 1]
         
         return {'input_ids': input_ids, 'labels': target_ids}
 
@@ -338,9 +349,13 @@ def train_epoch(model, train_loader, optimizer, device, config, vocab_size):
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
         # Calculate LMC every batch (expensive but accurate)
-        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-
-        lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
+        lmc_value = None
+        if lmc_weight > 0:
+            lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+            lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
+        else:
+            lmc_value = 0.0
+            lmc_tensor = torch.tensor(1.0, dtype=torch.float32, device=device) # placeholder
         
         # Combined objective using different formulations based on lmc_weight
         # Use lmc_weight to select which loss formulation to use:
