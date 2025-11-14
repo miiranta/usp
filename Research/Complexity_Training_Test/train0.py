@@ -18,8 +18,8 @@ import torchist
 
 class Config:
      # Model hyperparameters
-    HIDDEN_DIM = 64
-    NUM_LAYERS = 2
+    HIDDEN_DIM = 128
+    NUM_LAYERS = 4
     NUM_ATTENTION_HEADS = 2 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
@@ -41,7 +41,7 @@ class Config:
     LMC_SAMPLE_SIZE = 100000
     
     # Device configuration
-    GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.)
+    GPU_INDEX = 1  # Which GPU to use (0, 1, 2, etc.)
     DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
     NUM_WORKERS = 8  # DataLoader workers
     
@@ -108,7 +108,6 @@ class TextDataset(Dataset):
         self.seq_length = seq_length
         self.tokenizer = tokenizer
         
-        # Read and tokenize text
         print(f"Tokenizing {file_path}...")
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
@@ -128,7 +127,6 @@ class TextDataset(Dataset):
         
         self.input_ids = encodings['input_ids'][0]
         
-        # Only limit if max_samples is explicitly set
         if max_samples is not None:
             max_length = max_samples * seq_length
             original_len = len(self.input_ids)
@@ -137,19 +135,27 @@ class TextDataset(Dataset):
             print(f"  Tokens after limit:  {len(self.input_ids):,} (max_samples={max_samples})")
         else:
             print(f"  Tokens loaded: {len(self.input_ids):,} (no limit)")
+        
+        stride = seq_length
+        chunks = []
+        for start in range(0, len(self.input_ids) - seq_length, stride):
+            chunk = self.input_ids[start:start + seq_length + 1]
+            chunks.append(chunk)
+        
+        if chunks:
+            self.chunks = torch.stack(chunks)
+            print(f"  Created {len(chunks):,} chunks with stride={stride}")
+        else:
+            self.chunks = self.input_ids.unsqueeze(0)
+            print(f"  Warning: Not enough tokens for chunking. Created 1 chunk.")
     
     def __len__(self):
-        return max(0, len(self.input_ids) - self.seq_length)
+        return len(self.chunks)
     
     def __getitem__(self, idx):
-        input_ids = self.input_ids[idx:idx + self.seq_length]
-        target_ids = self.input_ids[idx + 1:idx + self.seq_length + 1]
-        
-        # Pad if necessary
-        if len(input_ids) < self.seq_length:
-            padding = self.seq_length - len(input_ids)
-            input_ids = torch.cat([input_ids, torch.zeros(padding, dtype=torch.long)])
-            target_ids = torch.cat([target_ids, torch.full((padding,), -100, dtype=torch.long)])
+        chunk = self.chunks[idx]
+        input_ids = chunk[:self.seq_length]
+        target_ids = chunk[1:self.seq_length + 1]
         
         return {'input_ids': input_ids, 'labels': target_ids}
 
