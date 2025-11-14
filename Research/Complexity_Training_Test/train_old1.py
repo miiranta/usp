@@ -316,8 +316,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         
         with torch.amp.autocast('cuda'):
             logits = model(input_ids)
-            vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
-            logits_flat = logits.view(-1, vocab_size)
+            logits_flat = logits.view(-1, model.vocab_size)
             labels_flat = labels.view(-1)
             ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
@@ -387,9 +386,7 @@ def validate(model, val_loader, device):
             labels = batch['labels'].to(primary_device)
             
             logits = model(input_ids)
-            # Handle both DataParallel and regular models
-            vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
-            logits_flat = logits.view(-1, vocab_size)
+            logits_flat = logits.view(-1, model.vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
@@ -412,9 +409,7 @@ def test(model, test_loader, device):
             labels = batch['labels'].to(primary_device)
             
             logits = model(input_ids)
-            # Handle both DataParallel and regular models
-            vocab_size = model.module.vocab_size if hasattr(model, 'module') else model.vocab_size
-            logits_flat = logits.view(-1, vocab_size)
+            logits_flat = logits.view(-1, model.vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
@@ -739,6 +734,7 @@ def run_training_single(output_dir, config, run_num):
     # Initialize model
     print("\nInitializing Transformer model...")
     vocab_size = len(tokenizer)
+    
     model = TransformerLLM(
         vocab_size=vocab_size,
         hidden_dim=config.HIDDEN_DIM,
@@ -749,19 +745,11 @@ def run_training_single(output_dir, config, run_num):
         attention_backend=attention_backend
     ).to(device)
     
-    # Apply DataParallel if multiple GPUs are available
-    if torch.cuda.device_count() > 1:
-        print(f"\nUsing {torch.cuda.device_count()} GPUs with DataParallel")
-        model = torch.nn.DataParallel(model)
-    
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
-    if hasattr(model, 'module'):
-        print(f"Efficient attention enabled: {model.module.efficient_attention_enabled}")
+    if model.efficient_attention_enabled:
+        print(f"✓ Efficient attention enabled: {model.attention_backend}")
     else:
-        if model.efficient_attention_enabled:
-            print(f"✓ Efficient attention enabled: {model.attention_backend}")
-        else:
-            print(f"ℹ Using standard PyTorch attention")
+        print(f"ℹ Using standard PyTorch attention")
     
     # Optimizer and scheduler
     total_steps = len(train_loader) * config.EPOCHS // config.GRADIENT_ACCUMULATION_STEPS
