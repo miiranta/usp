@@ -18,16 +18,16 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 512         
-    NUM_LAYERS = 4            
-    NUM_ATTENTION_HEADS = 8   # (match hidden_dim/64)
+    HIDDEN_DIM = 768
+    NUM_LAYERS = 6            
+    NUM_ATTENTION_HEADS = 12   # (match hidden_dim/64)
     
     # Training hyperparameters
-    BATCH_SIZE = 32           
+    BATCH_SIZE = 64           
     EPOCHS = 30
-    SEQ_LENGTH = 16
-    MAX_GRAD_NORM = 10.0      
-    MAX_SAMPLES = 2000        
+    SEQ_LENGTH = 256
+    MAX_GRAD_NORM = None
+    MAX_SAMPLES = 10000        
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -336,8 +336,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Backward pass
         combined_loss.backward()
         
-        # Optimization step
-        torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
+        # Optimization step (no gradient clipping for maximum overfitting)
+        if config.MAX_GRAD_NORM is not None:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad(set_to_none=True)
