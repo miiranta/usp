@@ -27,7 +27,7 @@ class Config:
     EPOCHS = 20
     SEQ_LENGTH = 64
     MAX_GRAD_NORM = None
-    MAX_SAMPLES = None        
+    MAX_SAMPLES = 1000        
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
