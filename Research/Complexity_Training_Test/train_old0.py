@@ -24,12 +24,12 @@ class Config:
     # Training hyperparameters
     BATCH_SIZE = 512 
     GRADIENT_ACCUMULATION_STEPS = 2
-    EPOCHS = 30
+    EPOCHS = 20
     LEARNING_RATE = 3e-4
     SEQ_LENGTH = 8
     WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 1000
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -37,7 +37,7 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 10
+    NUM_OF_RUN_PER_CALL = 3
     
     # LMC weight sampling configuration
     # Number of weights to sample for LMC calculation (0 = use all weights)
@@ -46,7 +46,7 @@ class Config:
     # Device configuration
     GPU_INDEX = 0 
     DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
-    NUM_WORKERS = 6  # DataLoader workers
+    NUM_WORKERS = 8  # DataLoader workers
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
 
