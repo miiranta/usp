@@ -29,7 +29,7 @@ class Config:
     SEQ_LENGTH = 8
     WARMUP_RATIO = 0.1
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 1000
+    MAX_SAMPLES = None
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
