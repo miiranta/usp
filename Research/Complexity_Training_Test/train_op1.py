@@ -336,7 +336,7 @@ def estimate_lambda(ce_loss, lmc_loss, model, eps=1e-12):
         return 0.0
     
     # Lambda is the ratio of gradient scales
-    lambda_weight = grad_ce / grad_lmc
+    lambda_weight = grad_lmc / grad_ce
     return lambda_weight
 
 
