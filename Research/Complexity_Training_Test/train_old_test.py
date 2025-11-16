@@ -294,7 +294,7 @@ def calculate_lmc_from_weights(model, sample_size=0):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, scaler):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, scaler, mean_lmc):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
@@ -784,7 +784,7 @@ def run_training_single(output_dir, config, run_num):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
         train_loss, train_lmc, train_combined = train_epoch(
-            model, train_loader, optimizer, scheduler, device, config, scaler
+            model, train_loader, optimizer, scheduler, device, config, scaler, mean_lmc
         )
         val_loss = validate(model, val_loader, device)
         
