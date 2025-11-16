@@ -31,8 +31,8 @@ class Config:
     MAX_SAMPLES = 500
     
     # LMC Complexity weight sweep configuration
-    LMC_WEIGHT_START = 0.001   # Starting value
-    LMC_WEIGHT_END = 0.003     # Ending value (inclusive)
+    LMC_WEIGHT_START = 0.0011   # Starting value
+    LMC_WEIGHT_END = 0.0013     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 0.0001   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
