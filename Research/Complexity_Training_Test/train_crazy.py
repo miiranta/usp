@@ -60,12 +60,12 @@ class Config:
 # DEVICE INITIALIZATION
 # ============================================================================
 
-def initialize_device():
-    device = Config.DEVICE
+def initialize_device(config):
+    device = config.DEVICE
     print(f"Using device: {device}")
     
     if torch.cuda.is_available():
-        gpu_index = Config.GPU_INDEX
+        gpu_index = config.GPU_INDEX
         print(f"GPU: {torch.cuda.get_device_name(gpu_index)}")
         print(f"Memory: {torch.cuda.get_device_properties(gpu_index).total_memory / 1e9:.2f} GB")
         print(f"CUDA Version: {torch.version.cuda}")
@@ -733,7 +733,7 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
 
 def run_training_single(output_dir, config, run_num):
     # Initialize device
-    device = initialize_device()
+    device = initialize_device(config)
     
     enable_efficient_attention, attention_backend = check_efficient_attention()
     print()
