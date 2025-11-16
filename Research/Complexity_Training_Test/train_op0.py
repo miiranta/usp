@@ -31,9 +31,9 @@ class Config:
     MAX_SAMPLES = None
     
     # LMC Complexity weight sweep configuration
-    LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 0.0     # Ending value (inclusive)
-    LMC_WEIGHT_STEP = 0.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
+    LMC_WEIGHT_START = 1.0   # Starting value
+    LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
+    LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
     NUM_OF_RUN_PER_CALL = 5
@@ -335,15 +335,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         labels_flat = labels.view(-1)
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
-        # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
-        if lmc_weight != 0:
-            if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
-                lmc_tensor, lmc_scalar, _, _, _ = calculate_lmc_from_weights(model)
-                lmc_value = lmc_tensor  # Keep tensor for gradient computation
-                lmc_value_scalar = lmc_scalar  # Keep scalar for logging
-        else:
-            lmc_value = torch.tensor(1.0, device=device)  # Dummy tensor
-            lmc_value_scalar = 1.0
+        lmc_value = torch.tensor(1.0, device=device)  # Dummy tensor
+        lmc_value_scalar = 1.0
         
         # Combined objective using different formulations based on lmc_weight
         # Use lmc_weight to control the importance of lmc_value:
@@ -351,10 +344,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # lmc_weight=1: combined_loss = ce_loss * (lmc_mean / lmc_value) (full complexity penalty)
         # 0 < lmc_weight < 1: interpolate between the two extremes
         
-        if lmc_weight == 0:
-            combined_loss = ce_loss
-        elif lmc_weight > 0:
-            combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, 0.0012)
+        combined_loss = ce_loss
         
         # Backward pass
         combined_loss.backward()
