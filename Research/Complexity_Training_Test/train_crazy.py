@@ -956,14 +956,16 @@ def main():
             continue
         
         # Create config with current LMC weight
-        config = Config()
-        config.LMC_WEIGHT = lmc_weight
+        config_run = Config()
+        config_run.LMC_WEIGHT = lmc_weight
+        config_run.GPU_INDEX = config.GPU_INDEX  # Preserve GPU setting
+        config_run.DEVICE = config.DEVICE  # Preserve device setting
         
         print(f"\n{'='*80}")
         print(f"Starting training with LMC_WEIGHT = {lmc_weight:.16f}")
         print(f"{'='*80}\n")
         
-        run_training(output_dir, config)
+        run_training(output_dir, config_run)
 
 
 if __name__ == '__main__':
