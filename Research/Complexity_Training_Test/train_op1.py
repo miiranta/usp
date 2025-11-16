@@ -32,8 +32,8 @@ class Config:
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
-    LMC_WEIGHT_STEP = 0.05   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
+    LMC_WEIGHT_END = 0.05     # Ending value (inclusive)
+    LMC_WEIGHT_STEP = 0.005   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
     NUM_OF_RUN_PER_CALL = 2
