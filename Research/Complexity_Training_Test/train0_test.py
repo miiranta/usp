@@ -18,16 +18,16 @@ import torchist
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 512
-    NUM_LAYERS = 2        
-    NUM_ATTENTION_HEADS = 8   # (match hidden_dim/64)
+    HIDDEN_DIM = 256
+    NUM_LAYERS = 4
+    NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
-    BATCH_SIZE = 64           
-    EPOCHS = 20
-    SEQ_LENGTH = 64
-    MAX_GRAD_NORM = None
-    MAX_SAMPLES = 1000        
+    BATCH_SIZE = 64 
+    EPOCHS = 30
+    SEQ_LENGTH = 32
+    MAX_GRAD_NORM = 1.0
+    MAX_SAMPLES = 1000
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -35,24 +35,24 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 3
+    NUM_OF_RUN_PER_CALL = 2
     
     # LMC weight sampling configuration
-    LMC_SAMPLE_SIZE = 10000
+    LMC_SAMPLE_SIZE = 0
     
     # Complexity calculation interval
-    COMPLEXITY_UPDATE_INTERVAL = 16  # Calculate LMC every X batches (1 = every batch)
+    COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
     
     # Device configuration
     GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.)
     DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
-    NUM_WORKERS = 32  # DataLoader workers
+    NUM_WORKERS = 8  # DataLoader workers
     
     # Performance optimizations
-    USE_COMPILE = False  # Use torch.compile for ~30% speedup (PyTorch 2.0+) - Disabled: GPU too old for Triton
+    USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
-    LEARNING_RATE = 1e-3     
+    LEARNING_RATE = 1e-4
 
 # ============================================================================
 # DEVICE INITIALIZATION
