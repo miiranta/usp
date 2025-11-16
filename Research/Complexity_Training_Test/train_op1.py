@@ -32,7 +32,6 @@ class Config:
     
     # Automatic Lambda Estimation (Gradient Balancing)
     USE_AUTO_LAMBDA = True   # Enable automatic λ estimation
-    MAX_LAMBDA = 10.0        # Maximum allowed λ value (prevents extreme weights)
     
     # LMC Complexity weight sweep configuration (used when USE_AUTO_LAMBDA=False)
     LMC_WEIGHT_START = 1.0   # Starting value
@@ -381,9 +380,10 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Automatic lambda estimation (gradient balancing)
         if config.USE_AUTO_LAMBDA:
             lambda_weight = estimate_lambda(ce_loss, lmc_value, model)
-            lambda_weight = min(lambda_weight, config.MAX_LAMBDA)  # Clip to avoid extreme values
+            lambda_weight = torch.tensor(lambda_weight, device=device, dtype=ce_loss.dtype)
         else:
             lambda_weight = config.LMC_WEIGHT
+            lambda_weight = torch.tensor(lambda_weight, device=device, dtype=ce_loss.dtype)
         
         combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, torch.log(lambda_weight))
         
@@ -492,7 +492,6 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, lambda
         writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.16f}'])
         writer.writerow(['Final Lambda (Average)', f'{lambda_values[-1]:.16f}'])
         writer.writerow(['Auto Lambda Enabled', f'{config.USE_AUTO_LAMBDA}'])
-        writer.writerow(['Max Lambda', f'{config.MAX_LAMBDA:.16f}'])
         writer.writerow(['Run Number', f'{run_num}'])
         writer.writerow([])
         
@@ -935,7 +934,6 @@ def main():
         print(f"AUTOMATIC LAMBDA ESTIMATION MODE")
         print(f"{'='*80}")
         print(f"Gradient balancing: λ* ≈ ||∇log(CE)|| / ||∇log(LMC)||")
-        print(f"Max lambda: {config.MAX_LAMBDA:.16f}")
         print(f"Runs per configuration: {config.NUM_OF_RUN_PER_CALL}")
         print(f"{'='*80}\n")
         
