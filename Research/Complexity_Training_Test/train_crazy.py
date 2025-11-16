@@ -231,12 +231,8 @@ def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
     # Flatten all weights into a single tensor
     weights = torch.cat(all_weights)
     
-    # Apply sampling if sample_size > 0 (only when requires_grad=False)
-    if sample_size > 0 and len(weights) > sample_size and not requires_grad:
-        # Create random indices on the same device as weights to avoid CPU-GPU deadlock
-        sample_indices = torch.randperm(len(weights), device=weights.device)[:sample_size]
-        weights = weights[sample_indices]
-    # Note: When requires_grad=True, we use all weights (sampling would break gradients)
+    # Always use ALL weights for consistent LMC calculations
+    # (sampling was causing inconsistent values between calculations)
     
     # Normalize weights to [0, 1] range
     weights_min = weights.min()
@@ -351,7 +347,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     
     for batch_idx, batch in enumerate(progress_bar):
         # Mark step begin for CUDA graphs compatibility
-        if hasattr(torch.compiler, 'cudagraph_mark_step_begin'):
+        if hasattr(torch.compiler, 'cudgraph_mark_step_begin'):
             torch.compiler.cudagraph_mark_step_begin()
         
         # Use the explicit device parameter, not inferred from model (fixes DataParallel issues)
@@ -367,8 +363,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
         if lmc_weight != 0:
             if lmc_value_for_loss is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
-                # Use requires_grad=True to enable gradient flow through LMC calculation
-                lmc_value_tensor, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE, requires_grad=True)
+                # Use requires_grad=True to enable gradient flow through LMC calculation (all weights)
+                lmc_value_tensor, _, _, _ = calculate_lmc_from_weights(model, sample_size=0, requires_grad=True)
                 # Store the tensor version for loss computation
                 lmc_value_for_loss = lmc_value_tensor
                 # Extract value for logging (use .item() to get Python float)
@@ -847,11 +843,10 @@ def run_training_single(output_dir, config, run_num):
     weights_disequilibrium_values = []
     num_bins_values = []
     
-    # Calculate initial LMC using the SAME method as training (soft histogram with requires_grad=True)
-    # Then detach to get the scalar value
+    # Calculate initial LMC using all weights (soft histogram with requires_grad=True)
     lmc_tensor, _, _, _ = calculate_lmc_from_weights(model, sample_size=0, requires_grad=True)
     weights_lmc = lmc_tensor.item()
-    print(f"Initial model LMC (soft histogram, all weights): {weights_lmc:.16f}")
+    print(f"Initial model LMC (soft histogram, all {sum(p.numel() for p in model.parameters()):,} weights): {weights_lmc:.16f}")
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
@@ -861,8 +856,11 @@ def run_training_single(output_dir, config, run_num):
         )
         val_loss = validate(model, val_loader, device, vocab_size)
         
-        # Calculate end-of-epoch LMC (can use sampling here since it's just for logging)
-        weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        # Calculate end-of-epoch LMC using soft histogram (consistent with training)
+        lmc_tensor, entropy_tensor, diseq_tensor, num_bins = calculate_lmc_from_weights(model, sample_size=0, requires_grad=True)
+        weights_lmc = lmc_tensor.item()
+        weights_entropy = entropy_tensor.item()
+        weights_diseq = diseq_tensor.item()
         
         # Store metrics
         train_losses.append(train_loss)
@@ -879,7 +877,8 @@ def run_training_single(output_dir, config, run_num):
     # Test
     print("\nEvaluating on test set...")
     test_loss = test(model, test_loader, device, vocab_size)
-    test_metrics = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+    lmc_tensor, entropy_tensor, diseq_tensor, num_bins = calculate_lmc_from_weights(model, sample_size=0, requires_grad=True)
+    test_metrics = (lmc_tensor.item(), entropy_tensor.item(), diseq_tensor.item(), num_bins)
     print(f"Test Loss: {test_loss:.16f}")
     print(f"Test LMC: {test_metrics[0]:.16f} (bins={test_metrics[3]})\n")
     
