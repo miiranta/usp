@@ -51,7 +51,7 @@ class Config:
     NUM_WORKERS = 8  # DataLoader workers
     
     # Performance optimizations
-    USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
+    USE_COMPILE = False  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
     LEARNING_RATE = 1e-4
