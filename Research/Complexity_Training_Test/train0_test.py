@@ -320,8 +320,11 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
         # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
-        if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
-            lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        if lmc_weight != 0:
+            if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
+                lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        else:
+            lmc_value = 1.0 
         
         # Combined objective using different formulations based on lmc_weight
         # Use lmc_weight to select which loss formulation to use:
@@ -330,7 +333,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         
         if lmc_weight == 0:
             combined_loss = ce_loss
-        elif lmc_weight == 1 or lmc_weight == 2:
+        elif lmc_weight == 1:
             combined_loss = (ce_loss / lmc_value) * lmc_mean
         
         # Backward pass
@@ -672,13 +675,6 @@ def run_training_single(output_dir, config, run_num):
     # Initialize device
     device = initialize_device()
     
-    # Override COMPLEXITY_UPDATE_INTERVAL for LMC_WEIGHT == 2
-    if config.LMC_WEIGHT == 2.0:
-        config.COMPLEXITY_UPDATE_INTERVAL = 2
-        print(f"ℹ LMC_WEIGHT is 2.0, setting COMPLEXITY_UPDATE_INTERVAL to 2\n")
-    else:
-        config.COMPLEXITY_UPDATE_INTERVAL = 1
-    
     enable_efficient_attention, attention_backend = check_efficient_attention()
     print()
     
@@ -792,21 +788,22 @@ def run_training_single(output_dir, config, run_num):
     weights_disequilibrium_values = []
     num_bins_values = []
     
+    weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+    
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
-        
-        # Calculate LMC once per epoch before training
-        weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
         
         train_loss, train_lmc, train_combined = train_epoch(
             model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean=weights_lmc
         )
         val_loss = validate(model, val_loader, device, vocab_size)
         
+        weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        
         # Store metrics
         train_losses.append(train_loss)
         val_losses.append(val_loss)
-        lmc_values.append(weights_lmc)  # Use per-epoch weight LMC instead of batch avg
+        lmc_values.append(weights_lmc)
         weights_entropy_values.append(weights_entropy)
         weights_disequilibrium_values.append(weights_diseq)
         num_bins_values.append(num_bins)
