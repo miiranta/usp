@@ -28,7 +28,7 @@ class Config:
     EPOCHS = 30
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 500
     
     # Automatic Lambda Estimation (Gradient Balancing)
     USE_AUTO_LAMBDA = True   # Enable automatic λ estimation
@@ -353,12 +353,6 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     total_lambda = 0.0
     total_samples = 0
     
-    # Initialize LMC value (will be updated every COMPLEXITY_UPDATE_INTERVAL batches)
-    lmc_value = None
-    
-    # Store baseline LMC (first batch) for normalization
-    baseline_log_lmc = None
-    
     progress_bar = tqdm(train_loader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
@@ -382,23 +376,14 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_value = lmc_tensor  # Keep tensor for gradient computation
             lmc_value_scalar = lmc_scalar  # Keep scalar for logging
         
-        # LMC loss (log scale for gradient computation)
-        lmc_loss = torch.log(lmc_value + 1e-12)
-        
-        # Store baseline on first batch
-        if baseline_log_lmc is None:
-            baseline_log_lmc = lmc_loss.detach()
-        
         # Automatic lambda estimation (gradient balancing)
         if config.USE_AUTO_LAMBDA:
-            lambda_weight = estimate_lambda(ce_loss, lmc_loss, model)
+            lambda_weight = estimate_lambda(ce_loss, lmc_value, model)
             lambda_weight = min(lambda_weight, config.MAX_LAMBDA)  # Clip to avoid extreme values
         else:
             lambda_weight = config.LMC_WEIGHT
         
-        # Combined loss: CE * exp(λ * (baseline_log_lmc - log_lmc))
-        # This encourages decreasing LMC (complexity reduction)
-        combined_loss = ce_loss * torch.exp(lambda_weight * (baseline_log_lmc - lmc_loss))
+        combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, lambda_weight)
         
         # Backward pass
         combined_loss.backward()
