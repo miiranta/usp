@@ -28,15 +28,15 @@ class Config:
     EPOCHS = 20
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 500
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
+    LMC_WEIGHT_END = 4.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 3
+    NUM_OF_RUN_PER_CALL = 1
     
     # LMC weight sampling configuration
     LMC_SAMPLE_SIZE = 100000
@@ -334,7 +334,13 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         if lmc_weight == 0:
             combined_loss = ce_loss
         elif lmc_weight == 1:
-            combined_loss = (ce_loss / lmc_value) * lmc_mean
+            combined_loss = ce_loss * (lmc_mean / lmc_value)
+        elif lmc_weight == 2:
+            combined_loss = ce_loss * ((lmc_mean / lmc_value) ** 2)
+        elif combined_loss == 3:
+            combined_loss = ce_loss * (lmc_value / lmc_mean)
+        elif combined_loss == 4:
+            combined_loss = ce_loss ** (lmc_mean / lmc_value)
         
         # Backward pass
         combined_loss.backward()
