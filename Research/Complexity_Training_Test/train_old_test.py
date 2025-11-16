@@ -320,6 +320,10 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
             labels_flat = labels.view(-1)
             ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
+        # Calculate LMC complexity from model weights (per batch)
+        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
+        
         # Combined objective using different formulations based on lmc_weight
         # Use lmc_weight to select which loss formulation to use:
         # 0: loss
@@ -330,7 +334,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         if lmc_weight == 0:
             combined_loss = ce_loss
         elif lmc_weight == 1:
-            combined_loss = ce_loss / 0.0176
+            combined_loss = (ce_loss / lmc_tensor) * mean_lmc
         
         combined_loss = combined_loss / config.GRADIENT_ACCUMULATION_STEPS
         
@@ -339,7 +343,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         
         # Accumulate metrics
         total_loss += ce_loss.detach().item()
-        total_lmc += 0.0
+        total_lmc += lmc_value
         total_combined_loss += combined_loss.detach().item() * config.GRADIENT_ACCUMULATION_STEPS
         batch_count += 1
         
@@ -761,6 +765,12 @@ def run_training_single(output_dir, config, run_num):
     print(f"Total steps: {total_steps}, Warmup steps: {num_warmup_steps}")
     print(f"LMC weight: {config.LMC_WEIGHT} ({config.LMC_WEIGHT*100:.0f}% LMC, "
           f"{(1-config.LMC_WEIGHT)*100:.0f}% loss)\n")
+    
+    # Calculate mean LMC from initial model state (for normalization)
+    print("Calculating baseline mean LMC...")
+    initial_lmc, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+    mean_lmc = initial_lmc
+    print(f"Baseline mean LMC: {mean_lmc:.16f}\n")
     
     # Training loop
     train_losses = []
