@@ -7,8 +7,9 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
-from transformers import RobertaTokenizer, get_linear_schedule_with_warmup
+from transformers import RobertaTokenizer
 from tqdm import tqdm
+import torchist
 
 
 # ============================================================================
@@ -17,19 +18,16 @@ from tqdm import tqdm
 
 class Config:
     # Model hyperparameters
-    HIDDEN_DIM = 200
-    NUM_LAYERS = 2
-    NUM_ATTENTION_HEADS = 4
+    HIDDEN_DIM = 512
+    NUM_LAYERS = 2        
+    NUM_ATTENTION_HEADS = 8   # (match hidden_dim/64)
     
     # Training hyperparameters
-    BATCH_SIZE = 512 
-    GRADIENT_ACCUMULATION_STEPS = 2
+    BATCH_SIZE = 64           
     EPOCHS = 20
-    LEARNING_RATE = 3e-4
-    SEQ_LENGTH = 8
-    WARMUP_RATIO = 0.1
-    MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    SEQ_LENGTH = 64
+    MAX_GRAD_NORM = None
+    MAX_SAMPLES = None        
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -40,16 +38,21 @@ class Config:
     NUM_OF_RUN_PER_CALL = 3
     
     # LMC weight sampling configuration
-    # Number of weights to sample for LMC calculation (0 = use all weights)
-    LMC_SAMPLE_SIZE = 0
+    LMC_SAMPLE_SIZE = 10000
+    
+    # Complexity calculation interval
+    COMPLEXITY_UPDATE_INTERVAL = 16  # Calculate LMC every X batches (1 = every batch)
     
     # Device configuration
-    GPU_INDEX = 0 
+    GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.)
     DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
-    NUM_WORKERS = 8  # DataLoader workers
+    NUM_WORKERS = 32  # DataLoader workers
+    
+    # Performance optimizations
+    USE_COMPILE = True  # Use torch.compile for ~30% speedup (PyTorch 2.0+)
     
     LMC_WEIGHT = 0.0         # DONT CHANGE
-
+    LEARNING_RATE = 1e-3     
 
 # ============================================================================
 # DEVICE INITIALIZATION
@@ -58,22 +61,17 @@ class Config:
 def initialize_device():
     device = Config.DEVICE
     print(f"Using device: {device}")
-
+    
     if torch.cuda.is_available():
         gpu_index = Config.GPU_INDEX
-        try:
-            print(f"Selected GPU index: {gpu_index}")
-            print(f"GPU: {torch.cuda.get_device_name(gpu_index)}")
-            print(f"Memory: {torch.cuda.get_device_properties(gpu_index).total_memory / 1e9:.16f} GB")
-            print(f"CUDA Version: {torch.version.cuda}")
-            torch.cuda.set_device(gpu_index)
-        except Exception:
-            num_gpus = torch.cuda.device_count()
-            print(f"Number of GPUs available: {num_gpus}")
-            for i in range(num_gpus):
-                print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
-                print(f"  Memory: {torch.cuda.get_device_properties(i).total_memory / 1e9:.16f} GB")
+        print(f"GPU: {torch.cuda.get_device_name(gpu_index)}")
+        print(f"Memory: {torch.cuda.get_device_properties(gpu_index).total_memory / 1e9:.2f} GB")
+        print(f"CUDA Version: {torch.version.cuda}")
+        torch.cuda.set_device(gpu_index)
         torch.cuda.empty_cache()
+        
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
     else:
         print("WARNING: CUDA is not available! Using CPU instead.")
@@ -83,6 +81,7 @@ def initialize_device():
 
 
 def check_efficient_attention():
+    """Check for efficient attention libraries (xFormers/flash_attn)"""
     if not torch.cuda.is_available():
         return False, "pytorch"
     
@@ -115,7 +114,7 @@ class TextDataset(Dataset):
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
         
-        print(f"  File size: {len(text) / 1024 / 1024:.16f} MB")
+        print(f"  File size: {len(text) / 1024 / 1024:.2f} MB")
         
         encodings = tokenizer(
             text,
@@ -146,13 +145,8 @@ class TextDataset(Dataset):
         input_ids = self.input_ids[idx:idx + self.seq_length]
         target_ids = self.input_ids[idx + 1:idx + self.seq_length + 1]
         
-        # Pad if necessary
-        if len(input_ids) < self.seq_length:
-            padding = self.seq_length - len(input_ids)
-            input_ids = torch.cat([input_ids, torch.zeros(padding, dtype=torch.long)])
-            target_ids = torch.cat([target_ids, torch.full((padding,), -100, dtype=torch.long)])
-        
         return {'input_ids': input_ids, 'labels': target_ids}
+
 
 # ============================================================================
 # MODEL
@@ -171,15 +165,17 @@ class TransformerLLM(nn.Module):
             nhead=num_attention_heads,
             dim_feedforward=hidden_dim * 4,
             batch_first=True,
-            dropout=0.3,
+            dropout=0.1,
             activation='gelu'
         )
         
+        # Enable efficient attention backend if available
         if enable_efficient_attention and attention_backend in ["xformers", "flash_attn"]:
             try:
                 encoder_layer.self_attn = nn.MultiheadAttention(
                     hidden_dim, num_attention_heads, dropout=0.1, batch_first=True
                 )
+                # xFormers/flash_attn will optimize this automatically during forward pass
             except Exception as e:
                 print(f"Warning: Could not enable {attention_backend} attention: {e}")
         
@@ -191,7 +187,7 @@ class TransformerLLM(nn.Module):
         self.efficient_attention_enabled = enable_efficient_attention
         self.attention_backend = attention_backend
     
-    def forward(self, input_ids, attention_mask=None):
+    def forward(self, input_ids):
         seq_length = input_ids.size(1)
         positions = torch.arange(seq_length, device=input_ids.device).unsqueeze(0)
         
@@ -204,11 +200,10 @@ class TransformerLLM(nn.Module):
             diagonal=1
         ).bool()
         
-        # Transformer
+        # Transformer (no attention_mask needed - no padding)
         transformer_out = self.transformer(
             embeddings,
-            mask=causal_mask,
-            src_key_padding_mask=attention_mask
+            mask=causal_mask
         )
         
         # Language model head
@@ -224,19 +219,17 @@ def calculate_lmc_from_weights(model, sample_size=0):
     # Collect ALL weights from the model
     all_weights = []
     for param in model.parameters():
-        all_weights.append(param.data.view(-1))
+        # Clone parameters to prevent CUDA graph from tracking these accesses
+        all_weights.append(param.data.clone().view(-1))
     
     # Flatten all weights into a single tensor
     weights = torch.cat(all_weights)
     
     # Apply sampling if sample_size > 0
     if sample_size > 0 and len(weights) > sample_size:
-        sample_indices = torch.randperm(len(weights))[:sample_size]
+        # Create random indices on the same device as weights to avoid CPU-GPU deadlock
+        sample_indices = torch.randperm(len(weights), device=weights.device)[:sample_size]
         weights = weights[sample_indices]
-    
-    # Move to CPU for histogram calculation (if on GPU)
-    if weights.is_cuda:
-        weights = weights.cpu()
     
     # Normalize weights to [0, 1] range
     weights_min = weights.min()
@@ -246,7 +239,7 @@ def calculate_lmc_from_weights(model, sample_size=0):
     # Calculate number of bins using Freedman-Diaconis rule
     n = len(weights)
     
-    # Sample 10,000 random values to calculate IQR
+    # Sample 10,000 random values to calculate IQR (memory efficient)
     sample_size_iqr = min(10000, len(normalized_weights))
     if len(normalized_weights) > sample_size_iqr:
         sample_indices = torch.randperm(len(normalized_weights))[:sample_size_iqr]
@@ -265,8 +258,8 @@ def calculate_lmc_from_weights(model, sample_size=0):
         data_range = float(weights_max - weights_min)
         num_bins = max(1, int(np.ceil(data_range / bin_width)))
     
-    # Create histogram
-    hist, _ = torch.histogram(normalized_weights, bins=num_bins, range=(0.0, 1.0))
+    # Create histogram using GPU-accelerated torchist
+    hist = torchist.histogram(normalized_weights, bins=num_bins, low=0.0, upp=1.0)
     
     # Convert to probability distribution
     probs = hist.float() / hist.sum().float()
@@ -294,128 +287,125 @@ def calculate_lmc_from_weights(model, sample_size=0):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, scaler, mean_lmc):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
     total_combined_loss = 0.0
-    batch_count = 0
+    total_samples = 0
     
     # Calculate loss/LMC weights (must sum to 1.0)
     loss_weight = 1.0 - config.LMC_WEIGHT
     lmc_weight = config.LMC_WEIGHT
     
-    # Get primary device (handles both single and multi-GPU)
-    primary_device = next(model.parameters()).device
+    # Initialize LMC value (will be updated every COMPLEXITY_UPDATE_INTERVAL batches)
+    lmc_value = None
     
     progress_bar = tqdm(train_loader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
-        input_ids = batch['input_ids'].to(primary_device)
-        labels = batch['labels'].to(primary_device)
+        # Mark step begin for CUDA graphs compatibility
+        if hasattr(torch.compiler, 'cudagraph_mark_step_begin'):
+            torch.compiler.cudagraph_mark_step_begin()
         
-        with torch.amp.autocast('cuda'):
-            logits = model(input_ids)
-            logits_flat = logits.view(-1, model.vocab_size)
-            labels_flat = labels.view(-1)
-            ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
+        # Use the explicit device parameter, not inferred from model (fixes DataParallel issues)
+        input_ids = batch['input_ids'].to(device, non_blocking=True)
+        labels = batch['labels'].to(device, non_blocking=True)
         
-        # Calculate LMC complexity from model weights (per batch)
-        lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-        lmc_tensor = torch.tensor(lmc_value, dtype=torch.float32, device=device)
+        # Forward pass
+        logits = model(input_ids)
+        logits_flat = logits.view(-1, vocab_size)
+        labels_flat = labels.view(-1)
+        ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
+        
+        # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
+        if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
+            lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
         
         # Combined objective using different formulations based on lmc_weight
         # Use lmc_weight to select which loss formulation to use:
         # 0: loss
         # 1: loss/lmc
         
-        eps = 1e-8
-        
         if lmc_weight == 0:
             combined_loss = ce_loss
-        elif lmc_weight == 1:
-            combined_loss = (ce_loss / lmc_tensor) * mean_lmc
-        
-        combined_loss = combined_loss / config.GRADIENT_ACCUMULATION_STEPS
+        elif lmc_weight == 1 or lmc_weight == 2:
+            combined_loss = (ce_loss / lmc_mean) * lmc_mean
         
         # Backward pass
-        scaler.scale(combined_loss).backward()
+        combined_loss.backward()
         
-        # Accumulate metrics
+        # Optimization step (no gradient clipping for maximum overfitting)
+        if config.MAX_GRAD_NORM is not None:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
+        optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad(set_to_none=True)
+        
+        # Accumulate metrics (losses are already means from CrossEntropyLoss)
         total_loss += ce_loss.detach().item()
         total_lmc += lmc_value
-        total_combined_loss += combined_loss.detach().item() * config.GRADIENT_ACCUMULATION_STEPS
-        batch_count += 1
-        
-        # Optimization step
-        if (batch_idx + 1) % config.GRADIENT_ACCUMULATION_STEPS == 0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
-            scaler.step(optimizer)
-            scaler.update()
-            scheduler.step()
-            optimizer.zero_grad()
-            
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+        total_combined_loss += combined_loss.detach().item()
+        total_samples += 1  # Count batches, not samples
         
         # Update progress bar
         progress_bar.set_postfix({
-            'loss': f'{total_loss / batch_count:.16f}',
-            'lmc': f'{total_lmc / batch_count:.16f}',
-            'combined': f'{total_combined_loss / batch_count:.16f}'
+            'loss': f'{total_loss / total_samples:.16f}',
+            'lmc': f'{total_lmc / total_samples:.16f}',
+            'combined': f'{total_combined_loss / total_samples:.16f}'
         })
     
-    avg_loss = total_loss / batch_count
-    avg_lmc = total_lmc / batch_count
-    avg_combined = total_combined_loss / batch_count
+    avg_loss = total_loss / total_samples
+    avg_lmc = total_lmc / total_samples
+    avg_combined = total_combined_loss / total_samples
     
     return avg_loss, avg_lmc, avg_combined
 
 
-def validate(model, val_loader, device):
+def validate(model, val_loader, device, vocab_size):
     model.eval()
     total_loss = 0.0
-    
-    # Get primary device (handles both single and multi-GPU)
-    primary_device = next(model.parameters()).device
+    total_samples = 0
     
     with torch.no_grad():
         progress_bar = tqdm(val_loader, desc="Validating")
         for batch in progress_bar:
-            input_ids = batch['input_ids'].to(primary_device)
-            labels = batch['labels'].to(primary_device)
+            input_ids = batch['input_ids'].to(device, non_blocking=True)
+            labels = batch['labels'].to(device, non_blocking=True)
             
             logits = model(input_ids)
-            logits_flat = logits.view(-1, model.vocab_size)
+            logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
+            # Loss is already a mean, just accumulate it
             total_loss += loss.item()
+            total_samples += 1  # Count batches
     
-    return total_loss / len(val_loader)
+    return total_loss / total_samples if total_samples > 0 else 0.0
 
 
-def test(model, test_loader, device):
+def test(model, test_loader, device, vocab_size):
     model.eval()
     total_loss = 0.0
-    
-    # Get primary device (handles both single and multi-GPU)
-    primary_device = next(model.parameters()).device
+    total_samples = 0
     
     with torch.no_grad():
         progress_bar = tqdm(test_loader, desc="Testing")
         for batch in progress_bar:
-            input_ids = batch['input_ids'].to(primary_device)
-            labels = batch['labels'].to(primary_device)
+            input_ids = batch['input_ids'].to(device, non_blocking=True)
+            labels = batch['labels'].to(device, non_blocking=True)
             
             logits = model(input_ids)
-            logits_flat = logits.view(-1, model.vocab_size)
+            logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             
+            # Loss is already a mean, just accumulate it
             total_loss += loss.item()
+            total_samples += 1  # Count batches
     
-    return total_loss / len(test_loader)
+    return total_loss / total_samples if total_samples > 0 else 0.0
 
 
 # ============================================================================
@@ -678,8 +668,16 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
 # ============================================================================
 
 def run_training_single(output_dir, config, run_num):
-    """Run a single training iteration"""
+    # Initialize device
     device = initialize_device()
+    
+    # Override COMPLEXITY_UPDATE_INTERVAL for LMC_WEIGHT == 2
+    if config.LMC_WEIGHT == 2.0:
+        config.COMPLEXITY_UPDATE_INTERVAL = 2
+        print(f"ℹ LMC_WEIGHT is 2.0, setting COMPLEXITY_UPDATE_INTERVAL to 2\n")
+    else:
+        config.COMPLEXITY_UPDATE_INTERVAL = 1
+    
     enable_efficient_attention, attention_backend = check_efficient_attention()
     print()
     
@@ -701,8 +699,8 @@ def run_training_single(output_dir, config, run_num):
     
     print("Loading datasets...")
     train_dataset = TextDataset(train_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
-    val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
-    test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
+    val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, None) 
+    test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, None) 
     
     # Print dataset token summary (only for first run)
     if run_num == 1:
@@ -717,24 +715,26 @@ def run_training_single(output_dir, config, run_num):
         print(f"Total tokens:      {total_tokens:>20,}")
         print(f"{'='*70}\n")
     
-    # Create data loaders
+    # Create data loaders with persistent workers for faster epoch transitions
     train_loader = DataLoader(
         train_dataset, batch_size=config.BATCH_SIZE, shuffle=True,
-        num_workers=config.NUM_WORKERS, pin_memory=True
+        num_workers=config.NUM_WORKERS, pin_memory=True,
+        persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
     val_loader = DataLoader(
         val_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True
+        num_workers=config.NUM_WORKERS, pin_memory=True,
+        persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
     test_loader = DataLoader(
         test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
-        num_workers=config.NUM_WORKERS, pin_memory=True
+        num_workers=config.NUM_WORKERS, pin_memory=True,
+        persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
     
     # Initialize model
     print("\nInitializing Transformer model...")
     vocab_size = len(tokenizer)
-    
     model = TransformerLLM(
         vocab_size=vocab_size,
         hidden_dim=config.HIDDEN_DIM,
@@ -751,26 +751,37 @@ def run_training_single(output_dir, config, run_num):
     else:
         print(f"ℹ Using standard PyTorch attention")
     
-    # Optimizer and scheduler
-    total_steps = len(train_loader) * config.EPOCHS // config.GRADIENT_ACCUMULATION_STEPS
-    num_warmup_steps = int(config.WARMUP_RATIO * total_steps)
+    # Store vocab_size before compilation (compile wraps model)
+    vocab_size = model.vocab_size
     
+    # Compile model for faster execution (PyTorch 2.0+)
+    if config.USE_COMPILE and hasattr(torch, 'compile'):
+        try:
+            print("Compiling model with torch.compile (first epoch will be slower)...")
+            model = torch.compile(model, mode='default')
+            print("✓ Model compiled successfully")
+        except Exception as e:
+            print(f"⚠ Could not compile model: {e}")
+    
+    # Optimizer and scheduler
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE)
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=total_steps
+    
+    # Calculate total training steps for OneCycleLR
+    total_steps = len(train_loader) * config.EPOCHS
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=config.LEARNING_RATE,
+        total_steps=total_steps,
+        pct_start=0.1,
+        anneal_strategy='cos',
+        cycle_momentum=True,
+        base_momentum=0.85,
+        max_momentum=0.95
     )
-    scaler = torch.amp.GradScaler('cuda')
     
     print(f"Training on {device}")
-    print(f"Total steps: {total_steps}, Warmup steps: {num_warmup_steps}")
-    print(f"LMC weight: {config.LMC_WEIGHT} ({config.LMC_WEIGHT*100:.0f}% LMC, "
-          f"{(1-config.LMC_WEIGHT)*100:.0f}% loss)\n")
-    
-    # Calculate mean LMC from initial model state (for normalization)
-    print("Calculating baseline mean LMC...")
-    initial_lmc, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-    mean_lmc = initial_lmc
-    print(f"Baseline mean LMC: {mean_lmc:.16f}\n")
+    print(f"LMC weight: {config.LMC_WEIGHT:.16f} ({config.LMC_WEIGHT*100:.16f}% LMC, "
+          f"{(1-config.LMC_WEIGHT)*100:.16f}% loss)\n")
     
     # Training loop
     train_losses = []
@@ -783,13 +794,13 @@ def run_training_single(output_dir, config, run_num):
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
-        train_loss, train_lmc, train_combined = train_epoch(
-            model, train_loader, optimizer, scheduler, device, config, scaler, mean_lmc
-        )
-        val_loss = validate(model, val_loader, device)
-        
-        # Calculate detailed weight statistics for CSV and plotting
+        # Calculate LMC once per epoch before training
         weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        
+        train_loss, train_lmc, train_combined = train_epoch(
+            model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean=weights_lmc
+        )
+        val_loss = validate(model, val_loader, device, vocab_size)
         
         # Store metrics
         train_losses.append(train_loss)
@@ -805,7 +816,7 @@ def run_training_single(output_dir, config, run_num):
     
     # Test
     print("\nEvaluating on test set...")
-    test_loss = test(model, test_loader, device)
+    test_loss = test(model, test_loader, device, vocab_size)
     test_metrics = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
     print(f"Test Loss: {test_loss:.16f}")
     print(f"Test LMC: {test_metrics[0]:.16f} (bins={test_metrics[3]})\n")
