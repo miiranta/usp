@@ -8,7 +8,6 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
-import argparse
 from transformers import RobertaTokenizer
 from tqdm import tqdm
 import torchist
@@ -39,15 +38,12 @@ class Config:
     # Number of runs per configuration call
     NUM_OF_RUN_PER_CALL = 1
     
-    # LMC weight sampling configuration
-    LMC_SAMPLE_SIZE = 100000
-    
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
     
     # Device configuration
-    GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.) - can be overridden by --gpu flag
-    DEVICE = None  # Will be set dynamically based on GPU_INDEX
+    GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.)
+    DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
     NUM_WORKERS = 8  # DataLoader workers
     
     # Performance optimizations
@@ -60,12 +56,12 @@ class Config:
 # DEVICE INITIALIZATION
 # ============================================================================
 
-def initialize_device(config):
-    device = config.DEVICE
+def initialize_device():
+    device = Config.DEVICE
     print(f"Using device: {device}")
     
     if torch.cuda.is_available():
-        gpu_index = config.GPU_INDEX
+        gpu_index = Config.GPU_INDEX
         print(f"GPU: {torch.cuda.get_device_name(gpu_index)}")
         print(f"Memory: {torch.cuda.get_device_properties(gpu_index).total_memory / 1e9:.2f} GB")
         print(f"CUDA Version: {torch.version.cuda}")
@@ -217,113 +213,90 @@ class TransformerLLM(nn.Module):
 # LMC COMPLEXITY CALCULATION
 # ============================================================================
 
-def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
-    # Collect ALL weights from the model
+def calculate_lmc_from_weights(model):
+    """
+    Calculate LMC complexity from model weights in a fully differentiable way.
+    Returns both tensor (for gradient computation) and scalar metrics (for logging).
+    """
+    # Collect ALL weights from the model (keeping gradients)
     all_weights = []
     for param in model.parameters():
-        if requires_grad:
-            # Keep gradient connection for backpropagation
-            all_weights.append(param.view(-1))
-        else:
-            # Clone parameters to prevent CUDA graph from tracking these accesses
-            all_weights.append(param.data.clone().view(-1))
+        all_weights.append(param.view(-1))
     
-    # Flatten all weights into a single tensor
+    # Flatten all weights into a single tensor (differentiable)
     weights = torch.cat(all_weights)
     
-    # Always use ALL weights for consistent LMC calculations
-    # (sampling was causing inconsistent values between calculations)
-    
-    # Normalize weights to [0, 1] range
+    # Normalize weights to [0, 1] range (differentiable)
     weights_min = weights.min()
     weights_max = weights.max()
     normalized_weights = (weights - weights_min) / (weights_max - weights_min + 1e-10)
     
     # Calculate number of bins using Freedman-Diaconis rule
+    # Use detached values for bin calculation (doesn't need gradients)
     n = len(weights)
-    
-    # Sample for IQR calculation (always use a small sample for efficiency)
-    # IQR doesn't need gradients, so we can always detach and sample
     sample_size_iqr = min(10000, len(normalized_weights))
-    if len(normalized_weights) > sample_size_iqr:
-        # Use random sampling for IQR (doesn't affect gradient flow since we detach)
-        sample_indices = torch.randperm(len(normalized_weights), device=normalized_weights.device)[:sample_size_iqr]
-        sample_for_iqr = normalized_weights.detach()[sample_indices]
-    else:
-        sample_for_iqr = normalized_weights.detach()
     
-    q1 = torch.quantile(sample_for_iqr, 0.25)
-    q3 = torch.quantile(sample_for_iqr, 0.75)
-    iqr = q3 - q1
-    
-    if iqr == 0:
-        num_bins = max(1, int(np.ceil(float(np.sqrt(n)))))
-    else:
-        bin_width = float(2 * iqr.item() * (n ** (-1/3)))
-        data_range = float((weights_max - weights_min).item() if requires_grad else (weights_max - weights_min))
-        num_bins = max(1, int(np.ceil(data_range / bin_width)))
-    
-    # Create histogram - use differentiable soft histogram if requires_grad
-    if requires_grad:
-        # Differentiable soft histogram using Gaussian kernels
-        # Create bin centers
-        bin_edges = torch.linspace(0.0, 1.0, num_bins + 1, device=normalized_weights.device, requires_grad=False)
-        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    with torch.no_grad():
+        if len(normalized_weights) > sample_size_iqr:
+            sample_indices = torch.randperm(len(normalized_weights), device=normalized_weights.device)[:sample_size_iqr]
+            sample = normalized_weights[sample_indices]
+        else:
+            sample = normalized_weights
         
-        # Soft assignment using Gaussian kernels
-        # sigma = bin_width for smooth assignment
-        sigma = 1.0 / num_bins
+        q1 = torch.quantile(sample, 0.25)
+        q3 = torch.quantile(sample, 0.75)
+        iqr = q3 - q1
         
-        # Process in VERY small chunks to avoid OOM when model is already loaded
-        # After torch.compile, GPU memory is mostly full, so use tiny chunks
-        chunk_size = 1000  # Process only 1k weights at a time (1k × 100 bins = 100k elements = 400KB base)
-        hist = torch.zeros(num_bins, device=normalized_weights.device, requires_grad=True)
-        
-        for i in range(0, len(normalized_weights), chunk_size):
-            chunk = normalized_weights[i:i + chunk_size]
-            
-            # Compute soft histogram for this chunk: each weight contributes to nearby bins
-            # Shape: (chunk_size, num_bins)
-            diff = chunk.unsqueeze(1) - bin_centers.unsqueeze(0)
-            soft_assignments = torch.exp(-0.5 * (diff / sigma) ** 2)
-            
-            # Normalize assignments per weight (each weight distributes total mass of 1)
-            soft_assignments = soft_assignments / (soft_assignments.sum(dim=1, keepdim=True) + 1e-10)
-            
-            # Accumulate directly (in-place, maintains gradient flow)
-            hist = hist + soft_assignments.sum(dim=0)
-            
-            # Clear cache after each chunk to prevent memory buildup
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-    else:
-        # Use fast non-differentiable histogram
-        hist = torchist.histogram(normalized_weights, bins=num_bins, low=0.0, upp=1.0)
+        if iqr == 0:
+            num_bins = max(1, int(np.ceil(float(np.sqrt(n)))))
+        else:
+            bin_width = float(2 * iqr.item() * (n ** (-1/3)))
+            data_range = float((weights_max - weights_min).item())
+            num_bins = max(1, int(np.ceil(data_range / bin_width)))
     
-    # Convert to probability distribution
-    probs = hist.float() / hist.sum().float()
+    # Create differentiable histogram using soft binning
+    # This is a differentiable approximation of histogram
+    bin_edges = torch.linspace(0.0, 1.0, num_bins + 1, device=normalized_weights.device)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    bin_width_tensor = bin_edges[1] - bin_edges[0]
+    
+    # Soft histogram: use Gaussian kernel for differentiable binning
+    # Each weight contributes to nearby bins based on distance
+    sigma = bin_width_tensor / 2  # Kernel width
+    
+    # Compute distances from each weight to each bin center
+    # Shape: [num_weights, num_bins]
+    distances = (normalized_weights.unsqueeze(1) - bin_centers.unsqueeze(0)).abs()
+    
+    # Gaussian weights (differentiable)
+    weights_contrib = torch.exp(-(distances ** 2) / (2 * sigma ** 2))
+    
+    # Sum contributions to get histogram (differentiable)
+    hist = weights_contrib.sum(dim=0)
+    
+    # Convert to probability distribution (differentiable)
+    probs = hist / hist.sum()
     
     # Ensure valid probabilities (clip to avoid log(0))
     eps = 1e-10
     probs = torch.clamp(probs, eps, 1.0)
     probs = probs / probs.sum()  # Renormalize
     
-    # Calculate Shannon entropy: H = -sum(p_i * log(p_i))
+    # Calculate Shannon entropy: H = -sum(p_i * log(p_i)) (differentiable)
     shannon_entropy = -(probs * torch.log(probs)).sum()
     
-    # Calculate disequilibrium: D = sum((p_i - 1/N)^2)
+    # Calculate disequilibrium: D = sum((p_i - 1/N)^2) (differentiable)
     N = len(probs)
     uniform_prob = 1.0 / N
     disequilibrium = ((probs - uniform_prob) ** 2).sum()
     
-    # LMC complexity: C = H × D
+    # LMC complexity: C = H × D (differentiable)
     lmc = shannon_entropy * disequilibrium
     
-    # Return tensors if requires_grad, otherwise convert to scalars
-    if requires_grad:
-        return lmc, shannon_entropy, disequilibrium, num_bins
-    else:
-        return lmc.item(), shannon_entropy.item(), disequilibrium.item(), num_bins
+    # Return: (lmc_tensor, lmc_scalar, entropy_scalar, diseq_scalar, num_bins)
+    # The tensor version is used in loss computation (keeps gradients)
+    # The scalar versions are used for logging only
+    return lmc, lmc.item(), shannon_entropy.item(), disequilibrium.item(), num_bins
 
 
 # ============================================================================
@@ -343,13 +316,12 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     
     # Initialize LMC value (will be updated every COMPLEXITY_UPDATE_INTERVAL batches)
     lmc_value = None
-    lmc_value_for_loss = None
     
     progress_bar = tqdm(train_loader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
         # Mark step begin for CUDA graphs compatibility
-        if hasattr(torch.compiler, 'cudgraph_mark_step_begin'):
+        if hasattr(torch.compiler, 'cudagraph_mark_step_begin'):
             torch.compiler.cudagraph_mark_step_begin()
         
         # Use the explicit device parameter, not inferred from model (fixes DataParallel issues)
@@ -364,18 +336,13 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         
         # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
         if lmc_weight != 0:
-            if lmc_value_for_loss is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
-                # Use requires_grad=True to enable gradient flow through LMC calculation (all weights)
-                lmc_value_tensor, _, _, _ = calculate_lmc_from_weights(model, sample_size=0, requires_grad=True)
-                # Store the tensor version for loss computation
-                lmc_value_for_loss = lmc_value_tensor
-                # Extract value for logging (use .item() to get Python float)
-                lmc_value = lmc_value_tensor.item() if isinstance(lmc_value_tensor, torch.Tensor) else lmc_value_tensor
-            # else: reuse previous lmc_value and lmc_value_for_loss
+            if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
+                lmc_tensor, lmc_scalar, _, _, _ = calculate_lmc_from_weights(model)
+                lmc_value = lmc_tensor  # Keep tensor for gradient computation
+                lmc_value_scalar = lmc_scalar  # Keep scalar for logging
         else:
-            if lmc_value_for_loss is None:
-                lmc_value = 1.0
-                lmc_value_for_loss = torch.tensor(1.0, device=device, requires_grad=False)
+            lmc_value = torch.tensor(1.0, device=device)  # Dummy tensor
+            lmc_value_scalar = 1.0
         
         # Combined objective using different formulations based on lmc_weight
         # Use lmc_weight to select which loss formulation to use:
@@ -385,13 +352,13 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         if lmc_weight == 0:
             combined_loss = ce_loss
         elif lmc_weight == 1:
-            combined_loss = ce_loss * (lmc_mean / lmc_value_for_loss)
+            combined_loss = ce_loss * (lmc_mean / lmc_value)
         elif lmc_weight == 2:
-            combined_loss = ce_loss * ((lmc_mean / lmc_value_for_loss) ** 2)
+            combined_loss = ce_loss * ((lmc_mean / lmc_value) ** 2)
         elif lmc_weight == 3:
-            combined_loss = ce_loss * (lmc_value_for_loss / lmc_mean)
+            combined_loss = ce_loss * (lmc_value / lmc_mean)
         elif lmc_weight == 4:
-            combined_loss = ce_loss ** (lmc_mean / lmc_value_for_loss)
+            combined_loss = ce_loss ** (lmc_mean / lmc_value)
         
         # Backward pass
         combined_loss.backward()
@@ -405,7 +372,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         
         # Accumulate metrics (losses are already means from CrossEntropyLoss)
         total_loss += ce_loss.detach().item()
-        total_lmc += lmc_value
+        total_lmc += lmc_value_scalar
         total_combined_loss += combined_loss.detach().item()
         total_samples += 1  # Count batches, not samples
         
@@ -730,7 +697,7 @@ def plot_aggregate_results(output_dir, config, aggregate_stats):
 
 def run_training_single(output_dir, config, run_num):
     # Initialize device
-    device = initialize_device(config)
+    device = initialize_device()
     
     enable_efficient_attention, attention_backend = check_efficient_attention()
     print()
@@ -845,10 +812,7 @@ def run_training_single(output_dir, config, run_num):
     weights_disequilibrium_values = []
     num_bins_values = []
     
-    # Calculate initial LMC using all weights (soft histogram with requires_grad=True)
-    lmc_tensor, _, _, _ = calculate_lmc_from_weights(model, sample_size=0, requires_grad=True)
-    weights_lmc = lmc_tensor.item()
-    print(f"Initial model LMC (soft histogram, all {sum(p.numel() for p in model.parameters()):,} weights): {weights_lmc:.16f}")
+    _, weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model)
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
@@ -858,11 +822,7 @@ def run_training_single(output_dir, config, run_num):
         )
         val_loss = validate(model, val_loader, device, vocab_size)
         
-        # Calculate end-of-epoch LMC using soft histogram (consistent with training)
-        lmc_tensor, entropy_tensor, diseq_tensor, num_bins = calculate_lmc_from_weights(model, sample_size=0, requires_grad=True)
-        weights_lmc = lmc_tensor.item()
-        weights_entropy = entropy_tensor.item()
-        weights_diseq = diseq_tensor.item()
+        _, weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model)
         
         # Store metrics
         train_losses.append(train_loss)
@@ -879,8 +839,8 @@ def run_training_single(output_dir, config, run_num):
     # Test
     print("\nEvaluating on test set...")
     test_loss = test(model, test_loader, device, vocab_size)
-    lmc_tensor, entropy_tensor, diseq_tensor, num_bins = calculate_lmc_from_weights(model, sample_size=0, requires_grad=True)
-    test_metrics = (lmc_tensor.item(), entropy_tensor.item(), diseq_tensor.item(), num_bins)
+    _, test_lmc, test_entropy, test_diseq, test_bins = calculate_lmc_from_weights(model)
+    test_metrics = (test_lmc, test_entropy, test_diseq, test_bins)
     print(f"Test Loss: {test_loss:.16f}")
     print(f"Test LMC: {test_metrics[0]:.16f} (bins={test_metrics[3]})\n")
     
@@ -926,21 +886,8 @@ def run_training(output_dir, config):
 # ============================================================================
 
 def main():
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='Train Transformer with LMC complexity optimization')
-    parser.add_argument('--gpu', type=int, default=None, help='GPU index to use (default: 0)')
-    args = parser.parse_args()
-    
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config = Config()
-    
-    # Override GPU index if specified
-    if args.gpu is not None:
-        config.GPU_INDEX = args.gpu
-        print(f"Using GPU index from command line: {args.gpu}")
-    
-    # Set DEVICE based on final GPU_INDEX value
-    config.DEVICE = torch.device(f'cuda:{config.GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
     
     # Generate LMC weight sweep using START, END, and STEP
     num_steps = int(round((config.LMC_WEIGHT_END - config.LMC_WEIGHT_START) / config.LMC_WEIGHT_STEP)) + 1
@@ -965,16 +912,14 @@ def main():
             continue
         
         # Create config with current LMC weight
-        config_run = Config()
-        config_run.LMC_WEIGHT = lmc_weight
-        config_run.GPU_INDEX = config.GPU_INDEX  # Preserve GPU setting
-        config_run.DEVICE = config.DEVICE  # Preserve device setting
+        config = Config()
+        config.LMC_WEIGHT = lmc_weight
         
         print(f"\n{'='*80}")
         print(f"Starting training with LMC_WEIGHT = {lmc_weight:.16f}")
         print(f"{'='*80}\n")
         
-        run_training(output_dir, config_run)
+        run_training(output_dir, config)
 
 
 if __name__ == '__main__':
