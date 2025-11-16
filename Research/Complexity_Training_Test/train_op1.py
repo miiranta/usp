@@ -347,84 +347,90 @@ def estimate_lambda(ce_loss, lmc_loss, model, eps=1e-12):
 
 def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean):
     model.train()
-
-    total_loss = total_lmc = total_combined_loss = total_lambda = 0.0
-    total_batches = 0
-
+    total_loss = 0.0
+    total_lmc = 0.0
+    total_combined_loss = 0.0
+    total_lambda = 0.0
+    total_samples = 0
+    
+    # Initialize LMC value (will be updated every COMPLEXITY_UPDATE_INTERVAL batches)
     lmc_value = None
+    
+    # Store baseline LMC (first batch) for normalization
     baseline_log_lmc = None
-
+    
     progress_bar = tqdm(train_loader, desc="Training")
-
-    ce_criterion = nn.CrossEntropyLoss(ignore_index=-100)
-
+    
     for batch_idx, batch in enumerate(progress_bar):
-
-        # CUDA graph compatibility
+        # Mark step begin for CUDA graphs compatibility
         if hasattr(torch.compiler, 'cudagraph_mark_step_begin'):
             torch.compiler.cudagraph_mark_step_begin()
-
+        
+        # Use the explicit device parameter, not inferred from model (fixes DataParallel issues)
         input_ids = batch['input_ids'].to(device, non_blocking=True)
         labels = batch['labels'].to(device, non_blocking=True)
-
-        # Forward + CE
-        logits = model(input_ids)
-        ce_loss = ce_criterion(logits.reshape(-1, vocab_size), labels.reshape(-1))
-
-        # Update LMC every interval
-        if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
-            lmc_value, lmc_scalar, *_ = calculate_lmc_from_weights(model)
         
-        # log(LMC)
-        lmc_log = torch.log(lmc_value + 1e-12)
-
-        # Baseline LMC = first batch (scalar tensor)
+        # Forward pass
+        logits = model(input_ids)
+        logits_flat = logits.view(-1, vocab_size)
+        labels_flat = labels.view(-1)
+        ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
+        
+        # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
+        if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
+            lmc_tensor, lmc_scalar, _, _, _ = calculate_lmc_from_weights(model)
+            lmc_value = lmc_tensor  # Keep tensor for gradient computation
+            lmc_value_scalar = lmc_scalar  # Keep scalar for logging
+        
+        # LMC loss (log scale for gradient computation)
+        lmc_loss = torch.log(lmc_value + 1e-12)
+        
+        # Store baseline on first batch
         if baseline_log_lmc is None:
-            baseline_log_lmc = lmc_log.detach().mean()
-
-        # Lambda weight
+            baseline_log_lmc = lmc_loss.detach()
+        
+        # Automatic lambda estimation (gradient balancing)
         if config.USE_AUTO_LAMBDA:
-            lambda_weight = estimate_lambda(ce_loss, lmc_log, model)
-            lambda_weight = min(lambda_weight, config.MAX_LAMBDA)
+            lambda_weight = estimate_lambda(ce_loss, lmc_loss, model)
+            lambda_weight = min(lambda_weight, config.MAX_LAMBDA)  # Clip to avoid extreme values
         else:
             lambda_weight = config.LMC_WEIGHT
-
-        # Combined loss
-        scale = torch.exp(lambda_weight * (baseline_log_lmc - lmc_log))
-        combined_loss = ce_loss * scale
-
-        # Backprop + step
+        
+        # Combined loss: CE * exp(λ * (baseline_log_lmc - log_lmc))
+        # This encourages decreasing LMC (complexity reduction)
+        combined_loss = ce_loss * torch.exp(lambda_weight * (baseline_log_lmc - lmc_loss))
+        
+        # Backward pass
         combined_loss.backward()
-
-        if config.MAX_GRAD_NORM:
+        
+        # Optimization step
+        if config.MAX_GRAD_NORM is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
-
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad(set_to_none=True)
-
-        # Stats
-        total_loss += ce_loss.item()
-        total_lmc += lmc_scalar
-        total_combined_loss += combined_loss.item()
-        total_lambda += float(lambda_weight)
-        total_batches += 1
-
-        # Progress bar
+        
+        # Accumulate metrics (losses are already means from CrossEntropyLoss)
+        total_loss += ce_loss.detach().item()
+        total_lmc += lmc_value_scalar
+        total_combined_loss += combined_loss.detach().item()
+        total_lambda += lambda_weight if isinstance(lambda_weight, float) else lambda_weight
+        total_samples += 1  # Count batches, not samples
+        
+        # Update progress bar
         progress_bar.set_postfix({
-            'loss': f'{total_loss / total_batches:.4f}',
-            'lmc': f'{total_lmc / total_batches:.4f}',
-            'λ': f'{total_lambda / total_batches:.4f}',
-            'combined': f'{total_combined_loss / total_batches:.4f}'
+            'loss': f'{total_loss / total_samples:.4f}',
+            'lmc': f'{total_lmc / total_samples:.4f}',
+            'λ': f'{total_lambda / total_samples:.4f}',
+            'combined': f'{total_combined_loss / total_samples:.4f}'
         })
-
-    return (
-        total_loss / total_batches,
-        total_lmc / total_batches,
-        total_combined_loss / total_batches,
-        total_lambda / total_batches
-    )
-
+    
+    avg_loss = total_loss / total_samples
+    avg_lmc = total_lmc / total_samples
+    avg_combined = total_combined_loss / total_samples
+    avg_lambda = total_lambda / total_samples
+    
+    return avg_loss, avg_lmc, avg_combined, avg_lambda
 
 
 def validate(model, val_loader, device, vocab_size):
