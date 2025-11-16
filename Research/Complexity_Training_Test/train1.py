@@ -36,7 +36,7 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 3
+    NUM_OF_RUN_PER_CALL = 1
     
     # LMC weight sampling configuration
     LMC_SAMPLE_SIZE = 100000
@@ -335,6 +335,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             combined_loss = ce_loss
         elif lmc_weight == 1:
             combined_loss = (ce_loss / lmc_value) * lmc_mean
+        elif lmc_weight == 2:
+            combined_loss = ce_loss * ((lmc_mean / lmc_value) ** 2)
         
         # Backward pass
         combined_loss.backward()
