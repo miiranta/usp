@@ -353,6 +353,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     total_lambda = 0.0
     total_samples = 0
     
+    lmc_value = None
+    
     progress_bar = tqdm(train_loader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
