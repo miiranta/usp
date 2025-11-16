@@ -254,25 +254,37 @@ def calculate_lmc_from_weights(model):
             data_range = float((weights_max - weights_min).item())
             num_bins = max(1, int(np.ceil(data_range / bin_width)))
     
-    # Create differentiable histogram using soft binning
-    # This is a differentiable approximation of histogram
+    # Create differentiable histogram using memory-efficient soft binning
+    # Process in chunks to avoid OOM with large weight tensors
     bin_edges = torch.linspace(0.0, 1.0, num_bins + 1, device=normalized_weights.device)
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     bin_width_tensor = bin_edges[1] - bin_edges[0]
     
-    # Soft histogram: use Gaussian kernel for differentiable binning
-    # Each weight contributes to nearby bins based on distance
-    sigma = bin_width_tensor / 2  # Kernel width
+    # Use soft binning with triangular kernel (more memory efficient than Gaussian)
+    # Each weight contributes to its nearest bins based on distance
+    hist = torch.zeros(num_bins, device=normalized_weights.device, dtype=torch.float32)
     
-    # Compute distances from each weight to each bin center
-    # Shape: [num_weights, num_bins]
-    distances = (normalized_weights.unsqueeze(1) - bin_centers.unsqueeze(0)).abs()
-    
-    # Gaussian weights (differentiable)
-    weights_contrib = torch.exp(-(distances ** 2) / (2 * sigma ** 2))
-    
-    # Sum contributions to get histogram (differentiable)
-    hist = weights_contrib.sum(dim=0)
+    # Process weights in chunks to avoid OOM
+    chunk_size = 100000  # Process 100k weights at a time
+    for i in range(0, len(normalized_weights), chunk_size):
+        chunk = normalized_weights[i:i+chunk_size]
+        
+        # Find bin indices for this chunk (differentiable)
+        bin_indices_float = chunk / bin_width_tensor
+        bin_indices_floor = torch.floor(bin_indices_float).long()
+        bin_indices_floor = torch.clamp(bin_indices_floor, 0, num_bins - 1)
+        
+        # Calculate fractional part for soft binning (differentiable)
+        frac = bin_indices_float - bin_indices_floor.float()
+        
+        # Distribute each weight between two adjacent bins (differentiable)
+        # Left bin gets (1 - frac), right bin gets frac
+        for j in range(len(chunk)):
+            left_idx = bin_indices_floor[j]
+            right_idx = min(left_idx + 1, num_bins - 1)
+            
+            hist[left_idx] = hist[left_idx] + (1.0 - frac[j])
+            if right_idx != left_idx:
+                hist[right_idx] = hist[right_idx] + frac[j]
     
     # Convert to probability distribution (differentiable)
     probs = hist / hist.sum()
