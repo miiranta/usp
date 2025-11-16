@@ -359,6 +359,10 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     # Store baseline LMC (first batch) for normalization
     baseline_log_lmc = None
     
+    # Initialize EMA variables for gradient smoothing
+    grad_ce_ema = None
+    grad_lmc_ema = None
+    
     progress_bar = tqdm(train_loader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
@@ -389,8 +393,13 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         grad_ce = compute_grad_norm(ce_loss, model)
         grad_lmc = compute_grad_norm(lmc_loss, model)
 
-        grad_ce_ema  = 0.95 * grad_ce_ema  + 0.05 * grad_ce
-        grad_lmc_ema = 0.95 * grad_lmc_ema + 0.05 * grad_lmc
+        # Initialize EMA on first batch
+        if grad_ce_ema is None:
+            grad_ce_ema = grad_ce
+            grad_lmc_ema = grad_lmc
+        else:
+            grad_ce_ema  = 0.95 * grad_ce_ema  + 0.05 * grad_ce
+            grad_lmc_ema = 0.95 * grad_lmc_ema + 0.05 * grad_lmc
 
         lambda_weight = grad_ce_ema / (grad_lmc_ema + 1e-12)
         lambda_weight = min(lambda_weight, config.MAX_LAMBDA)
