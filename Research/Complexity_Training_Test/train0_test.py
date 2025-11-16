@@ -41,7 +41,7 @@ class Config:
     LMC_SAMPLE_SIZE = 0
     
     # Complexity calculation interval
-    COMPLEXITY_UPDATE_INTERVAL = 16  # Calculate LMC every X batches (1 = every batch)
+    COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
     
     # Device configuration
     GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.)
