@@ -382,23 +382,24 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_value = lmc_tensor  # Keep tensor for gradient computation
             lmc_value_scalar = lmc_scalar  # Keep scalar for logging
         
-        # LMC loss (log scale for gradient computation)
-        lmc_loss = torch.log(lmc_value + 1e-12)
-        
-        # Store baseline on first batch
-        if baseline_log_lmc is None:
-            baseline_log_lmc = lmc_loss.detach()
-        
-        # Automatic lambda estimation (gradient balancing)
-        if config.USE_AUTO_LAMBDA:
-            lambda_weight = estimate_lambda(ce_loss, lmc_loss, model)
-            lambda_weight = min(lambda_weight, config.MAX_LAMBDA)  # Clip to avoid extreme values
-        else:
-            lambda_weight = config.LMC_WEIGHT
-        
-        # Combined loss: CE * exp(λ * (baseline_log_lmc - log_lmc))
-        # This encourages decreasing LMC (complexity reduction)
-        combined_loss = ce_loss * torch.exp(lambda_weight * (baseline_log_lmc - lmc_loss))
+        # 1. Compute CE and LMC
+        lmc_loss = torch.log(lmc_value)
+
+        # 2. Automatic λ with EMA smoothing
+        grad_ce = compute_grad_norm(ce_loss, model)
+        grad_lmc = compute_grad_norm(lmc_loss, model)
+
+        grad_ce_ema  = 0.95 * grad_ce_ema  + 0.05 * grad_ce
+        grad_lmc_ema = 0.95 * grad_lmc_ema + 0.05 * grad_lmc
+
+        lambda_weight = grad_ce_ema / (grad_lmc_ema + 1e-12)
+        lambda_weight = min(lambda_weight, config.MAX_LAMBDA)
+
+        # 3. Normalized complexity difference
+        lmc_delta = (baseline_log_lmc - lmc_loss) / abs(baseline_log_lmc)
+
+        # 4. Additive, not multiplicative loss
+        combined_loss = ce_loss + lambda_weight * lmc_delta
         
         # Backward pass
         combined_loss.backward()
