@@ -275,7 +275,9 @@ def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
         sigma = 1.0 / num_bins
         
         # Process in chunks to avoid OOM (29M weights × 100 bins is too large)
-        chunk_size = 100000  # Process 100k weights at a time
+        # Reduce chunk size significantly: even 100k × 100 bins = 10M elements × 4 bytes = 40MB per intermediate
+        # But broadcasting creates multiple copies, so use much smaller chunks
+        chunk_size = 10000  # Process 10k weights at a time to stay under memory limits
         hist_chunks = []
         
         for i in range(0, len(normalized_weights), chunk_size):
