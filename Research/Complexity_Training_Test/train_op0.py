@@ -32,11 +32,11 @@ class Config:
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 4.0     # Ending value (inclusive)
-    LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
+    LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
+    LMC_WEIGHT_STEP = 0.05   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 1
+    NUM_OF_RUN_PER_CALL = 2
     
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
@@ -346,20 +346,15 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_value_scalar = 1.0
         
         # Combined objective using different formulations based on lmc_weight
-        # Use lmc_weight to select which loss formulation to use:
-        # 0: loss
-        # 1: loss/lmc
+        # Use lmc_weight to control the importance of lmc_value:
+        # lmc_weight=0: combined_loss = ce_loss (no complexity penalty)
+        # lmc_weight=1: combined_loss = ce_loss * (lmc_mean / lmc_value) (full complexity penalty)
+        # 0 < lmc_weight < 1: interpolate between the two extremes
         
         if lmc_weight == 0:
             combined_loss = ce_loss
-        elif lmc_weight == 1:
-            combined_loss = ce_loss * (lmc_mean / lmc_value)
-        elif lmc_weight == 2:
-            combined_loss = ce_loss * ((lmc_mean / lmc_value) ** 2)
-        elif lmc_weight == 3:
-            combined_loss = ce_loss * (lmc_value / lmc_mean)
-        elif lmc_weight == 4:
-            combined_loss = ce_loss ** (lmc_mean / lmc_value)
+        elif lmc_weight > 0:
+            combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, lmc_weight)
         
         # Backward pass
         combined_loss.backward()
