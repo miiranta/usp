@@ -236,10 +236,7 @@ def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
         # Create random indices on the same device as weights to avoid CPU-GPU deadlock
         sample_indices = torch.randperm(len(weights), device=weights.device)[:sample_size]
         weights = weights[sample_indices]
-    elif requires_grad and sample_size > 0 and len(weights) > sample_size:
-        # For gradient flow, we cannot use random sampling - use all weights
-        # (random indexing is non-differentiable)
-        print(f"Warning: sample_size ignored when requires_grad=True (using all {len(weights)} weights)")
+    # Note: When requires_grad=True, we use all weights (sampling would break gradients)
     
     # Normalize weights to [0, 1] range
     weights_min = weights.min()
