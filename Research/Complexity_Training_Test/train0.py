@@ -20,7 +20,7 @@ import torchist
 class Config:
     # Model hyperparameters
     HIDDEN_DIM = 256
-    NUM_LAYERS = 2
+    NUM_LAYERS = 4
     NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
