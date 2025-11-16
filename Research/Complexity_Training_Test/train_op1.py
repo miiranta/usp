@@ -380,12 +380,10 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Automatic lambda estimation (gradient balancing)
         if config.USE_AUTO_LAMBDA:
             lambda_weight = estimate_lambda(ce_loss, lmc_value, model)
-            lambda_weight = torch.tensor(lambda_weight, device=device, dtype=ce_loss.dtype)
         else:
             lambda_weight = config.LMC_WEIGHT
-            lambda_weight = torch.tensor(lambda_weight, device=device, dtype=ce_loss.dtype)
         
-        combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, torch.log(lambda_weight))
+        combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, lambda_weight)
         
         # Backward pass
         combined_loss.backward()
