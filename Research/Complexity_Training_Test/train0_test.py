@@ -1,3 +1,4 @@
+
 import os
 import csv
 import torch
@@ -24,10 +25,10 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 512 
-    EPOCHS = 30
+    EPOCHS = 20
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 1000
+    MAX_SAMPLES = None
     
     # LMC Complexity weight sweep configuration
     LMC_WEIGHT_START = 0.0   # Starting value
@@ -35,7 +36,7 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 2
+    NUM_OF_RUN_PER_CALL = 3
     
     # LMC weight sampling configuration
     LMC_SAMPLE_SIZE = 0
