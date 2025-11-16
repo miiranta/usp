@@ -25,7 +25,7 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 512 
-    EPOCHS = 20
+    EPOCHS = 30
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 500
