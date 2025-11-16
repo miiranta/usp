@@ -284,7 +284,7 @@ def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
         
         # Process in chunks to avoid OOM (29M weights × 100 bins is too large)
         chunk_size = 100000  # Process 100k weights at a time
-        hist = torch.zeros(num_bins, device=normalized_weights.device, requires_grad=True)
+        hist_chunks = []
         
         for i in range(0, len(normalized_weights), chunk_size):
             chunk = normalized_weights[i:i + chunk_size]
@@ -297,8 +297,11 @@ def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
             # Normalize assignments per weight (each weight distributes total mass of 1)
             soft_assignments = soft_assignments / (soft_assignments.sum(dim=1, keepdim=True) + 1e-10)
             
-            # Accumulate to histogram
-            hist = hist + soft_assignments.sum(dim=0)
+            # Sum this chunk's contribution
+            hist_chunks.append(soft_assignments.sum(dim=0))
+        
+        # Sum all chunks (maintains gradient flow)
+        hist = torch.stack(hist_chunks).sum(dim=0)
     else:
         # Use fast non-differentiable histogram
         hist = torchist.histogram(normalized_weights, bins=num_bins, low=0.0, upp=1.0)
@@ -848,7 +851,9 @@ def run_training_single(output_dir, config, run_num):
     weights_disequilibrium_values = []
     num_bins_values = []
     
-    weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+    # Calculate initial LMC using ALL weights (not sampled) to match training calculation
+    weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=0)
+    print(f"Initial model LMC (all weights): {weights_lmc:.16f}")
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
@@ -858,6 +863,7 @@ def run_training_single(output_dir, config, run_num):
         )
         val_loss = validate(model, val_loader, device, vocab_size)
         
+        # Calculate end-of-epoch LMC (can use sampling here since it's just for logging)
         weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
         
         # Store metrics
