@@ -274,11 +274,10 @@ def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
         # sigma = bin_width for smooth assignment
         sigma = 1.0 / num_bins
         
-        # Process in chunks to avoid OOM (29M weights × 100 bins is too large)
-        # Reduce chunk size significantly: even 100k × 100 bins = 10M elements × 4 bytes = 40MB per intermediate
-        # But broadcasting creates multiple copies, so use much smaller chunks
-        chunk_size = 10000  # Process 10k weights at a time to stay under memory limits
-        hist_chunks = []
+        # Process in VERY small chunks to avoid OOM when model is already loaded
+        # After torch.compile, GPU memory is mostly full, so use tiny chunks
+        chunk_size = 1000  # Process only 1k weights at a time (1k × 100 bins = 100k elements = 400KB base)
+        hist = torch.zeros(num_bins, device=normalized_weights.device, requires_grad=True)
         
         for i in range(0, len(normalized_weights), chunk_size):
             chunk = normalized_weights[i:i + chunk_size]
@@ -291,11 +290,12 @@ def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
             # Normalize assignments per weight (each weight distributes total mass of 1)
             soft_assignments = soft_assignments / (soft_assignments.sum(dim=1, keepdim=True) + 1e-10)
             
-            # Sum this chunk's contribution
-            hist_chunks.append(soft_assignments.sum(dim=0))
-        
-        # Sum all chunks (maintains gradient flow)
-        hist = torch.stack(hist_chunks).sum(dim=0)
+            # Accumulate directly (in-place, maintains gradient flow)
+            hist = hist + soft_assignments.sum(dim=0)
+            
+            # Clear cache after each chunk to prevent memory buildup
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
     else:
         # Use fast non-differentiable histogram
         hist = torchist.histogram(normalized_weights, bins=num_bins, low=0.0, upp=1.0)
