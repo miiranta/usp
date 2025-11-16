@@ -267,10 +267,6 @@ def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
         data_range = float((weights_max - weights_min).item() if requires_grad else (weights_max - weights_min))
         num_bins = max(1, int(np.ceil(data_range / bin_width)))
     
-    # Limit bins for memory and gradient efficiency
-    if requires_grad:
-        num_bins = min(num_bins, 100)  # Limit bins for gradient computation
-    
     # Create histogram - use differentiable soft histogram if requires_grad
     if requires_grad:
         # Differentiable soft histogram using Gaussian kernels
@@ -851,9 +847,11 @@ def run_training_single(output_dir, config, run_num):
     weights_disequilibrium_values = []
     num_bins_values = []
     
-    # Calculate initial LMC using ALL weights (not sampled) to match training calculation
-    weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=0)
-    print(f"Initial model LMC (all weights): {weights_lmc:.16f}")
+    # Calculate initial LMC using the SAME method as training (soft histogram with requires_grad=True)
+    # Then detach to get the scalar value
+    lmc_tensor, _, _, _ = calculate_lmc_from_weights(model, sample_size=0, requires_grad=True)
+    weights_lmc = lmc_tensor.item()
+    print(f"Initial model LMC (soft histogram, all weights): {weights_lmc:.16f}")
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
