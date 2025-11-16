@@ -354,7 +354,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         if lmc_weight == 0:
             combined_loss = ce_loss
         elif lmc_weight > 0:
-            combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, lmc_weight)
+            combined_loss = lmc_mean / lmc_value
         
         # Backward pass
         combined_loss.backward()
