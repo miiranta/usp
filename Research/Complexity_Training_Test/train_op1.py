@@ -214,14 +214,12 @@ class TransformerLLM(nn.Module):
 
 
 # ============================================================================
-# LMC COMPLEXITY CALCULATION (SMOOTH & DIFFERENTIABLE)
+# LMC COMPLEXITY CALCULATION
 # ============================================================================
 
-def calculate_lmc_from_weights(model, num_centers=100):
+def calculate_lmc_from_weights(model):
     """
-    Calculate LMC complexity from model weights using smooth Kernel Density Estimation (KDE).
-    This provides a DIFFERENTIABLE complexity measure with meaningful gradients.
-    
+    Calculate LMC complexity from model weights in a fully differentiable way.
     Returns both tensor (for gradient computation) and scalar metrics (for logging).
     """
     # Collect ALL weights from the model (keeping gradients)
@@ -237,70 +235,73 @@ def calculate_lmc_from_weights(model, num_centers=100):
     weights_max = weights.max()
     normalized_weights = (weights - weights_min) / (weights_max - weights_min + 1e-10)
     
-    # Sample for computational efficiency (if dataset is too large)
-    max_sample_size = 50000
-    if len(normalized_weights) > max_sample_size:
-        sample_indices = torch.randperm(len(normalized_weights), device=normalized_weights.device)[:max_sample_size]
-        w_sample = normalized_weights[sample_indices]
-    else:
-        w_sample = normalized_weights
+    # Calculate number of bins using Freedman-Diaconis rule
+    # Use detached values for bin calculation (doesn't need gradients)
+    n = len(weights)
+    sample_size_iqr = min(10000, len(normalized_weights))
     
-    # ============================================================================
-    # SMOOTH KDE-BASED PDF (DIFFERENTIABLE)
-    # ============================================================================
-    
-    # Create evenly spaced centers for KDE
-    centers = torch.linspace(0.0, 1.0, num_centers, device=w_sample.device)
-    
-    # Bandwidth (h) using Scott's rule: h ≈ n^(-1/5) * std
     with torch.no_grad():
-        std = w_sample.std()
-        n = len(w_sample)
-        h = std * (n ** (-0.2))
-        h = max(h.item(), 0.01)  # Minimum bandwidth to ensure smoothness
+        if len(normalized_weights) > sample_size_iqr:
+            sample_indices = torch.randperm(len(normalized_weights), device=normalized_weights.device)[:sample_size_iqr]
+            sample = normalized_weights[sample_indices]
+        else:
+            sample = normalized_weights
+        
+        q1 = torch.quantile(sample, 0.25)
+        q3 = torch.quantile(sample, 0.75)
+        iqr = q3 - q1
+        
+        if iqr == 0:
+            num_bins = max(1, int(np.ceil(float(np.sqrt(n)))))
+        else:
+            bin_width = float(2 * iqr.item() * (n ** (-1/3)))
+            data_range = float((weights_max - weights_min).item())
+            num_bins = max(1, int(np.ceil(data_range / bin_width)))
     
-    # Compute Gaussian KDE: K(x) = exp(-0.5 * ((x - center) / h)^2)
-    # Shape: (num_samples, num_centers)
-    diff = w_sample.reshape(-1, 1) - centers.reshape(1, -1)
-    kernels = torch.exp(-0.5 * (diff / h) ** 2)
+    # Create differentiable histogram using vectorized soft binning
+    # This avoids OOM by using scatter_add instead of creating large distance matrix
+    bin_edges = torch.linspace(0.0, 1.0, num_bins + 1, device=normalized_weights.device)
+    bin_width_tensor = bin_edges[1] - bin_edges[0]
     
-    # PDF estimation: average kernel contributions (differentiable)
-    pdf = kernels.mean(dim=0)
+    # Find bin indices (differentiable through the fractional part)
+    bin_indices_float = normalized_weights / bin_width_tensor
+    bin_indices_floor = torch.floor(bin_indices_float)
+    bin_indices_left = bin_indices_floor.long().clamp(0, num_bins - 1)
+    bin_indices_right = (bin_indices_floor + 1).long().clamp(0, num_bins - 1)
     
-    # Normalize to probability distribution (differentiable)
-    pdf = pdf / (pdf.sum() + 1e-10)
+    # Calculate interpolation weights (differentiable)
+    frac = bin_indices_float - bin_indices_floor
+    weight_left = 1.0 - frac
+    weight_right = frac
+    
+    # Create histogram using scatter_add (differentiable and memory efficient)
+    hist = torch.zeros(num_bins, device=normalized_weights.device, dtype=normalized_weights.dtype)
+    hist.scatter_add_(0, bin_indices_left, weight_left)
+    hist.scatter_add_(0, bin_indices_right, weight_right)
+    
+    # Convert to probability distribution (differentiable)
+    probs = hist / hist.sum()
     
     # Ensure valid probabilities (clip to avoid log(0))
     eps = 1e-10
-    pdf = torch.clamp(pdf, eps, 1.0)
-    pdf = pdf / pdf.sum()  # Renormalize
+    probs = torch.clamp(probs, eps, 1.0)
+    probs = probs / probs.sum()  # Renormalize
     
-    # ============================================================================
-    # SHANNON ENTROPY (SMOOTH & DIFFERENTIABLE)
-    # ============================================================================
+    # Calculate Shannon entropy: H = -sum(p_i * log(p_i)) (differentiable)
+    shannon_entropy = -(probs * torch.log(probs)).sum()
     
-    # H = -sum(p_i * log(p_i))
-    shannon_entropy = -(pdf * torch.log(pdf)).sum()
-    
-    # ============================================================================
-    # DISEQUILIBRIUM (SMOOTH & DIFFERENTIABLE)
-    # ============================================================================
-    
-    # D = sum((p_i - 1/N)^2)
-    N = len(pdf)
+    # Calculate disequilibrium: D = sum((p_i - 1/N)^2) (differentiable)
+    N = len(probs)
     uniform_prob = 1.0 / N
-    disequilibrium = ((pdf - uniform_prob) ** 2).sum()
+    disequilibrium = ((probs - uniform_prob) ** 2).sum()
     
-    # ============================================================================
-    # LMC COMPLEXITY: C = H × D (SMOOTH & DIFFERENTIABLE)
-    # ============================================================================
-    
+    # LMC complexity: C = H × D (differentiable)
     lmc = shannon_entropy * disequilibrium
     
-    # Return: (lmc_tensor, lmc_scalar, entropy_scalar, diseq_scalar, num_centers)
+    # Return: (lmc_tensor, lmc_scalar, entropy_scalar, diseq_scalar, num_bins)
     # The tensor version is used in loss computation (keeps gradients)
     # The scalar versions are used for logging only
-    return lmc, lmc.item(), shannon_entropy.item(), disequilibrium.item(), num_centers
+    return lmc, lmc.item(), shannon_entropy.item(), disequilibrium.item(), num_bins
 
 
 # ============================================================================
@@ -311,9 +312,6 @@ def compute_grad_norm(loss, model):
     """
     Compute the L2 norm of gradients for a given loss.
     This is used to balance gradient magnitudes between CE and LMC.
-    
-    Note: Now that LMC is smooth and differentiable (using KDE), 
-    this function will return meaningful gradients.
     """
     grads = torch.autograd.grad(loss, model.parameters(), retain_graph=True, allow_unused=True, create_graph=False)
     total = 0.0
@@ -321,6 +319,26 @@ def compute_grad_norm(loss, model):
         if g is not None:
             total += g.norm().item() ** 2
     return total ** 0.5
+
+
+def estimate_lambda(ce_loss, lmc_loss, model, eps=1e-12):
+    """
+    Automatically estimate λ (LMC weight) by balancing gradient magnitudes:
+    λ* ≈ ||∇log(CE)|| / ||∇log(LMC)||
+    
+    This keeps gradients from both terms at similar scales.
+    """
+    # Compute gradient norms for both losses
+    grad_ce = compute_grad_norm(ce_loss, model)
+    grad_lmc = compute_grad_norm(lmc_loss, model)
+    
+    # Avoid division by zero
+    if grad_lmc < eps:
+        return 0.0
+    
+    # Lambda is the ratio of gradient scales
+    lambda_weight = grad_ce / grad_lmc
+    return lambda_weight
 
 
 # ============================================================================
@@ -340,10 +358,6 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     
     # Store baseline LMC (first batch) for normalization
     baseline_log_lmc = None
-    
-    # Initialize EMA variables for gradient smoothing
-    grad_ce_ema = None
-    grad_lmc_ema = None
     
     progress_bar = tqdm(train_loader, desc="Training")
     
@@ -368,36 +382,23 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_value = lmc_tensor  # Keep tensor for gradient computation
             lmc_value_scalar = lmc_scalar  # Keep scalar for logging
         
-        # 1. Compute CE and LMC
+        # LMC loss (log scale for gradient computation)
         lmc_loss = torch.log(lmc_value + 1e-12)
         
         # Store baseline on first batch
         if baseline_log_lmc is None:
             baseline_log_lmc = lmc_loss.detach()
         
-        # 2. Automatic λ with EMA smoothing (now with meaningful LMC gradients)
+        # Automatic lambda estimation (gradient balancing)
         if config.USE_AUTO_LAMBDA:
-            grad_ce = compute_grad_norm(ce_loss, model)
-            grad_lmc = compute_grad_norm(lmc_loss, model)
-            
-            # Initialize EMA on first batch
-            if grad_ce_ema is None:
-                grad_ce_ema = grad_ce
-                grad_lmc_ema = grad_lmc
-            else:
-                grad_ce_ema  = 0.95 * grad_ce_ema  + 0.05 * grad_ce
-                grad_lmc_ema = 0.95 * grad_lmc_ema + 0.05 * grad_lmc
-            
-            lambda_weight = grad_ce_ema / (grad_lmc_ema + 1e-12)
-            lambda_weight = min(lambda_weight, config.MAX_LAMBDA)
+            lambda_weight = estimate_lambda(ce_loss, lmc_loss, model)
+            lambda_weight = min(lambda_weight, config.MAX_LAMBDA)  # Clip to avoid extreme values
         else:
             lambda_weight = config.LMC_WEIGHT
         
-        # 3. Normalized complexity difference
-        lmc_delta = (baseline_log_lmc - lmc_loss) / (abs(baseline_log_lmc) + 1e-12)
-        
-        # 4. Additive loss (no exp() instabilities)
-        combined_loss = ce_loss + lambda_weight * lmc_delta
+        # Combined loss: CE * exp(λ * (baseline_log_lmc - log_lmc))
+        # This encourages decreasing LMC (complexity reduction)
+        combined_loss = ce_loss * torch.exp(lambda_weight * (baseline_log_lmc - lmc_loss))
         
         # Backward pass
         combined_loss.backward()
