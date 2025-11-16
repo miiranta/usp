@@ -168,9 +168,9 @@ best_training = min(final_train_losses.items(), key=lambda x: x[1])[0]
 best_validation = min(final_val_losses.items(), key=lambda x: x[1])[0]
 best_lmc = min(final_model_lmc.items(), key=lambda x: x[1])[0]
 
-print(f"\nBest final Training Loss: LMC {best_training:.2f}")
-print(f"Best final Validation Loss: LMC {best_validation:.2f}")
-print(f"Best final Model LMC: LMC {best_lmc:.2f}")
+print(f"\nBest final Training Loss: LMC {best_training:.4f}")
+print(f"Best final Validation Loss: LMC {best_validation:.4f}")
+print(f"Best final Model LMC: LMC {best_lmc:.4f}")
 
 # Plot 1: Training Loss with 95% CI
 ax = axes[0]
@@ -182,12 +182,12 @@ for i, (lmc_weight, data) in enumerate(sorted(training_data.items())):
     
     if lmc_weight == best_training:
         ax.plot(epochs, train_loss_mean, marker='o', linestyle='-', linewidth=3.5, 
-                markersize=10, color='red', label=f'LMC {lmc_weight:.2f} ★', zorder=10)
+                markersize=10, color='red', label=f'LMC {lmc_weight:.4f} ★', zorder=10)
         ax.fill_between(epochs, train_loss_mean - train_loss_ci, train_loss_mean + train_loss_ci,
                        alpha=0.25, color='red', zorder=9)
     else:
         ax.plot(epochs, train_loss_mean, marker='o', linestyle='-', linewidth=2, 
-                markersize=6, color=colors_grad[i], label=f'LMC {lmc_weight:.2f}', alpha=0.8, zorder=5-i*0.1)
+                markersize=6, color=colors_grad[i], label=f'LMC {lmc_weight:.4f}', alpha=0.8, zorder=5-i*0.1)
         ax.fill_between(epochs, train_loss_mean - train_loss_ci, train_loss_mean + train_loss_ci,
                        alpha=0.1, color=colors_grad[i], zorder=4-i*0.1)
 
@@ -207,12 +207,12 @@ for i, (lmc_weight, data) in enumerate(sorted(training_data.items())):
     
     if lmc_weight == best_validation:
         ax.plot(epochs, val_loss_mean, marker='s', linestyle='-', linewidth=3.5, 
-                markersize=10, color='red', label=f'LMC {lmc_weight:.2f} ★', zorder=10)
+                markersize=10, color='red', label=f'LMC {lmc_weight:.4f} ★', zorder=10)
         ax.fill_between(epochs, val_loss_mean - val_loss_ci, val_loss_mean + val_loss_ci,
                        alpha=0.25, color='red', zorder=9)
     else:
         ax.plot(epochs, val_loss_mean, marker='s', linestyle='-', linewidth=2, 
-                markersize=6, color=colors_grad[i], label=f'LMC {lmc_weight:.2f}', alpha=0.8, zorder=5-i*0.1)
+                markersize=6, color=colors_grad[i], label=f'LMC {lmc_weight:.4f}', alpha=0.8, zorder=5-i*0.1)
         ax.fill_between(epochs, val_loss_mean - val_loss_ci, val_loss_mean + val_loss_ci,
                        alpha=0.1, color=colors_grad[i], zorder=4-i*0.1)
 
@@ -232,12 +232,12 @@ for i, (lmc_weight, data) in enumerate(sorted(training_data.items())):
     
     if lmc_weight == best_lmc:
         ax.plot(epochs, lmc_mean, marker='^', linestyle='-', linewidth=3.5, 
-                markersize=10, color='red', label=f'LMC {lmc_weight:.2f} ★', zorder=10)
+                markersize=10, color='red', label=f'LMC {lmc_weight:.4f} ★', zorder=10)
         ax.fill_between(epochs, lmc_mean - lmc_ci, lmc_mean + lmc_ci,
                        alpha=0.25, color='red', zorder=9)
     else:
         ax.plot(epochs, lmc_mean, marker='^', linestyle='-', linewidth=2, 
-                markersize=6, color=colors_grad[i], label=f'LMC {lmc_weight:.2f}', alpha=0.8, zorder=5-i*0.1)
+                markersize=6, color=colors_grad[i], label=f'LMC {lmc_weight:.4f}', alpha=0.8, zorder=5-i*0.1)
         ax.fill_between(epochs, lmc_mean - lmc_ci, lmc_mean + lmc_ci,
                        alpha=0.1, color=colors_grad[i], zorder=4-i*0.1)
 
@@ -350,10 +350,10 @@ plt.savefig(output_3d_path, dpi=300, bbox_inches='tight')
 print(f"3D plots saved as '{output_3d_path}'")
 plt.show()
 
-print("\n" + "="*70)
+print("="*70)
 print("SUMMARY STATISTICS")
 print("="*70)
-print(f"LMC Weight Range: {min(lmc_weights):.2f} to {max(lmc_weights):.2f}")
+print(f"LMC Weight Range: {min(lmc_weights):.4f} to {max(lmc_weights):.4f}")
 print(f"Test Loss Range: {np.min(test_losses_mean):.4f} ± {np.std(test_losses_mean):.4f}")
 print(f"Test LMC Range: {np.min(test_lmc_mean):.4f} ± {np.std(test_lmc_mean):.4f}")
 print("="*70)
