@@ -30,7 +30,11 @@ class Config:
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 500
     
-    # LMC Complexity weight sweep configuration
+    # Automatic Lambda Estimation (Gradient Balancing)
+    USE_AUTO_LAMBDA = True   # Enable automatic λ estimation
+    MAX_LAMBDA = 10.0        # Maximum allowed λ value (prevents extreme weights)
+    
+    # LMC Complexity weight sweep configuration (used when USE_AUTO_LAMBDA=False)
     LMC_WEIGHT_START = 0.5  # Starting value
     LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 0.5   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
@@ -301,6 +305,43 @@ def calculate_lmc_from_weights(model):
 
 
 # ============================================================================
+# AUTOMATIC LAMBDA ESTIMATION
+# ============================================================================
+
+def compute_grad_norm(loss, model):
+    """
+    Compute the L2 norm of gradients for a given loss.
+    This is used to balance gradient magnitudes between CE and LMC.
+    """
+    grads = torch.autograd.grad(loss, model.parameters(), retain_graph=True, allow_unused=True, create_graph=False)
+    total = 0.0
+    for g in grads:
+        if g is not None:
+            total += g.norm().item() ** 2
+    return total ** 0.5
+
+
+def estimate_lambda(ce_loss, lmc_loss, model, eps=1e-12):
+    """
+    Automatically estimate λ (LMC weight) by balancing gradient magnitudes:
+    λ* ≈ ||∇log(CE)|| / ||∇log(LMC)||
+    
+    This keeps gradients from both terms at similar scales.
+    """
+    # Compute gradient norms for both losses
+    grad_ce = compute_grad_norm(ce_loss, model)
+    grad_lmc = compute_grad_norm(lmc_loss, model)
+    
+    # Avoid division by zero
+    if grad_lmc < eps:
+        return 0.0
+    
+    # Lambda is the ratio of gradient scales
+    lambda_weight = grad_ce / grad_lmc
+    return lambda_weight
+
+
+# ============================================================================
 # TRAINING
 # ============================================================================
 
@@ -309,14 +350,14 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     total_loss = 0.0
     total_lmc = 0.0
     total_combined_loss = 0.0
+    total_lambda = 0.0
     total_samples = 0
-    
-    # Calculate loss/LMC weights (must sum to 1.0)
-    loss_weight = 1.0 - config.LMC_WEIGHT
-    lmc_weight = config.LMC_WEIGHT
     
     # Initialize LMC value (will be updated every COMPLEXITY_UPDATE_INTERVAL batches)
     lmc_value = None
+    
+    # Store baseline LMC (first batch) for normalization
+    baseline_log_lmc = None
     
     progress_bar = tqdm(train_loader, desc="Training")
     
@@ -336,30 +377,33 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
         # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
-        if lmc_weight != 0:
-            if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
-                lmc_tensor, lmc_scalar, _, _, _ = calculate_lmc_from_weights(model)
-                lmc_value = lmc_tensor  # Keep tensor for gradient computation
-                lmc_value_scalar = lmc_scalar  # Keep scalar for logging
+        if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
+            lmc_tensor, lmc_scalar, _, _, _ = calculate_lmc_from_weights(model)
+            lmc_value = lmc_tensor  # Keep tensor for gradient computation
+            lmc_value_scalar = lmc_scalar  # Keep scalar for logging
+        
+        # LMC loss (log scale for gradient computation)
+        lmc_loss = torch.log(lmc_value + 1e-12)
+        
+        # Store baseline on first batch
+        if baseline_log_lmc is None:
+            baseline_log_lmc = lmc_loss.detach()
+        
+        # Automatic lambda estimation (gradient balancing)
+        if config.USE_AUTO_LAMBDA:
+            lambda_weight = estimate_lambda(ce_loss, lmc_loss, model)
+            lambda_weight = min(lambda_weight, config.MAX_LAMBDA)  # Clip to avoid extreme values
         else:
-            lmc_value = torch.tensor(1.0, device=device)  # Dummy tensor
-            lmc_value_scalar = 1.0
+            lambda_weight = config.LMC_WEIGHT
         
-        # Combined objective using different formulations based on lmc_weight
-        # Use lmc_weight to control the importance of lmc_value:
-        # lmc_weight=0: combined_loss = ce_loss (no complexity penalty)
-        # lmc_weight=1: combined_loss = ce_loss * (lmc_mean / lmc_value) (full complexity penalty)
-        # 0 < lmc_weight < 1: interpolate between the two extremes
-        
-        if lmc_weight == 0:
-            combined_loss = ce_loss
-        elif lmc_weight > 0:
-            combined_loss = 1 / lmc_value
+        # Combined loss: CE * exp(λ * (baseline_log_lmc - log_lmc))
+        # This encourages decreasing LMC (complexity reduction)
+        combined_loss = ce_loss * torch.exp(lambda_weight * (baseline_log_lmc - lmc_loss))
         
         # Backward pass
         combined_loss.backward()
         
-        # Optimization step (no gradient clipping for maximum overfitting)
+        # Optimization step
         if config.MAX_GRAD_NORM is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
         optimizer.step()
@@ -370,20 +414,23 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         total_loss += ce_loss.detach().item()
         total_lmc += lmc_value_scalar
         total_combined_loss += combined_loss.detach().item()
+        total_lambda += lambda_weight if isinstance(lambda_weight, float) else lambda_weight
         total_samples += 1  # Count batches, not samples
         
         # Update progress bar
         progress_bar.set_postfix({
-            'loss': f'{total_loss / total_samples:.16f}',
-            'lmc': f'{total_lmc / total_samples:.16f}',
-            'combined': f'{total_combined_loss / total_samples:.16f}'
+            'loss': f'{total_loss / total_samples:.4f}',
+            'lmc': f'{total_lmc / total_samples:.4f}',
+            'λ': f'{total_lambda / total_samples:.4f}',
+            'combined': f'{total_combined_loss / total_samples:.4f}'
         })
     
     avg_loss = total_loss / total_samples
     avg_lmc = total_lmc / total_samples
     avg_combined = total_combined_loss / total_samples
+    avg_lambda = total_lambda / total_samples
     
-    return avg_loss, avg_lmc, avg_combined
+    return avg_loss, avg_lmc, avg_combined, avg_lambda
 
 
 def validate(model, val_loader, device, vocab_size):
@@ -436,7 +483,7 @@ def test(model, test_loader, device, vocab_size):
 # LOGGING AND VISUALIZATION
 # ============================================================================
 
-def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, 
+def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, lambda_values,
                        weights_entropy_values, weights_disequilibrium_values, 
                        num_bins_values, test_loss, test_metrics, config, run_num=1):
     """Save training results to CSV file"""
@@ -456,13 +503,14 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values,
         writer.writerow(['Final Training Loss', f'{train_losses[-1]:.16f}'])
         writer.writerow(['Final Validation Loss', f'{val_losses[-1]:.16f}'])
         writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.16f}'])
-        writer.writerow(['LMC Weight', f'{config.LMC_WEIGHT:.16f}'])
-        writer.writerow(['Loss Weight', f'{1.0 - config.LMC_WEIGHT:.16f}'])
+        writer.writerow(['Final Lambda (Average)', f'{lambda_values[-1]:.16f}'])
+        writer.writerow(['Auto Lambda Enabled', f'{config.USE_AUTO_LAMBDA}'])
+        writer.writerow(['Max Lambda', f'{config.MAX_LAMBDA:.16f}'])
         writer.writerow(['Run Number', f'{run_num}'])
         writer.writerow([])
         
         # Epoch-by-epoch data
-        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Model LMC', 
+        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Model LMC', 'Avg Lambda',
                         'Weights Entropy', 'Weights Disequilibrium', 'Num Bins'])
         for epoch in range(len(train_losses)):
             writer.writerow([
@@ -470,6 +518,7 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values,
                 f'{train_losses[epoch]:.16f}',
                 f'{val_losses[epoch]:.16f}',
                 f'{lmc_values[epoch]:.16f}',
+                f'{lambda_values[epoch]:.16f}',
                 f'{weights_entropy_values[epoch]:.16f}',
                 f'{weights_disequilibrium_values[epoch]:.16f}',
                 f'{num_bins_values[epoch]}'
@@ -555,6 +604,7 @@ def aggregate_results_csv(output_dir, config):
                         'train_loss': [],
                         'val_loss': [],
                         'lmc': [],
+                        'lambda': [],
                         'entropy': [],
                         'diseq': [],
                         'bins': []
@@ -563,15 +613,16 @@ def aggregate_results_csv(output_dir, config):
                 aggregate_data[epoch]['train_loss'].append(float(row[1]))
                 aggregate_data[epoch]['val_loss'].append(float(row[2]))
                 aggregate_data[epoch]['lmc'].append(float(row[3]))
-                aggregate_data[epoch]['entropy'].append(float(row[4]))
-                aggregate_data[epoch]['diseq'].append(float(row[5]))
-                aggregate_data[epoch]['bins'].append(float(row[6]))
+                aggregate_data[epoch]['lambda'].append(float(row[4]))
+                aggregate_data[epoch]['entropy'].append(float(row[5]))
+                aggregate_data[epoch]['diseq'].append(float(row[6]))
+                aggregate_data[epoch]['bins'].append(float(row[7]))
     
     # Calculate statistics
     aggregate_stats = {}
     for epoch in sorted(aggregate_data.keys()):
         stats_dict = {}
-        for metric in ['train_loss', 'val_loss', 'lmc', 'entropy', 'diseq', 'bins']:
+        for metric in ['train_loss', 'val_loss', 'lmc', 'lambda', 'entropy', 'diseq', 'bins']:
             values = np.array(aggregate_data[epoch][metric])
             stats_dict[metric] = {
                 'mean': np.mean(values),
@@ -598,6 +649,7 @@ def aggregate_results_csv(output_dir, config):
                  'Train_Loss_Mean', 'Train_Loss_Std', 'Train_Loss_Min', 'Train_Loss_Max',
                  'Val_Loss_Mean', 'Val_Loss_Std', 'Val_Loss_Min', 'Val_Loss_Max',
                  'LMC_Mean', 'LMC_Std', 'LMC_Min', 'LMC_Max',
+                 'Lambda_Mean', 'Lambda_Std', 'Lambda_Min', 'Lambda_Max',
                  'Entropy_Mean', 'Entropy_Std', 'Entropy_Min', 'Entropy_Max',
                  'Diseq_Mean', 'Diseq_Std', 'Diseq_Min', 'Diseq_Max',
                  'Bins_Mean', 'Bins_Std', 'Bins_Min', 'Bins_Max']
@@ -605,7 +657,7 @@ def aggregate_results_csv(output_dir, config):
         
         for epoch in sorted(aggregate_stats.keys()):
             row = [epoch]
-            for metric in ['train_loss', 'val_loss', 'lmc', 'entropy', 'diseq', 'bins']:
+            for metric in ['train_loss', 'val_loss', 'lmc', 'lambda', 'entropy', 'diseq', 'bins']:
                 row.extend([
                     f'{aggregate_stats[epoch][metric]["mean"]:.16f}',
                     f'{aggregate_stats[epoch][metric]["std"]:.16f}',
@@ -804,6 +856,7 @@ def run_training_single(output_dir, config, run_num):
     train_losses = []
     val_losses = []
     lmc_values = []
+    lambda_values = []
     weights_entropy_values = []
     weights_disequilibrium_values = []
     num_bins_values = []
@@ -813,7 +866,7 @@ def run_training_single(output_dir, config, run_num):
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
-        train_loss, train_lmc, train_combined = train_epoch(
+        train_loss, train_lmc, train_combined, train_lambda = train_epoch(
             model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean=weights_lmc
         )
         val_loss = validate(model, val_loader, device, vocab_size)
@@ -824,6 +877,7 @@ def run_training_single(output_dir, config, run_num):
         train_losses.append(train_loss)
         val_losses.append(val_loss)
         lmc_values.append(weights_lmc)
+        lambda_values.append(train_lambda)
         weights_entropy_values.append(weights_entropy)
         weights_disequilibrium_values.append(weights_diseq)
         num_bins_values.append(num_bins)
@@ -831,6 +885,7 @@ def run_training_single(output_dir, config, run_num):
         print(f"Training Loss: {train_loss:.16f}, Combined: {train_combined:.16f}")
         print(f"Validation Loss: {val_loss:.16f}")
         print(f"Model LMC (per-epoch weights): {weights_lmc:.16f}")
+        print(f"Average Lambda (λ): {train_lambda:.16f}")
     
     # Test
     print("\nEvaluating on test set...")
@@ -842,7 +897,7 @@ def run_training_single(output_dir, config, run_num):
     
     # Save results with run number
     save_results_to_csv(
-        output_dir, train_losses, val_losses, lmc_values,
+        output_dir, train_losses, val_losses, lmc_values, lambda_values,
         weights_entropy_values, weights_disequilibrium_values, num_bins_values,
         test_loss, test_metrics, config, run_num
     )
@@ -885,37 +940,52 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config = Config()
     
-    # Generate LMC weight sweep using START, END, and STEP
-    num_steps = int(round((config.LMC_WEIGHT_END - config.LMC_WEIGHT_START) / config.LMC_WEIGHT_STEP)) + 1
-    lmc_weights = np.linspace(config.LMC_WEIGHT_START, config.LMC_WEIGHT_END, num_steps)
-    
-    print(f"\n{'='*80}")
-    print(f"LMC WEIGHT SWEEP CONFIGURATION")
-    print(f"{'='*80}")
-    print(f"START: {config.LMC_WEIGHT_START:.16f}")
-    print(f"END:   {config.LMC_WEIGHT_END:.16f}")
-    print(f"STEP:  {config.LMC_WEIGHT_STEP:.16f}")
-    print(f"Total configurations: {len(lmc_weights)}")
-    print(f"Weights: {[f'{w:.16f}' for w in lmc_weights]}")
-    print(f"{'='*80}\n")
-    
-    # Iterate through LMC weight values
-    for lmc_weight in lmc_weights:
-        output_dir = os.path.join(script_dir, f'output/output_LMC_{lmc_weight:.16f}')
-        
-        if os.path.exists(output_dir):
-            print(f"Skipping LMC_WEIGHT={lmc_weight:.16f}, output already exists.\n")
-            continue
-        
-        # Create config with current LMC weight
-        config = Config()
-        config.LMC_WEIGHT = lmc_weight
+    if config.USE_AUTO_LAMBDA:
+        # Automatic lambda estimation mode
+        output_dir = os.path.join(script_dir, 'output/output_AUTO_LAMBDA')
         
         print(f"\n{'='*80}")
-        print(f"Starting training with LMC_WEIGHT = {lmc_weight:.16f}")
+        print(f"AUTOMATIC LAMBDA ESTIMATION MODE")
+        print(f"{'='*80}")
+        print(f"Gradient balancing: λ* ≈ ||∇log(CE)|| / ||∇log(LMC)||")
+        print(f"Max lambda: {config.MAX_LAMBDA:.16f}")
+        print(f"Runs per configuration: {config.NUM_OF_RUN_PER_CALL}")
         print(f"{'='*80}\n")
         
         run_training(output_dir, config)
+    else:
+        # Manual LMC weight sweep mode
+        num_steps = int(round((config.LMC_WEIGHT_END - config.LMC_WEIGHT_START) / config.LMC_WEIGHT_STEP)) + 1
+        lmc_weights = np.linspace(config.LMC_WEIGHT_START, config.LMC_WEIGHT_END, num_steps)
+        
+        print(f"\n{'='*80}")
+        print(f"LMC WEIGHT SWEEP CONFIGURATION")
+        print(f"{'='*80}")
+        print(f"START: {config.LMC_WEIGHT_START:.16f}")
+        print(f"END:   {config.LMC_WEIGHT_END:.16f}")
+        print(f"STEP:  {config.LMC_WEIGHT_STEP:.16f}")
+        print(f"Total configurations: {len(lmc_weights)}")
+        print(f"Weights: {[f'{w:.16f}' for w in lmc_weights]}")
+        print(f"{'='*80}\n")
+        
+        # Iterate through LMC weight values
+        for lmc_weight in lmc_weights:
+            output_dir = os.path.join(script_dir, f'output/output_LMC_{lmc_weight:.16f}')
+            
+            if os.path.exists(output_dir):
+                print(f"Skipping LMC_WEIGHT={lmc_weight:.16f}, output already exists.\n")
+                continue
+            
+            # Create config with current LMC weight
+            config = Config()
+            config.USE_AUTO_LAMBDA = False
+            config.LMC_WEIGHT = lmc_weight
+            
+            print(f"\n{'='*80}")
+            print(f"Starting training with LMC_WEIGHT = {lmc_weight:.16f}")
+            print(f"{'='*80}\n")
+            
+            run_training(output_dir, config)
 
 
 if __name__ == '__main__':
