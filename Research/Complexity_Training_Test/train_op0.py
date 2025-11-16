@@ -24,19 +24,19 @@ class Config:
     NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
-    BATCH_SIZE = 512 
-    EPOCHS = 20
+    BATCH_SIZE = 256 
+    EPOCHS = 30
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 500
+    MAX_SAMPLES = None
     
     # LMC Complexity weight sweep configuration
-    LMC_WEIGHT_START = 0.0011   # Starting value
-    LMC_WEIGHT_END = 0.0013     # Ending value (inclusive)
-    LMC_WEIGHT_STEP = 0.00001   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
+    LMC_WEIGHT_START = 1.0   # Starting value
+    LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
+    LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 2
+    NUM_OF_RUN_PER_CALL = 5
     
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
@@ -354,7 +354,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         if lmc_weight == 0:
             combined_loss = ce_loss
         elif lmc_weight > 0:
-            combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, lmc_weight)
+            combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, 0.0012)
         
         # Backward pass
         combined_loss.backward()
