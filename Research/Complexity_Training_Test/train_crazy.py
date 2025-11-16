@@ -47,7 +47,7 @@ class Config:
     
     # Device configuration
     GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.) - can be overridden by --gpu flag
-    DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
+    DEVICE = None  # Will be set dynamically based on GPU_INDEX
     NUM_WORKERS = 8  # DataLoader workers
     
     # Performance optimizations
@@ -249,20 +249,16 @@ def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
     # Calculate number of bins using Freedman-Diaconis rule
     n = len(weights)
     
-    # Sample 10,000 random values to calculate IQR (memory efficient)
-    # But don't sample if requires_grad=True (breaks gradient flow)
-    if requires_grad:
-        sample = normalized_weights
+    # Sample for IQR calculation (always use a small sample for efficiency)
+    # IQR doesn't need gradients, so we can always detach and sample
+    sample_size_iqr = min(10000, len(normalized_weights))
+    if len(normalized_weights) > sample_size_iqr:
+        # Use random sampling for IQR (doesn't affect gradient flow since we detach)
+        sample_indices = torch.randperm(len(normalized_weights), device=normalized_weights.device)[:sample_size_iqr]
+        sample_for_iqr = normalized_weights.detach()[sample_indices]
     else:
-        sample_size_iqr = min(10000, len(normalized_weights))
-        if len(normalized_weights) > sample_size_iqr:
-            sample_indices = torch.randperm(len(normalized_weights), device=normalized_weights.device)[:sample_size_iqr]
-            sample = normalized_weights[sample_indices]
-        else:
-            sample = normalized_weights
+        sample_for_iqr = normalized_weights.detach()
     
-    # Detach for IQR calculation (IQR doesn't need gradients)
-    sample_for_iqr = sample.detach() if requires_grad else sample
     q1 = torch.quantile(sample_for_iqr, 0.25)
     q3 = torch.quantile(sample_for_iqr, 0.75)
     iqr = q3 - q1
@@ -932,8 +928,10 @@ def main():
     # Override GPU index if specified
     if args.gpu is not None:
         config.GPU_INDEX = args.gpu
-        config.DEVICE = torch.device(f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu')
         print(f"Using GPU index from command line: {args.gpu}")
+    
+    # Set DEVICE based on final GPU_INDEX value
+    config.DEVICE = torch.device(f'cuda:{config.GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
     
     # Generate LMC weight sweep using START, END, and STEP
     num_steps = int(round((config.LMC_WEIGHT_END - config.LMC_WEIGHT_START) / config.LMC_WEIGHT_STEP)) + 1
