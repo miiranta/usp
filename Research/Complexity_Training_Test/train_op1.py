@@ -387,27 +387,34 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_value_scalar = lmc_scalar  # Keep scalar for logging
         
         # 1. Compute CE and LMC
-        lmc_loss = torch.log(lmc_value)
-
+        lmc_loss = torch.log(lmc_value + 1e-12)
+        
+        # Store baseline on first batch
+        if baseline_log_lmc is None:
+            baseline_log_lmc = lmc_loss.detach()
+        
         # 2. Automatic λ with EMA smoothing
-        grad_ce = compute_grad_norm(ce_loss, model)
-        grad_lmc = compute_grad_norm(lmc_loss, model)
-
-        # Initialize EMA on first batch
-        if grad_ce_ema is None:
-            grad_ce_ema = grad_ce
-            grad_lmc_ema = grad_lmc
+        if config.USE_AUTO_LAMBDA:
+            grad_ce = compute_grad_norm(ce_loss, model)
+            grad_lmc = compute_grad_norm(lmc_loss, model)
+            
+            # Initialize EMA on first batch
+            if grad_ce_ema is None:
+                grad_ce_ema = grad_ce
+                grad_lmc_ema = grad_lmc
+            else:
+                grad_ce_ema  = 0.95 * grad_ce_ema  + 0.05 * grad_ce
+                grad_lmc_ema = 0.95 * grad_lmc_ema + 0.05 * grad_lmc
+            
+            lambda_weight = grad_ce_ema / (grad_lmc_ema + 1e-12)
+            lambda_weight = min(lambda_weight, config.MAX_LAMBDA)
         else:
-            grad_ce_ema  = 0.95 * grad_ce_ema  + 0.05 * grad_ce
-            grad_lmc_ema = 0.95 * grad_lmc_ema + 0.05 * grad_lmc
-
-        lambda_weight = grad_ce_ema / (grad_lmc_ema + 1e-12)
-        lambda_weight = min(lambda_weight, config.MAX_LAMBDA)
-
+            lambda_weight = config.LMC_WEIGHT
+        
         # 3. Normalized complexity difference
-        lmc_delta = (baseline_log_lmc - lmc_loss) / abs(baseline_log_lmc)
-
-        # 4. Additive, not multiplicative loss
+        lmc_delta = (baseline_log_lmc - lmc_loss) / (abs(baseline_log_lmc) + 1e-12)
+        
+        # 4. Additive, not multiplicative loss (no exp() instabilities)
         combined_loss = ce_loss + lambda_weight * lmc_delta
         
         # Backward pass
