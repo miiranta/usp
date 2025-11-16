@@ -330,7 +330,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, scale
         if lmc_weight == 0:
             combined_loss = ce_loss
         elif lmc_weight == 1:
-            combined_loss = ce_loss / 0.01
+            combined_loss = ce_loss / 0.0176
         
         combined_loss = combined_loss / config.GRADIENT_ACCUMULATION_STEPS
         
