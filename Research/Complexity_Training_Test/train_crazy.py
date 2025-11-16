@@ -285,16 +285,23 @@ def calculate_lmc_from_weights(model, sample_size=0, requires_grad=False):
         # sigma = bin_width for smooth assignment
         sigma = 1.0 / num_bins
         
-        # Compute soft histogram: each weight contributes to nearby bins
-        # Shape: (num_weights, num_bins)
-        diff = normalized_weights.unsqueeze(1) - bin_centers.unsqueeze(0)
-        soft_assignments = torch.exp(-0.5 * (diff / sigma) ** 2)
+        # Process in chunks to avoid OOM (29M weights × 100 bins is too large)
+        chunk_size = 100000  # Process 100k weights at a time
+        hist = torch.zeros(num_bins, device=normalized_weights.device, requires_grad=True)
         
-        # Normalize assignments per weight (each weight distributes total mass of 1)
-        soft_assignments = soft_assignments / (soft_assignments.sum(dim=1, keepdim=True) + 1e-10)
-        
-        # Sum to get histogram
-        hist = soft_assignments.sum(dim=0)
+        for i in range(0, len(normalized_weights), chunk_size):
+            chunk = normalized_weights[i:i + chunk_size]
+            
+            # Compute soft histogram for this chunk: each weight contributes to nearby bins
+            # Shape: (chunk_size, num_bins)
+            diff = chunk.unsqueeze(1) - bin_centers.unsqueeze(0)
+            soft_assignments = torch.exp(-0.5 * (diff / sigma) ** 2)
+            
+            # Normalize assignments per weight (each weight distributes total mass of 1)
+            soft_assignments = soft_assignments / (soft_assignments.sum(dim=1, keepdim=True) + 1e-10)
+            
+            # Accumulate to histogram
+            hist = hist + soft_assignments.sum(dim=0)
     else:
         # Use fast non-differentiable histogram
         hist = torchist.histogram(normalized_weights, bins=num_bins, low=0.0, upp=1.0)
