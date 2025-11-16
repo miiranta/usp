@@ -254,37 +254,26 @@ def calculate_lmc_from_weights(model):
             data_range = float((weights_max - weights_min).item())
             num_bins = max(1, int(np.ceil(data_range / bin_width)))
     
-    # Create differentiable histogram using memory-efficient soft binning
-    # Process in chunks to avoid OOM with large weight tensors
+    # Create differentiable histogram using vectorized soft binning
+    # This avoids OOM by using scatter_add instead of creating large distance matrix
     bin_edges = torch.linspace(0.0, 1.0, num_bins + 1, device=normalized_weights.device)
     bin_width_tensor = bin_edges[1] - bin_edges[0]
     
-    # Use soft binning with triangular kernel (more memory efficient than Gaussian)
-    # Each weight contributes to its nearest bins based on distance
-    hist = torch.zeros(num_bins, device=normalized_weights.device, dtype=torch.float32)
+    # Find bin indices (differentiable through the fractional part)
+    bin_indices_float = normalized_weights / bin_width_tensor
+    bin_indices_floor = torch.floor(bin_indices_float)
+    bin_indices_left = bin_indices_floor.long().clamp(0, num_bins - 1)
+    bin_indices_right = (bin_indices_floor + 1).long().clamp(0, num_bins - 1)
     
-    # Process weights in chunks to avoid OOM
-    chunk_size = 100000  # Process 100k weights at a time
-    for i in range(0, len(normalized_weights), chunk_size):
-        chunk = normalized_weights[i:i+chunk_size]
-        
-        # Find bin indices for this chunk (differentiable)
-        bin_indices_float = chunk / bin_width_tensor
-        bin_indices_floor = torch.floor(bin_indices_float).long()
-        bin_indices_floor = torch.clamp(bin_indices_floor, 0, num_bins - 1)
-        
-        # Calculate fractional part for soft binning (differentiable)
-        frac = bin_indices_float - bin_indices_floor.float()
-        
-        # Distribute each weight between two adjacent bins (differentiable)
-        # Left bin gets (1 - frac), right bin gets frac
-        for j in range(len(chunk)):
-            left_idx = bin_indices_floor[j]
-            right_idx = min(left_idx + 1, num_bins - 1)
-            
-            hist[left_idx] = hist[left_idx] + (1.0 - frac[j])
-            if right_idx != left_idx:
-                hist[right_idx] = hist[right_idx] + frac[j]
+    # Calculate interpolation weights (differentiable)
+    frac = bin_indices_float - bin_indices_floor
+    weight_left = 1.0 - frac
+    weight_right = frac
+    
+    # Create histogram using scatter_add (differentiable and memory efficient)
+    hist = torch.zeros(num_bins, device=normalized_weights.device, dtype=normalized_weights.dtype)
+    hist.scatter_add_(0, bin_indices_left, weight_left)
+    hist.scatter_add_(0, bin_indices_right, weight_right)
     
     # Convert to probability distribution (differentiable)
     probs = hist / hist.sum()
