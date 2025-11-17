@@ -386,7 +386,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Other batches: optimize CE loss
         if batch_idx % 2 == 0:
             # Optimize for LMC: minimize 10/LMC (which maximizes LMC)
-            loss_to_optimize = 10.0 / (lmc_value + 1e-10)  # Add epsilon to avoid division by zero
+            loss_to_optimize = 1 / (lmc_value * 10 + 1e-10)  # Add epsilon to avoid division by zero
             lambda_weight = 0.0  # Not used in alternating mode, but keep for logging
         else:
             # Optimize CE loss
