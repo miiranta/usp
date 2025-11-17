@@ -12,12 +12,16 @@ output_dir = os.path.join(SCRIPT_DIR, "output")
 
 # Lists to store data
 lmc_weights = []
-test_losses_mean = []
-test_losses_std = []
-test_lmc_mean = []
-test_lmc_std = []
+test_losses_wiki_mean = []
+test_losses_wiki_std = []
+test_lmc_wiki_mean = []
+test_lmc_wiki_std = []
+test_losses_shakespeare_mean = []
+test_losses_shakespeare_std = []
+test_lmc_shakespeare_mean = []
+test_lmc_shakespeare_std = []
 
-# Dictionary to store training curves for each LMC weigh
+# Dictionary to store training curves for each LMC weight
 training_data = {}
 
 # Get all folders in the output directory
@@ -37,6 +41,34 @@ for folder in folders:
         # Read the file manually to extract summary metrics
         with open(csv_path, 'r') as f:
             lines = f.readlines()
+        
+        # Extract test metrics from summary section
+        test_loss_wiki = None
+        test_loss_wiki_std = None
+        test_lmc_wiki = None
+        test_lmc_wiki_std = None
+        test_loss_shakespeare = None
+        test_loss_shakespeare_std = None
+        test_lmc_shakespeare = None
+        test_lmc_shakespeare_std = None
+        
+        for i, line in enumerate(lines):
+            if 'Test Loss Mean' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
+                test_loss_wiki = float(line.split(',')[1].strip())
+            elif 'Test Loss Std' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
+                test_loss_wiki_std = float(line.split(',')[1].strip())
+            elif 'Test LMC Mean' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
+                test_lmc_wiki = float(line.split(',')[1].strip())
+            elif 'Test LMC Std' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
+                test_lmc_wiki_std = float(line.split(',')[1].strip())
+            elif 'Test Loss Mean' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
+                test_loss_shakespeare = float(line.split(',')[1].strip())
+            elif 'Test Loss Std' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
+                test_loss_shakespeare_std = float(line.split(',')[1].strip())
+            elif 'Test LMC Mean' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
+                test_lmc_shakespeare = float(line.split(',')[1].strip())
+            elif 'Test LMC Std' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
+                test_lmc_shakespeare_std = float(line.split(',')[1].strip())
         
         # Find the epoch-by-epoch data section
         epoch_start_idx = None
@@ -68,21 +100,25 @@ for folder in folders:
             if epoch_data:
                 training_data[lmc_weight] = epoch_data
                 
-                # Use final epoch values as test metrics
-                if epoch_data:
-                    test_loss_mean = epoch_data[-1]['val_loss_mean']
-                    test_loss_std = epoch_data[-1]['val_loss_std']
-                    test_lmc_mean_val = epoch_data[-1]['lmc_mean']
-                    test_lmc_std_val = epoch_data[-1]['lmc_std']
-                    
+                # Store test metrics if available
+                if all(v is not None for v in [test_loss_wiki, test_loss_wiki_std, test_lmc_wiki, test_lmc_wiki_std,
+                                                test_loss_shakespeare, test_loss_shakespeare_std, 
+                                                test_lmc_shakespeare, test_lmc_shakespeare_std]):
                     lmc_weights.append(lmc_weight)
-                    test_losses_mean.append(test_loss_mean)
-                    test_losses_std.append(test_loss_std)
-                    test_lmc_mean.append(test_lmc_mean_val)
-                    test_lmc_std.append(test_lmc_std_val)
+                    test_losses_wiki_mean.append(test_loss_wiki)
+                    test_losses_wiki_std.append(test_loss_wiki_std)
+                    test_lmc_wiki_mean.append(test_lmc_wiki)
+                    test_lmc_wiki_std.append(test_lmc_wiki_std)
+                    test_losses_shakespeare_mean.append(test_loss_shakespeare)
+                    test_losses_shakespeare_std.append(test_loss_shakespeare_std)
+                    test_lmc_shakespeare_mean.append(test_lmc_shakespeare)
+                    test_lmc_shakespeare_std.append(test_lmc_shakespeare_std)
                     
-                    print(f"LMC Weight: {lmc_weight:.2f}, Test Loss: {test_loss_mean:.4f}±{test_loss_std:.4f}, "
-                          f"Test LMC: {test_lmc_mean_val:.4f}±{test_lmc_std_val:.4f}")
+                    print(f"LMC Weight: {lmc_weight:.2f}")
+                    print(f"  WikiText-2 - Test Loss: {test_loss_wiki:.4f}±{test_loss_wiki_std:.4f}, "
+                          f"Test LMC: {test_lmc_wiki:.4f}±{test_lmc_wiki_std:.4f}")
+                    print(f"  Tiny-Shakespeare - Test Loss: {test_loss_shakespeare:.4f}±{test_loss_shakespeare_std:.4f}, "
+                          f"Test LMC: {test_lmc_shakespeare:.4f}±{test_lmc_shakespeare_std:.4f}")
     else:
         print(f"Aggregate CSV not found for {folder}")
 
@@ -91,54 +127,94 @@ if not lmc_weights:
     exit(1)
 
 # ============================================================================
-# PLOT 1: Test Loss and Test LMC vs LMC Weight with 95% CI
+# PLOT 1: Test Loss and Test LMC vs LMC Weight with 95% CI (WikiText-2 and Tiny-Shakespeare)
 # ============================================================================
 
-fig, ax1 = plt.subplots(figsize=(12, 7))
+fig, axes = plt.subplots(2, 2, figsize=(16, 12))
 
 # Convert to numpy arrays
 lmc_weights_array = np.array(lmc_weights)
-test_losses_mean = np.array(test_losses_mean)
-test_losses_std = np.array(test_losses_std)
-test_lmc_mean = np.array(test_lmc_mean)
-test_lmc_std = np.array(test_lmc_std)
+test_losses_wiki_mean = np.array(test_losses_wiki_mean)
+test_losses_wiki_std = np.array(test_losses_wiki_std)
+test_lmc_wiki_mean = np.array(test_lmc_wiki_mean)
+test_lmc_wiki_std = np.array(test_lmc_wiki_std)
+test_losses_shakespeare_mean = np.array(test_losses_shakespeare_mean)
+test_losses_shakespeare_std = np.array(test_losses_shakespeare_std)
+test_lmc_shakespeare_mean = np.array(test_lmc_shakespeare_mean)
+test_lmc_shakespeare_std = np.array(test_lmc_shakespeare_std)
 
 # Calculate 95% CI (1.96 * std)
 ci_factor = 1.96
-test_loss_ci = ci_factor * test_losses_std
-test_lmc_ci = ci_factor * test_lmc_std
 
-# Plot Test Loss on the left y-axis with 95% CI
+# --- WikiText-2 Plots ---
+
+# Plot 1.1: WikiText-2 Test Loss
+ax1 = axes[0, 0]
+test_loss_wiki_ci = ci_factor * test_losses_wiki_std
 color = 'tab:blue'
 ax1.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
-ax1.set_ylabel('Test Loss', color=color, fontsize=12, fontweight='bold')
-ax1.plot(lmc_weights_array, test_losses_mean, marker='o', linestyle='-', linewidth=2.5, 
+ax1.set_ylabel('Test Loss (WikiText-2)', color=color, fontsize=12, fontweight='bold')
+ax1.plot(lmc_weights_array, test_losses_wiki_mean, marker='o', linestyle='-', linewidth=2.5, 
          markersize=10, color=color, label='Test Loss (Mean)', zorder=3)
-ax1.fill_between(lmc_weights_array, test_losses_mean - test_loss_ci, test_losses_mean + test_loss_ci,
+ax1.fill_between(lmc_weights_array, test_losses_wiki_mean - test_loss_wiki_ci, 
+                 test_losses_wiki_mean + test_loss_wiki_ci,
                  alpha=0.2, color=color, label='Test Loss (95% CI)', zorder=2)
 ax1.tick_params(axis='y', labelcolor=color)
-ax1.grid(True, alpha=0.3, axis='x')
+ax1.grid(True, alpha=0.3)
+ax1.legend(loc='best')
+ax1.set_title('WikiText-2: Test Loss vs LMC Weight', fontsize=13, fontweight='bold')
 
-# Create a second y-axis for Test LMC
-ax2 = ax1.twinx()
+# Plot 1.2: WikiText-2 Test LMC
+ax2 = axes[0, 1]
+test_lmc_wiki_ci = ci_factor * test_lmc_wiki_std
 color = 'tab:red'
-ax2.set_ylabel('Test LMC Complexity', color=color, fontsize=12, fontweight='bold')
-ax2.plot(lmc_weights_array, test_lmc_mean, marker='s', linestyle='-', linewidth=2.5, 
+ax2.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
+ax2.set_ylabel('Test LMC (WikiText-2)', color=color, fontsize=12, fontweight='bold')
+ax2.plot(lmc_weights_array, test_lmc_wiki_mean, marker='s', linestyle='-', linewidth=2.5, 
          markersize=10, color=color, label='Test LMC (Mean)', zorder=3)
-ax2.fill_between(lmc_weights_array, test_lmc_mean - test_lmc_ci, test_lmc_mean + test_lmc_ci,
+ax2.fill_between(lmc_weights_array, test_lmc_wiki_mean - test_lmc_wiki_ci, 
+                 test_lmc_wiki_mean + test_lmc_wiki_ci,
                  alpha=0.2, color=color, label='Test LMC (95% CI)', zorder=2)
 ax2.tick_params(axis='y', labelcolor=color)
+ax2.grid(True, alpha=0.3)
+ax2.legend(loc='best')
+ax2.set_title('WikiText-2: Test LMC vs LMC Weight', fontsize=13, fontweight='bold')
 
-# Add title and legends
-plt.title('Test Loss and Test LMC Complexity vs LMC Weight (with 95% CI)', 
-          fontsize=14, fontweight='bold')
+# --- Tiny-Shakespeare Plots ---
 
-# Combine legends from both axes
-lines1, labels1 = ax1.get_legend_handles_labels()
-lines2, labels2 = ax2.get_legend_handles_labels()
-ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.1), 
-          ncol=2, frameon=True, fontsize=10)
+# Plot 1.3: Tiny-Shakespeare Test Loss
+ax3 = axes[1, 0]
+test_loss_shakespeare_ci = ci_factor * test_losses_shakespeare_std
+color = 'tab:purple'
+ax3.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
+ax3.set_ylabel('Test Loss (Tiny-Shakespeare)', color=color, fontsize=12, fontweight='bold')
+ax3.plot(lmc_weights_array, test_losses_shakespeare_mean, marker='o', linestyle='-', linewidth=2.5, 
+         markersize=10, color=color, label='Test Loss (Mean)', zorder=3)
+ax3.fill_between(lmc_weights_array, test_losses_shakespeare_mean - test_loss_shakespeare_ci, 
+                 test_losses_shakespeare_mean + test_loss_shakespeare_ci,
+                 alpha=0.2, color=color, label='Test Loss (95% CI)', zorder=2)
+ax3.tick_params(axis='y', labelcolor=color)
+ax3.grid(True, alpha=0.3)
+ax3.legend(loc='best')
+ax3.set_title('Tiny-Shakespeare: Test Loss vs LMC Weight', fontsize=13, fontweight='bold')
 
+# Plot 1.4: Tiny-Shakespeare Test LMC
+ax4 = axes[1, 1]
+test_lmc_shakespeare_ci = ci_factor * test_lmc_shakespeare_std
+color = 'tab:green'
+ax4.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
+ax4.set_ylabel('Test LMC (Tiny-Shakespeare)', color=color, fontsize=12, fontweight='bold')
+ax4.plot(lmc_weights_array, test_lmc_shakespeare_mean, marker='s', linestyle='-', linewidth=2.5, 
+         markersize=10, color=color, label='Test LMC (Mean)', zorder=3)
+ax4.fill_between(lmc_weights_array, test_lmc_shakespeare_mean - test_lmc_shakespeare_ci, 
+                 test_lmc_shakespeare_mean + test_lmc_shakespeare_ci,
+                 alpha=0.2, color=color, label='Test LMC (95% CI)', zorder=2)
+ax4.tick_params(axis='y', labelcolor=color)
+ax4.grid(True, alpha=0.3)
+ax4.legend(loc='best')
+ax4.set_title('Tiny-Shakespeare: Test LMC vs LMC Weight', fontsize=13, fontweight='bold')
+
+fig.suptitle('Test Metrics vs LMC Weight (with 95% CI)', fontsize=15, fontweight='bold', y=0.995)
 fig.tight_layout()
 output_plot_path = os.path.join(SCRIPT_DIR, 'plot_test_loss_and_lmc_aggregate.png')
 plt.savefig(output_plot_path, dpi=300, bbox_inches='tight')
@@ -350,10 +426,84 @@ plt.savefig(output_3d_path, dpi=300, bbox_inches='tight')
 print(f"3D plots saved as '{output_3d_path}'")
 plt.show()
 
+# ============================================================================
+# PLOT 4: Bar charts comparing test losses for each dataset
+# ============================================================================
+
+print("\nGenerating bar chart comparison plots...")
+
+fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+# Calculate 95% CI (1.96 * std)
+ci_factor = 1.96
+
+# Prepare data for bar charts
+x_positions = np.arange(len(lmc_weights_array))
+bar_width = 0.35
+
+# --- WikiText-2 Bar Chart ---
+ax1 = axes[0]
+wiki_ci = ci_factor * test_losses_wiki_std
+
+bars1 = ax1.bar(x_positions, test_losses_wiki_mean, bar_width, 
+                yerr=wiki_ci, capsize=5, alpha=0.8, color='steelblue',
+                edgecolor='black', linewidth=1.5, error_kw={'linewidth': 2, 'ecolor': 'darkred'})
+
+ax1.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
+ax1.set_ylabel('Test Loss', fontsize=12, fontweight='bold')
+ax1.set_title('WikiText-2: Test Loss by LMC Weight (with 95% CI)', fontsize=13, fontweight='bold')
+ax1.set_xticks(x_positions)
+ax1.set_xticklabels([f'{w:.2f}' for w in lmc_weights_array], rotation=45, ha='right')
+ax1.grid(True, alpha=0.3, axis='y')
+
+# Add value labels on bars
+for i, (bar, val, err) in enumerate(zip(bars1, test_losses_wiki_mean, wiki_ci)):
+    height = bar.get_height()
+    ax1.text(bar.get_x() + bar.get_width()/2., height + err + 0.01,
+             f'{val:.3f}±{err:.3f}',
+             ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+# --- Tiny-Shakespeare Bar Chart ---
+ax2 = axes[1]
+shakespeare_ci = ci_factor * test_losses_shakespeare_std
+
+bars2 = ax2.bar(x_positions, test_losses_shakespeare_mean, bar_width,
+                yerr=shakespeare_ci, capsize=5, alpha=0.8, color='coral',
+                edgecolor='black', linewidth=1.5, error_kw={'linewidth': 2, 'ecolor': 'darkred'})
+
+ax2.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
+ax2.set_ylabel('Test Loss', fontsize=12, fontweight='bold')
+ax2.set_title('Tiny-Shakespeare: Test Loss by LMC Weight (with 95% CI)', fontsize=13, fontweight='bold')
+ax2.set_xticks(x_positions)
+ax2.set_xticklabels([f'{w:.2f}' for w in lmc_weights_array], rotation=45, ha='right')
+ax2.grid(True, alpha=0.3, axis='y')
+
+# Add value labels on bars
+for i, (bar, val, err) in enumerate(zip(bars2, test_losses_shakespeare_mean, shakespeare_ci)):
+    height = bar.get_height()
+    ax2.text(bar.get_x() + bar.get_width()/2., height + err + 0.01,
+             f'{val:.3f}±{err:.3f}',
+             ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+fig.suptitle('Test Loss Comparison Across LMC Weights', fontsize=15, fontweight='bold', y=0.98)
+plt.tight_layout()
+output_bar_path = os.path.join(SCRIPT_DIR, 'plot_test_loss_bars.png')
+plt.savefig(output_bar_path, dpi=300, bbox_inches='tight')
+print(f"Bar chart comparison saved as '{output_bar_path}'")
+plt.show()
+
 print("="*70)
 print("SUMMARY STATISTICS")
 print("="*70)
 print(f"LMC Weight Range: {min(lmc_weights):.4f} to {max(lmc_weights):.4f}")
-print(f"Test Loss Range: {np.min(test_losses_mean):.4f} ± {np.std(test_losses_mean):.4f}")
-print(f"Test LMC Range: {np.min(test_lmc_mean):.4f} ± {np.std(test_lmc_mean):.4f}")
+print(f"\nWikiText-2:")
+print(f"  Test Loss Range: {np.min(test_losses_wiki_mean):.4f} to {np.max(test_losses_wiki_mean):.4f}")
+print(f"  Test Loss Std: {np.mean(test_losses_wiki_std):.4f} (mean)")
+print(f"  Test LMC Range: {np.min(test_lmc_wiki_mean):.4f} to {np.max(test_lmc_wiki_mean):.4f}")
+print(f"  Test LMC Std: {np.mean(test_lmc_wiki_std):.4f} (mean)")
+print(f"\nTiny-Shakespeare:")
+print(f"  Test Loss Range: {np.min(test_losses_shakespeare_mean):.4f} to {np.max(test_losses_shakespeare_mean):.4f}")
+print(f"  Test Loss Std: {np.mean(test_losses_shakespeare_std):.4f} (mean)")
+print(f"  Test LMC Range: {np.min(test_lmc_shakespeare_mean):.4f} to {np.max(test_lmc_shakespeare_mean):.4f}")
+print(f"  Test LMC Std: {np.mean(test_lmc_shakespeare_std):.4f} (mean)")
 print("="*70)
