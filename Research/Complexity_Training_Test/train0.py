@@ -224,7 +224,7 @@ class TransformerLLM(nn.Module):
 
 def calculate_lmc_from_weights(model):
     """
-    Calculate LMC complexity from model weights using Gaussian kernel soft binning.
+    Calculate LMC complexity from model weights in a fully differentiable way.
     Returns both tensor (for gradient computation) and scalar metrics (for logging).
     """
     # Collect ALL weights from the model (keeping gradients)
@@ -263,36 +263,26 @@ def calculate_lmc_from_weights(model):
             data_range = float((weights_max - weights_min).item())
             num_bins = max(1, int(np.ceil(data_range / bin_width)))
     
-    # Create bin centers
-    bin_centers = torch.linspace(0.0, 1.0, num_bins, device=normalized_weights.device)
-    bin_width_tensor = 1.0 / (num_bins - 1) if num_bins > 1 else 1.0
+    # Create differentiable histogram using vectorized soft binning
+    # This avoids OOM by using scatter_add instead of creating large distance matrix
+    bin_edges = torch.linspace(0.0, 1.0, num_bins + 1, device=normalized_weights.device)
+    bin_width_tensor = bin_edges[1] - bin_edges[0]
     
-    # Gaussian kernel bandwidth (using Silverman's rule of thumb)
-    # bandwidth = 1.06 * std * n^(-1/5)
-    with torch.no_grad():
-        std_val = normalized_weights.std().item()
-        bandwidth = 1.06 * std_val * (n ** (-0.2))
-        bandwidth = max(bandwidth, bin_width_tensor * 0.5)  # Ensure minimum bandwidth
+    # Find bin indices (differentiable through the fractional part)
+    bin_indices_float = normalized_weights / bin_width_tensor
+    bin_indices_floor = torch.floor(bin_indices_float)
+    bin_indices_left = bin_indices_floor.long().clamp(0, num_bins - 1)
+    bin_indices_right = (bin_indices_floor + 1).long().clamp(0, num_bins - 1)
     
-    # Gaussian soft binning: compute weight of each data point to each bin
-    # For memory efficiency, use very small chunks and free memory aggressively
-    chunk_size = 100  # Very small chunks to minimize peak memory
+    # Calculate interpolation weights (differentiable)
+    frac = bin_indices_float - bin_indices_floor
+    weight_left = 1.0 - frac
+    weight_right = frac
+    
+    # Create histogram using scatter_add (differentiable and memory efficient)
     hist = torch.zeros(num_bins, device=normalized_weights.device, dtype=normalized_weights.dtype)
-    
-    for i in range(0, len(normalized_weights), chunk_size):
-        chunk = normalized_weights[i:i+chunk_size]
-        # Compute Gaussian kernel: exp(-0.5 * ((x - center) / bandwidth)^2)
-        # Shape: (chunk_size, num_bins)
-        distances = (chunk.unsqueeze(1) - bin_centers.unsqueeze(0)) / bandwidth
-        gaussian_weights = torch.exp(-0.5 * distances ** 2)
-        # Sum contributions from this chunk to each bin
-        hist.add_(gaussian_weights.sum(dim=0))
-        # Free intermediate tensors immediately
-        del distances, gaussian_weights
-    
-    # Clear cache after binning
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    hist.scatter_add_(0, bin_indices_left, weight_left)
+    hist.scatter_add_(0, bin_indices_right, weight_right)
     
     # Convert to probability distribution (differentiable)
     probs = hist / hist.sum()
@@ -312,6 +302,9 @@ def calculate_lmc_from_weights(model):
     
     # LMC complexity: C = H × D (differentiable)
     lmc = shannon_entropy * disequilibrium
+    
+    # Compute bin centers for plotting (from bin edges)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
     
     # Return: (lmc_tensor, lmc_scalar, entropy_scalar, diseq_scalar, num_bins, probs, bin_centers)
     # The tensor version is used in loss computation (keeps gradients)
