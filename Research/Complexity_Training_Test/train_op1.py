@@ -847,13 +847,13 @@ def run_training_single(output_dir, config, run_num):
     weights_disequilibrium_values = []
     num_bins_values = []
     
-    _, weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model)
+    _, start_weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model)
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
         train_loss, train_lmc, train_combined, train_lambda = train_epoch(
-            model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean=weights_lmc
+            model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean=start_weights_lmc
         )
         val_loss = validate(model, val_loader, device, vocab_size)
         
