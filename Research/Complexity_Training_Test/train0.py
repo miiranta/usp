@@ -479,27 +479,52 @@ def plot_weight_distribution(probs, bin_centers, epoch, output_dir, run_num):
     dist_dir = os.path.join(output_dir, 'distributions')
     os.makedirs(dist_dir, exist_ok=True)
     
-    plt.figure(figsize=(10, 6))
-    
     # Convert to numpy for plotting
     probs_np = probs.cpu().numpy()
     bin_centers_np = bin_centers.cpu().numpy()
     
-    # Plot distribution
-    plt.bar(bin_centers_np, probs_np, width=(bin_centers_np[1] - bin_centers_np[0]) * 0.8, 
+    # Save full data to CSV
+    csv_path = os.path.join(dist_dir, f'distribution_epoch_{epoch:03d}_run_{run_num}.csv')
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Bin_Center', 'Probability'])
+        for center, prob in zip(bin_centers_np, probs_np):
+            writer.writerow([f'{center:.16f}', f'{prob:.16f}'])
+    
+    # Limit bins for plotting (aggregate if necessary)
+    max_plot_bins = 1000
+    if len(probs_np) > max_plot_bins:
+        # Aggregate bins by summing probabilities
+        bin_factor = int(np.ceil(len(probs_np) / max_plot_bins))
+        plot_probs = []
+        plot_centers = []
+        for i in range(0, len(probs_np), bin_factor):
+            chunk_probs = probs_np[i:i+bin_factor]
+            chunk_centers = bin_centers_np[i:i+bin_factor]
+            plot_probs.append(chunk_probs.sum())
+            plot_centers.append(chunk_centers.mean())
+        plot_probs = np.array(plot_probs)
+        plot_centers = np.array(plot_centers)
+    else:
+        plot_probs = probs_np
+        plot_centers = bin_centers_np
+    
+    # Create plot
+    plt.figure(figsize=(10, 6))
+    plt.bar(plot_centers, plot_probs, width=(plot_centers[1] - plot_centers[0]) * 0.8 if len(plot_centers) > 1 else 0.01,
             alpha=0.7, color='steelblue', edgecolor='black')
     plt.xlabel('Normalized Weight Value', fontsize=12)
     plt.ylabel('Probability Density', fontsize=12)
     plt.title(f'Weight Distribution - Epoch {epoch} (Run {run_num})', fontsize=14)
     plt.grid(True, alpha=0.3)
     
-    # Add statistics text
+    # Add statistics text (computed from full data)
     entropy = -(probs_np * np.log(probs_np + 1e-10)).sum()
     uniform_prob = 1.0 / len(probs_np)
     disequilibrium = ((probs_np - uniform_prob) ** 2).sum()
     lmc = entropy * disequilibrium
     
-    stats_text = f'H (Entropy): {entropy:.4f}\nD (Disequilibrium): {disequilibrium:.4f}\nC (LMC): {lmc:.4f}'
+    stats_text = f'H (Entropy): {entropy:.4f}\nD (Disequilibrium): {disequilibrium:.4f}\nC (LMC): {lmc:.4f}\nBins (full): {len(probs_np)}\nBins (plot): {len(plot_probs)}'
     plt.text(0.02, 0.98, stats_text, transform=plt.gca().transAxes, 
              fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
