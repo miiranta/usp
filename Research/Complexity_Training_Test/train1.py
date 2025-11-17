@@ -382,19 +382,19 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_tensor, lmc_scalar, _, _, _ = calculate_lmc_from_weights(model)
             lmc_value = lmc_tensor  # Keep tensor for gradient computation
             lmc_value_scalar = lmc_scalar  # Keep scalar for logging
-        
-        # Automatic lambda estimation (gradient balancing)
-        if config.USE_AUTO_LAMBDA:
-            lambda_weight = estimate_lambda(ce_loss, lmc_value, model)
-            lambda_weight = torch.tensor(lambda_weight, device=device, dtype=ce_loss.dtype)
+ 
+        # Other batches: optimize CE loss
+        if batch_idx % 2 == 0:
+            # Optimize for LMC: minimize 10/LMC (which maximizes LMC)
+            loss_to_optimize = 10.0 / (lmc_value + 1e-10)  # Add epsilon to avoid division by zero
+            lambda_weight = 0.0  # Not used in alternating mode, but keep for logging
         else:
-            lambda_weight = config.LMC_WEIGHT
-            lambda_weight = torch.tensor(lambda_weight, device=device, dtype=ce_loss.dtype)
-        
-        combined_loss = ce_loss * torch.sqrt(torch.pow(lmc_mean / lmc_value, 1 + torch.log(lambda_weight)))
+            # Optimize CE loss
+            loss_to_optimize = ce_loss
+            lambda_weight = 0.0  # Not used in alternating mode, but keep for logging
         
         # Backward pass
-        combined_loss.backward()
+        loss_to_optimize.backward()
         
         # Optimization step
         if config.MAX_GRAD_NORM is not None:
@@ -406,16 +406,16 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Accumulate metrics (losses are already means from CrossEntropyLoss)
         total_loss += ce_loss.detach().item()
         total_lmc += lmc_value_scalar
-        total_combined_loss += combined_loss.detach().item()
-        total_lambda += lambda_weight if isinstance(lambda_weight, float) else lambda_weight
+        total_combined_loss += loss_to_optimize.detach().item()
+        total_lambda += lambda_weight
         total_samples += 1  # Count batches, not samples
         
         # Update progress bar
         progress_bar.set_postfix({
             'loss': f'{total_loss / total_samples:.4f}',
             'lmc': f'{total_lmc / total_samples:.4f}',
-            'λ': f'{total_lambda / total_samples:.4f}',
-            'combined': f'{total_combined_loss / total_samples:.4f}'
+            'mode': 'LMC' if batch_idx % 10 == 0 else 'CE',
+            'opt_loss': f'{loss_to_optimize.detach().item():.4f}'
         })
     
     avg_loss = total_loss / total_samples
