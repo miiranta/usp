@@ -385,7 +385,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lambda_weight = config.LMC_WEIGHT
             lambda_weight = torch.tensor(lambda_weight, device=device, dtype=ce_loss.dtype)
         
-        combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, 1 + torch.tanh(lambda_weight))
+        combined_loss = ce_loss * torch.pow(lmc_mean / lmc_value, 1 + torch.log(lambda_weight))
         
         # Backward pass
         combined_loss.backward()
