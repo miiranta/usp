@@ -28,7 +28,7 @@ class Config:
     EPOCHS = 30
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 500
+    MAX_SAMPLES = None
     
     # Automatic Lambda Estimation (Gradient Balancing)
     USE_AUTO_LAMBDA = False   # Enable automatic λ estimation
@@ -39,7 +39,7 @@ class Config:
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 2
+    NUM_OF_RUN_PER_CALL = 5
     
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
