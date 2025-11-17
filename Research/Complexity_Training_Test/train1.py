@@ -275,9 +275,8 @@ def calculate_lmc_from_weights(model):
         bandwidth = max(bandwidth, bin_width_tensor * 0.5)  # Ensure minimum bandwidth
     
     # Gaussian soft binning: compute weight of each data point to each bin
-    # For memory efficiency, process in smaller chunks
-    # Reduce chunk size to avoid OOM with large number of bins
-    chunk_size = min(1000, len(normalized_weights))  # Much smaller chunks
+    # For memory efficiency, use very small chunks and free memory aggressively
+    chunk_size = 100  # Very small chunks to minimize peak memory
     hist = torch.zeros(num_bins, device=normalized_weights.device, dtype=normalized_weights.dtype)
     
     for i in range(0, len(normalized_weights), chunk_size):
@@ -287,7 +286,13 @@ def calculate_lmc_from_weights(model):
         distances = (chunk.unsqueeze(1) - bin_centers.unsqueeze(0)) / bandwidth
         gaussian_weights = torch.exp(-0.5 * distances ** 2)
         # Sum contributions from this chunk to each bin
-        hist += gaussian_weights.sum(dim=0)
+        hist.add_(gaussian_weights.sum(dim=0))
+        # Free intermediate tensors immediately
+        del distances, gaussian_weights
+    
+    # Clear cache after binning
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     
     # Convert to probability distribution (differentiable)
     probs = hist / hist.sum()
