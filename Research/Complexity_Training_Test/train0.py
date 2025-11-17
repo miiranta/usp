@@ -275,8 +275,9 @@ def calculate_lmc_from_weights(model):
         bandwidth = max(bandwidth, bin_width_tensor * 0.5)  # Ensure minimum bandwidth
     
     # Gaussian soft binning: compute weight of each data point to each bin
-    # For memory efficiency, process in chunks if needed
-    chunk_size = 10000
+    # For memory efficiency, process in smaller chunks
+    # Reduce chunk size to avoid OOM with large number of bins
+    chunk_size = min(1000, len(normalized_weights))  # Much smaller chunks
     hist = torch.zeros(num_bins, device=normalized_weights.device, dtype=normalized_weights.dtype)
     
     for i in range(0, len(normalized_weights), chunk_size):
@@ -986,7 +987,7 @@ def run_training_single(output_dir, config, run_num):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
         # Determine if we should optimize for LMC (if validation loss increased last epoch)
-        optimize_lmc = (epoch > 0 and val_losses[-1] > prev_val_loss)
+        optimize_lmc = (epoch > 0 and val_losses[-1] < prev_val_loss)
         
         train_loss, train_lmc, train_combined, train_lambda = train_epoch(
             model, train_loader, optimizer, scheduler, device, config, vocab_size, 
