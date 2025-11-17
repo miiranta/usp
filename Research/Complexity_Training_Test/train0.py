@@ -24,22 +24,19 @@ class Config:
     NUM_ATTENTION_HEADS = 4 # Standard ratio (hidden_dim / num_heads = 64)
     
     # Training hyperparameters
-    BATCH_SIZE = 512 
-    EPOCHS = 20
+    BATCH_SIZE = 256 
+    EPOCHS = 30
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 500
     
     # LMC Complexity weight sweep configuration
-    LMC_WEIGHT_START = 0.0   # Starting value
-    LMC_WEIGHT_END = 4.0     # Ending value (inclusive)
+    LMC_WEIGHT_START = 1.0   # Starting value
+    LMC_WEIGHT_END = 1.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 1
-    
-    # LMC weight sampling configuration
-    LMC_SAMPLE_SIZE = 100000
+    NUM_OF_RUN_PER_CALL = 2
     
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
@@ -113,7 +110,13 @@ class TextDataset(Dataset):
         
         print(f"Tokenizing {file_path}...")
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            text = f.read()
+            # Check if it's a CSV file (tiny-shakespeare format)
+            if file_path.endswith('.csv'):
+                import csv
+                reader = csv.DictReader(f)
+                text = ''.join(row['text'] for row in reader)
+            else:
+                text = f.read()
         
         print(f"  File size: {len(text) / 1024 / 1024:.2f} MB")
         
@@ -216,72 +219,91 @@ class TransformerLLM(nn.Module):
 # LMC COMPLEXITY CALCULATION
 # ============================================================================
 
-def calculate_lmc_from_weights(model, sample_size=0):
-    # Collect ALL weights from the model
+def calculate_lmc_from_weights(model):
+    """
+    Calculate LMC complexity from model weights in a fully differentiable way.
+    Returns both tensor (for gradient computation) and scalar metrics (for logging).
+    """
+    # Collect ALL weights from the model (keeping gradients)
     all_weights = []
     for param in model.parameters():
-        # Clone parameters to prevent CUDA graph from tracking these accesses
-        all_weights.append(param.data.clone().view(-1))
+        all_weights.append(param.view(-1))
     
-    # Flatten all weights into a single tensor
+    # Flatten all weights into a single tensor (differentiable)
     weights = torch.cat(all_weights)
     
-    # Apply sampling if sample_size > 0
-    if sample_size > 0 and len(weights) > sample_size:
-        # Create random indices on the same device as weights to avoid CPU-GPU deadlock
-        sample_indices = torch.randperm(len(weights), device=weights.device)[:sample_size]
-        weights = weights[sample_indices]
-    
-    # Normalize weights to [0, 1] range
+    # Normalize weights to [0, 1] range (differentiable)
     weights_min = weights.min()
     weights_max = weights.max()
     normalized_weights = (weights - weights_min) / (weights_max - weights_min + 1e-10)
     
     # Calculate number of bins using Freedman-Diaconis rule
+    # Use detached values for bin calculation (doesn't need gradients)
     n = len(weights)
-    
-    # Sample 10,000 random values to calculate IQR (memory efficient)
     sample_size_iqr = min(10000, len(normalized_weights))
-    if len(normalized_weights) > sample_size_iqr:
-        sample_indices = torch.randperm(len(normalized_weights))[:sample_size_iqr]
-        sample = normalized_weights[sample_indices]
-    else:
-        sample = normalized_weights
     
-    q1 = torch.quantile(sample, 0.25)
-    q3 = torch.quantile(sample, 0.75)
-    iqr = q3 - q1
+    with torch.no_grad():
+        if len(normalized_weights) > sample_size_iqr:
+            sample_indices = torch.randperm(len(normalized_weights), device=normalized_weights.device)[:sample_size_iqr]
+            sample = normalized_weights[sample_indices]
+        else:
+            sample = normalized_weights
+        
+        q1 = torch.quantile(sample, 0.25)
+        q3 = torch.quantile(sample, 0.75)
+        iqr = q3 - q1
+        
+        if iqr == 0:
+            num_bins = max(1, int(np.ceil(float(np.sqrt(n)))))
+        else:
+            bin_width = float(2 * iqr.item() * (n ** (-1/3)))
+            data_range = float((weights_max - weights_min).item())
+            num_bins = max(1, int(np.ceil(data_range / bin_width)))
     
-    if iqr == 0:
-        num_bins = max(1, int(np.ceil(float(np.sqrt(n)))))
-    else:
-        bin_width = float(2 * iqr * (n ** (-1/3)))
-        data_range = float(weights_max - weights_min)
-        num_bins = max(1, int(np.ceil(data_range / bin_width)))
+    # Create differentiable histogram using vectorized soft binning
+    # This avoids OOM by using scatter_add instead of creating large distance matrix
+    bin_edges = torch.linspace(0.0, 1.0, num_bins + 1, device=normalized_weights.device)
+    bin_width_tensor = bin_edges[1] - bin_edges[0]
     
-    # Create histogram using GPU-accelerated torchist
-    hist = torchist.histogram(normalized_weights, bins=num_bins, low=0.0, upp=1.0)
+    # Find bin indices (differentiable through the fractional part)
+    bin_indices_float = normalized_weights / bin_width_tensor
+    bin_indices_floor = torch.floor(bin_indices_float)
+    bin_indices_left = bin_indices_floor.long().clamp(0, num_bins - 1)
+    bin_indices_right = (bin_indices_floor + 1).long().clamp(0, num_bins - 1)
     
-    # Convert to probability distribution
-    probs = hist.float() / hist.sum().float()
+    # Calculate interpolation weights (differentiable)
+    frac = bin_indices_float - bin_indices_floor
+    weight_left = 1.0 - frac
+    weight_right = frac
+    
+    # Create histogram using scatter_add (differentiable and memory efficient)
+    hist = torch.zeros(num_bins, device=normalized_weights.device, dtype=normalized_weights.dtype)
+    hist.scatter_add_(0, bin_indices_left, weight_left)
+    hist.scatter_add_(0, bin_indices_right, weight_right)
+    
+    # Convert to probability distribution (differentiable)
+    probs = hist / hist.sum()
     
     # Ensure valid probabilities (clip to avoid log(0))
     eps = 1e-10
     probs = torch.clamp(probs, eps, 1.0)
     probs = probs / probs.sum()  # Renormalize
     
-    # Calculate Shannon entropy: H = -sum(p_i * log(p_i))
+    # Calculate Shannon entropy: H = -sum(p_i * log(p_i)) (differentiable)
     shannon_entropy = -(probs * torch.log(probs)).sum()
     
-    # Calculate disequilibrium: D = sum((p_i - 1/N)^2)
+    # Calculate disequilibrium: D = sum((p_i - 1/N)^2) (differentiable)
     N = len(probs)
     uniform_prob = 1.0 / N
     disequilibrium = ((probs - uniform_prob) ** 2).sum()
     
-    # LMC complexity: C = H × D
+    # LMC complexity: C = H × D (differentiable)
     lmc = shannon_entropy * disequilibrium
     
-    return lmc.item(), shannon_entropy.item(), disequilibrium.item(), num_bins
+    # Return: (lmc_tensor, lmc_scalar, entropy_scalar, diseq_scalar, num_bins)
+    # The tensor version is used in loss computation (keeps gradients)
+    # The scalar versions are used for logging only
+    return lmc, lmc.item(), shannon_entropy.item(), disequilibrium.item(), num_bins
 
 
 # ============================================================================
@@ -319,28 +341,16 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         labels_flat = labels.view(-1)
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
-        # Calculate LMC every COMPLEXITY_UPDATE_INTERVAL batches (or if not yet calculated)
-        if lmc_weight != 0:
-            if lmc_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
-                lmc_value, _, _, _ = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-        else:
-            lmc_value = 1.0 
+        lmc_value = torch.tensor(1.0, device=device)  # Dummy tensor
+        lmc_value_scalar = 1.0
         
         # Combined objective using different formulations based on lmc_weight
-        # Use lmc_weight to select which loss formulation to use:
-        # 0: loss
-        # 1: loss/lmc
+        # Use lmc_weight to control the importance of lmc_value:
+        # lmc_weight=0: combined_loss = ce_loss (no complexity penalty)
+        # lmc_weight=1: combined_loss = ce_loss * (lmc_mean / lmc_value) (full complexity penalty)
+        # 0 < lmc_weight < 1: interpolate between the two extremes
         
-        if lmc_weight == 0:
-            combined_loss = ce_loss
-        elif lmc_weight == 1:
-            combined_loss = ce_loss * (lmc_mean / lmc_value)
-        elif lmc_weight == 2:
-            combined_loss = ce_loss * ((lmc_mean / lmc_value) ** 2)
-        elif lmc_weight == 3:
-            combined_loss = ce_loss * (lmc_value / lmc_mean)
-        elif lmc_weight == 4:
-            combined_loss = ce_loss ** (lmc_mean / lmc_value)
+        combined_loss = ce_loss
         
         # Backward pass
         combined_loss.backward()
@@ -354,7 +364,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         
         # Accumulate metrics (losses are already means from CrossEntropyLoss)
         total_loss += ce_loss.detach().item()
-        total_lmc += lmc_value
+        total_lmc += lmc_value_scalar
         total_combined_loss += combined_loss.detach().item()
         total_samples += 1  # Count batches, not samples
         
@@ -424,7 +434,8 @@ def test(model, test_loader, device, vocab_size):
 
 def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, 
                        weights_entropy_values, weights_disequilibrium_values, 
-                       num_bins_values, test_loss, test_metrics, config, run_num=1):
+                       num_bins_values, test_loss_wiki, test_metrics_wiki, 
+                       test_loss_shakespeare, test_metrics_shakespeare, config, run_num=1):
     """Save training results to CSV file"""
     csv_filename = f'z_loss_test_results_transformers-{run_num}.csv'
     csv_path = os.path.join(output_dir, csv_filename)
@@ -434,11 +445,21 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values,
         
         # Summary metrics
         writer.writerow(['Metric', 'Value'])
-        writer.writerow(['Test Loss', f'{test_loss:.16f}'])
-        writer.writerow(['Test LMC Complexity', f'{test_metrics[0]:.16f}'])
-        writer.writerow(['Test Weights Entropy', f'{test_metrics[1]:.16f}'])
-        writer.writerow(['Test Weights Disequilibrium', f'{test_metrics[2]:.16f}'])
-        writer.writerow(['Test Weights Bins (Freedman-Diaconis)', f'{test_metrics[3]}'])
+        writer.writerow(['=== WikiText-2 Test Results ===', ''])
+        writer.writerow(['Test Loss (WikiText-2)', f'{test_loss_wiki:.16f}'])
+        writer.writerow(['Test LMC Complexity (WikiText-2)', f'{test_metrics_wiki[0]:.16f}'])
+        writer.writerow(['Test Weights Entropy (WikiText-2)', f'{test_metrics_wiki[1]:.16f}'])
+        writer.writerow(['Test Weights Disequilibrium (WikiText-2)', f'{test_metrics_wiki[2]:.16f}'])
+        writer.writerow(['Test Weights Bins (WikiText-2)', f'{test_metrics_wiki[3]}'])
+        writer.writerow([])
+        writer.writerow(['=== Tiny-Shakespeare Test Results ===', ''])
+        writer.writerow(['Test Loss (Tiny-Shakespeare)', f'{test_loss_shakespeare:.16f}'])
+        writer.writerow(['Test LMC Complexity (Tiny-Shakespeare)', f'{test_metrics_shakespeare[0]:.16f}'])
+        writer.writerow(['Test Weights Entropy (Tiny-Shakespeare)', f'{test_metrics_shakespeare[1]:.16f}'])
+        writer.writerow(['Test Weights Disequilibrium (Tiny-Shakespeare)', f'{test_metrics_shakespeare[2]:.16f}'])
+        writer.writerow(['Test Weights Bins (Tiny-Shakespeare)', f'{test_metrics_shakespeare[3]}'])
+        writer.writerow([])
+        writer.writerow(['=== Training Summary ===', ''])
         writer.writerow(['Final Training Loss', f'{train_losses[-1]:.16f}'])
         writer.writerow(['Final Validation Loss', f'{val_losses[-1]:.16f}'])
         writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.16f}'])
@@ -464,7 +485,7 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values,
     print(f"Results saved to '{csv_path}'")
 
 
-def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, config, run_num=1):
+def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss_wiki, test_loss_shakespeare, config, run_num=1):
     plot_filename = f'z_loss_training_losses_transformers-{run_num}.png'
     plot_path = os.path.join(output_dir, plot_filename)
     
@@ -477,7 +498,8 @@ def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, co
     # Primary y-axis: Losses
     ax1.plot(epochs, train_losses, label='Training Loss', marker='o', color='blue')
     ax1.plot(epochs, val_losses, label='Validation Loss', marker='s', color='orange')
-    ax1.axhline(y=test_loss, color='red', linestyle='--', label=f'Test Loss ({test_loss:.16f})')
+    ax1.axhline(y=test_loss_wiki, color='red', linestyle='--', label=f'Test Loss WikiText-2 ({test_loss_wiki:.16f})')
+    ax1.axhline(y=test_loss_shakespeare, color='purple', linestyle=':', label=f'Test Loss Tiny-Shakespeare ({test_loss_shakespeare:.16f})')
     ax1.set_xlabel('Epoch', fontsize=12)
     ax1.set_ylabel('Loss', fontsize=12, color='black')
     ax1.tick_params(axis='y', labelcolor='black')
@@ -693,9 +715,10 @@ def run_training_single(output_dir, config, run_num):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     train_path = os.path.join(script_dir, 'dataset/wikitext-2/wiki.train.tokens')
     val_path = os.path.join(script_dir, 'dataset/wikitext-2/wiki.valid.tokens')
-    test_path = os.path.join(script_dir, 'dataset/wikitext-2/wiki.test.tokens')
+    test_path_wiki = os.path.join(script_dir, 'dataset/wikitext-2/wiki.test.tokens')
+    test_path_shakespeare = os.path.join(script_dir, 'dataset/tiny-shakespare/test.csv')
     
-    for path in [train_path, val_path, test_path]:
+    for path in [train_path, val_path, test_path_wiki, test_path_shakespeare]:
         if not os.path.exists(path):
             print(f"Error: Dataset file '{path}' not found!")
             return
@@ -703,19 +726,21 @@ def run_training_single(output_dir, config, run_num):
     print("Loading datasets...")
     train_dataset = TextDataset(train_path, tokenizer, config.SEQ_LENGTH, config.MAX_SAMPLES)
     val_dataset = TextDataset(val_path, tokenizer, config.SEQ_LENGTH, None) 
-    test_dataset = TextDataset(test_path, tokenizer, config.SEQ_LENGTH, None) 
+    test_dataset_wiki = TextDataset(test_path_wiki, tokenizer, config.SEQ_LENGTH, None)
+    test_dataset_shakespeare = TextDataset(test_path_shakespeare, tokenizer, config.SEQ_LENGTH, None) 
     
     # Print dataset token summary (only for first run)
     if run_num == 1:
-        total_tokens = len(train_dataset.input_ids) + len(val_dataset.input_ids) + len(test_dataset.input_ids)
+        total_tokens = len(train_dataset.input_ids) + len(val_dataset.input_ids) + len(test_dataset_wiki.input_ids) + len(test_dataset_shakespeare.input_ids)
         print(f"\n{'='*70}")
         print(f"DATASET TOKEN SUMMARY")
         print(f"{'='*70}")
-        print(f"Training tokens:   {len(train_dataset.input_ids):>20,}")
-        print(f"Validation tokens: {len(val_dataset.input_ids):>20,}")
-        print(f"Test tokens:       {len(test_dataset.input_ids):>20,}")
+        print(f"Training tokens:            {len(train_dataset.input_ids):>20,}")
+        print(f"Validation tokens:          {len(val_dataset.input_ids):>20,}")
+        print(f"Test tokens (WikiText-2):   {len(test_dataset_wiki.input_ids):>20,}")
+        print(f"Test tokens (Tiny-Shakes.): {len(test_dataset_shakespeare.input_ids):>20,}")
         print(f"{'─'*70}")
-        print(f"Total tokens:      {total_tokens:>20,}")
+        print(f"Total tokens:               {total_tokens:>20,}")
         print(f"{'='*70}\n")
     
     # Create data loaders with persistent workers for faster epoch transitions
@@ -729,8 +754,13 @@ def run_training_single(output_dir, config, run_num):
         num_workers=config.NUM_WORKERS, pin_memory=True,
         persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
-    test_loader = DataLoader(
-        test_dataset, batch_size=config.BATCH_SIZE, shuffle=False,
+    test_loader_wiki = DataLoader(
+        test_dataset_wiki, batch_size=config.BATCH_SIZE, shuffle=False,
+        num_workers=config.NUM_WORKERS, pin_memory=True,
+        persistent_workers=True if config.NUM_WORKERS > 0 else False
+    )
+    test_loader_shakespeare = DataLoader(
+        test_dataset_shakespeare, batch_size=config.BATCH_SIZE, shuffle=False,
         num_workers=config.NUM_WORKERS, pin_memory=True,
         persistent_workers=True if config.NUM_WORKERS > 0 else False
     )
@@ -794,7 +824,7 @@ def run_training_single(output_dir, config, run_num):
     weights_disequilibrium_values = []
     num_bins_values = []
     
-    weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+    _, weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model)
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
@@ -804,7 +834,7 @@ def run_training_single(output_dir, config, run_num):
         )
         val_loss = validate(model, val_loader, device, vocab_size)
         
-        weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
+        _, weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model)
         
         # Store metrics
         train_losses.append(train_loss)
@@ -818,20 +848,29 @@ def run_training_single(output_dir, config, run_num):
         print(f"Validation Loss: {val_loss:.16f}")
         print(f"Model LMC (per-epoch weights): {weights_lmc:.16f}")
     
-    # Test
-    print("\nEvaluating on test set...")
-    test_loss = test(model, test_loader, device, vocab_size)
-    test_metrics = calculate_lmc_from_weights(model, sample_size=config.LMC_SAMPLE_SIZE)
-    print(f"Test Loss: {test_loss:.16f}")
-    print(f"Test LMC: {test_metrics[0]:.16f} (bins={test_metrics[3]})\n")
+    # Test on both datasets
+    print("\nEvaluating on test sets...")
+    print("Testing on WikiText-2...")
+    test_loss_wiki = test(model, test_loader_wiki, device, vocab_size)
+    _, test_lmc_wiki, test_entropy_wiki, test_diseq_wiki, test_bins_wiki = calculate_lmc_from_weights(model)
+    test_metrics_wiki = (test_lmc_wiki, test_entropy_wiki, test_diseq_wiki, test_bins_wiki)
+    print(f"Test Loss (WikiText-2): {test_loss_wiki:.16f}")
+    print(f"Test LMC (WikiText-2): {test_metrics_wiki[0]:.16f} (bins={test_metrics_wiki[3]})")
+    
+    print("\nTesting on Tiny-Shakespeare...")
+    test_loss_shakespeare = test(model, test_loader_shakespeare, device, vocab_size)
+    _, test_lmc_shakespeare, test_entropy_shakespeare, test_diseq_shakespeare, test_bins_shakespeare = calculate_lmc_from_weights(model)
+    test_metrics_shakespeare = (test_lmc_shakespeare, test_entropy_shakespeare, test_diseq_shakespeare, test_bins_shakespeare)
+    print(f"Test Loss (Tiny-Shakespeare): {test_loss_shakespeare:.16f}")
+    print(f"Test LMC (Tiny-Shakespeare): {test_metrics_shakespeare[0]:.16f} (bins={test_metrics_shakespeare[3]})\n")
     
     # Save results with run number
     save_results_to_csv(
         output_dir, train_losses, val_losses, lmc_values,
         weights_entropy_values, weights_disequilibrium_values, num_bins_values,
-        test_loss, test_metrics, config, run_num
+        test_loss_wiki, test_metrics_wiki, test_loss_shakespeare, test_metrics_shakespeare, config, run_num
     )
-    plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss, config, run_num)
+    plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss_wiki, test_loss_shakespeare, config, run_num)
 
 
 def run_training(output_dir, config):
