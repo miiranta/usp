@@ -881,8 +881,8 @@ def run_training_single(output_dir, config, run_num):
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
-        # Determine if we should optimize for LMC (if validation loss decreased last epoch)
-        optimize_lmc = (epoch > 0 and val_losses[-1] < prev_val_loss)
+        # Determine if we should optimize for LMC (if validation loss increased last epoch)
+        optimize_lmc = (epoch > 0 and val_losses[-1] > prev_val_loss)
         
         train_loss, train_lmc, train_combined, train_lambda = train_epoch(
             model, train_loader, optimizer, scheduler, device, config, vocab_size, 
