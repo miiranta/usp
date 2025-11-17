@@ -350,7 +350,7 @@ def estimate_lambda(ce_loss, lmc_loss, model, eps=1e-12):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean, optimize_lmc=False):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
@@ -360,7 +360,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     
     lmc_value = None
     
-    progress_bar = tqdm(train_loader, desc="Training")
+    mode_str = "LMC" if optimize_lmc else "CE"
+    progress_bar = tqdm(train_loader, desc=f"Training ({mode_str})")
     
     for batch_idx, batch in enumerate(progress_bar):
         # Mark step begin for CUDA graphs compatibility
@@ -383,10 +384,10 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_value = lmc_tensor  # Keep tensor for gradient computation
             lmc_value_scalar = lmc_scalar  # Keep scalar for logging
  
-        # Other batches: optimize CE loss
-        if batch_idx % 2 == 0:
-            # Optimize for LMC: minimize 10/LMC (which maximizes LMC)
-            loss_to_optimize = 1 / (lmc_value * 10 + 1e-10)  # Add epsilon to avoid division by zero
+        # Optimize based on whether validation loss decreased in previous epoch
+        if optimize_lmc:
+            # Optimize for LMC: minimize 1/(LMC*10) (which maximizes LMC)
+            loss_to_optimize = 1.0 / (lmc_value * 10.0 + 1e-10)  # Add epsilon to avoid division by zero
             lambda_weight = 0.0  # Not used in alternating mode, but keep for logging
         else:
             # Optimize CE loss
@@ -414,7 +415,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         progress_bar.set_postfix({
             'loss': f'{total_loss / total_samples:.4f}',
             'lmc': f'{total_lmc / total_samples:.4f}',
-            'mode': 'LMC' if batch_idx % 10 == 0 else 'CE',
+            'mode': mode_str,
             'opt_loss': f'{loss_to_optimize.detach().item():.4f}'
         })
     
@@ -875,12 +876,19 @@ def run_training_single(output_dir, config, run_num):
     
     _, start_weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model)
     
+    prev_val_loss = float('inf')  # Initialize with infinity for first epoch
+    
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
+        # Determine if we should optimize for LMC (if validation loss decreased last epoch)
+        optimize_lmc = (epoch > 0 and val_losses[-1] < prev_val_loss)
+        
         train_loss, train_lmc, train_combined, train_lambda = train_epoch(
-            model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean=start_weights_lmc
+            model, train_loader, optimizer, scheduler, device, config, vocab_size, 
+            lmc_mean=start_weights_lmc, optimize_lmc=optimize_lmc
         )
+        prev_val_loss = val_losses[-1] if len(val_losses) > 0 else float('inf')
         val_loss = validate(model, val_loader, device, vocab_size)
         
         _, weights_lmc, weights_entropy, weights_diseq, num_bins = calculate_lmc_from_weights(model)
