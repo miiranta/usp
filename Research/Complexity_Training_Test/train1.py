@@ -32,7 +32,7 @@ class Config:
     
     # Smooth Gradient Approach Configuration
     USE_SMOOTH_GRADIENT = True   # Enable smooth gradient approach
-    SMOOTH_ALPHA_START = 0.0     # Starting value for alpha (0 = pure CE, 1 = pure LMC)
+    SMOOTH_BETA_START = 0.0      # Starting value for beta (0 = pure CE, 1 = pure LMC)
     
     # LMC Complexity weight sweep configuration (used when USE_SMOOTH_GRADIENT=False)
     LMC_WEIGHT_START = 3.0   # Starting value
@@ -355,7 +355,7 @@ def estimate_lambda(ce_loss, lmc_loss, model, eps=1e-12):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_start, ce_start, alpha=0.0):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_start, ce_start, beta=0.0):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
@@ -364,9 +364,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     total_samples = 0
     
     lmc_value = None
-    current_alpha = alpha
+    current_beta = beta
     
-    mode_str = f"Smooth (α={alpha:.3f})"
+    mode_str = f"Smooth (β={beta:.3f})"
     progress_bar = tqdm(train_loader, desc=f"Training ({mode_str})")
     
     for batch_idx, batch in enumerate(progress_bar):
@@ -390,22 +390,21 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_value = lmc_tensor  # Keep tensor for gradient computation
             lmc_value_scalar = lmc_scalar  # Keep scalar for logging
  
-        # Calculate alpha dynamically based on gradient norms
-        # alpha = ||∇LMC|| / (||∇LMC|| + ||∇CE||)
-        # This balances the contribution of both loss terms
+        # Calculate alpha dynamically based on gradient norms for logging
+        # alpha = ||∇CE|| / (||∇LMC|| + ||∇CE||)
         lmc_loss_normalized = (lmc_start / lmc_value) * ce_start
         
         grad_lmc_norm = compute_grad_norm(lmc_loss_normalized, model)
         grad_ce_norm = compute_grad_norm(ce_loss, model)
         
-        # Calculate alpha (protect against division by zero)
+        # Calculate alpha for logging (protect against division by zero)
         if grad_lmc_norm + grad_ce_norm > 1e-12:
             current_alpha = grad_ce_norm / (grad_lmc_norm + grad_ce_norm)
         else:
             current_alpha = 0.0
         
-        # Combine losses with calculated alpha
-        combined_loss = current_alpha * lmc_loss_normalized + (1.0 - current_alpha) * ce_loss
+        # Combine losses with beta (adjusted based on validation loss trajectory)
+        combined_loss = current_beta * lmc_loss_normalized + (1.0 - current_beta) * ce_loss
         
         # Backward pass on combined loss
         combined_loss.backward()
@@ -429,6 +428,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             'loss': f'{total_loss / total_samples:.4f}',
             'lmc': f'{total_lmc / total_samples:.4f}',
             'alpha': f'{current_alpha:.3f}',
+            'beta': f'{current_beta:.3f}',
             'combined': f'{combined_loss.detach().item():.4f}'
         })
     
@@ -437,7 +437,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     avg_combined = total_combined_loss / total_samples
     avg_alpha = total_alpha / total_samples
     
-    return avg_loss, avg_lmc, avg_combined, avg_alpha
+    return avg_loss, avg_lmc, avg_combined, avg_alpha, current_beta
 
 
 def validate(model, val_loader, device, vocab_size):
@@ -556,7 +556,7 @@ def plot_weight_distribution(probs, bin_centers, epoch, output_dir, run_num):
 def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, lambda_values,
                        weights_entropy_values, weights_disequilibrium_values, 
                        num_bins_values, test_loss_wiki, test_metrics_wiki, 
-                       test_loss_shakespeare, test_metrics_shakespeare, config, run_num=1, alpha_history=None):
+                       test_loss_shakespeare, test_metrics_shakespeare, config, run_num=1, alpha_history=None, beta_history=None):
     """Save training results to CSV file"""
     csv_filename = f'z_loss_test_results_transformers-{run_num}.csv'
     csv_path = os.path.join(output_dir, csv_filename)
@@ -585,22 +585,26 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, lambda
         writer.writerow(['Final Validation Loss', f'{val_losses[-1]:.16f}'])
         writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.16f}'])
         writer.writerow(['Final Alpha', f'{lambda_values[-1]:.16f}'])
+        writer.writerow(['Final Beta', f'{beta_history[-1] if beta_history else "N/A"}'])
         writer.writerow(['Smooth Gradient Enabled', f'{config.USE_SMOOTH_GRADIENT}'])
-        writer.writerow(['Alpha Calculation', 'Dynamic: ||∇LMC|| / (||∇LMC|| + ||∇CE||)'])
+        writer.writerow(['Alpha Calculation', 'Dynamic: ||∇CE|| / (||∇LMC|| + ||∇CE||)'])
+        writer.writerow(['Beta Adjustment', 'Dynamic: β ± α based on validation loss trajectory'])
         writer.writerow(['Run Number', f'{run_num}'])
         writer.writerow([])
         
         # Epoch-by-epoch data
-        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Model LMC', 'Alpha',
+        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Model LMC', 'Alpha', 'Beta',
                         'Weights Entropy', 'Weights Disequilibrium', 'Num Bins'])
         for epoch in range(len(train_losses)):
             alpha_val = alpha_history[epoch] if alpha_history and epoch < len(alpha_history) else lambda_values[epoch]
+            beta_val = beta_history[epoch] if beta_history and epoch < len(beta_history) else "N/A"
             writer.writerow([
                 epoch + 1,
                 f'{train_losses[epoch]:.16f}',
                 f'{val_losses[epoch]:.16f}',
                 f'{lmc_values[epoch]:.16f}',
                 f'{alpha_val:.16f}',
+                f'{beta_val:.16f}' if isinstance(beta_val, float) else beta_val,
                 f'{weights_entropy_values[epoch]:.16f}',
                 f'{weights_disequilibrium_values[epoch]:.16f}',
                 f'{num_bins_values[epoch]}'
@@ -754,8 +758,9 @@ def aggregate_results_csv(output_dir, config):
         # Summary
         writer.writerow(['AGGREGATE RESULTS FROM', f'{config.NUM_OF_RUN_PER_CALL} RUNS'])
         if hasattr(config, 'USE_SMOOTH_GRADIENT') and config.USE_SMOOTH_GRADIENT:
-            writer.writerow(['Mode', 'Smooth Gradient'])
-            writer.writerow(['Alpha Start', f'{config.SMOOTH_ALPHA_START:.4f}'])
+            writer.writerow(['Mode', 'Smooth Gradient (Beta Adjustment)'])
+            writer.writerow(['Beta Start', f'{config.SMOOTH_BETA_START:.4f}'])
+            writer.writerow(['Beta Adjustment Method', 'β ± α (gradient balance)'])
         else:
             writer.writerow(['LMC Weight', f'{config.LMC_WEIGHT:.16f}'])
         writer.writerow([])
@@ -1047,21 +1052,40 @@ def run_training_single(output_dir, config, run_num):
     print(f"Initial LMC: {start_weights_lmc:.16f}")
     model.train()
     
-    alpha_history = []  # Track alpha changes
+    alpha_history = []  # Track alpha changes (for logging)
+    beta_history = []   # Track beta changes (actual weight in loss)
+    current_beta = config.SMOOTH_BETA_START
+    prev_val_loss = None
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
-        train_loss, train_lmc, train_combined, train_alpha = train_epoch(
+        train_loss, train_lmc, train_combined, train_alpha, epoch_beta = train_epoch(
             model, train_loader, optimizer, scheduler, device, config, vocab_size, 
-            lmc_start=start_weights_lmc, ce_start=start_ce, alpha=config.SMOOTH_ALPHA_START
+            lmc_start=start_weights_lmc, ce_start=start_ce, beta=current_beta
         )
         val_loss = validate(model, val_loader, device, vocab_size)
         
-        # Store the average alpha from this epoch
+        # Store the average alpha and beta from this epoch
         alpha_history.append(train_alpha)
+        beta_history.append(current_beta)
         
-        print(f"Average alpha for epoch: {train_alpha:.4f} (0=pure CE, 1=pure LMC)")
+        # Adjust beta based on validation loss trajectory
+        # Use alpha (gradient balance metric) as the adjustment amount
+        if prev_val_loss is not None:
+            if val_loss > prev_val_loss:
+                # Validation loss increased -> increment beta by alpha (more LMC)
+                current_beta = min(1.0, current_beta + train_alpha)
+                print(f"Val loss increased ({prev_val_loss:.4f} → {val_loss:.4f}): β += α ({train_alpha:.4f}) → {current_beta:.4f}")
+            else:
+                # Validation loss decreased -> decrement beta by alpha (more CE)
+                current_beta = max(0.0, current_beta - train_alpha)
+                print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}): β -= α ({train_alpha:.4f}) → {current_beta:.4f}")
+        
+        prev_val_loss = val_loss
+        
+        print(f"Average alpha for epoch: {train_alpha:.4f} (gradient balance, for logging only)")
+        print(f"Current beta for next epoch: {current_beta:.4f} (0=pure CE, 1=pure LMC)")
         
         _, weights_lmc, weights_entropy, weights_diseq, num_bins, probs, bin_centers = calculate_lmc_from_weights(model)
         
@@ -1080,7 +1104,8 @@ def run_training_single(output_dir, config, run_num):
         print(f"Training Loss: {train_loss:.16f}, Combined: {train_combined:.16f}")
         print(f"Validation Loss: {val_loss:.16f}")
         print(f"Model LMC (per-epoch weights): {weights_lmc:.16f}")
-        print(f"Average Alpha (α): {train_alpha:.16f}")
+        print(f"Average Alpha (α): {train_alpha:.16f} [logging only]")
+        print(f"Beta (β): {current_beta:.16f} [used in combined loss]")
     
     # Test on both datasets
     print("\nEvaluating on test sets...")
@@ -1106,7 +1131,7 @@ def run_training_single(output_dir, config, run_num):
     save_results_to_csv(
         output_dir, train_losses, val_losses, lmc_values, lambda_values,
         weights_entropy_values, weights_disequilibrium_values, num_bins_values,
-        test_loss_wiki, test_metrics_wiki, test_loss_shakespeare, test_metrics_shakespeare, config, run_num, alpha_history
+        test_loss_wiki, test_metrics_wiki, test_loss_shakespeare, test_metrics_shakespeare, config, run_num, alpha_history, beta_history
     )
     plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss_wiki, test_loss_shakespeare, config, run_num)
 
@@ -1154,8 +1179,11 @@ def main():
         print(f"\n{'='*80}")
         print(f"SMOOTH GRADIENT MODE")
         print(f"{'='*80}")
-        print(f"Combined Loss: α*LMC + (1-α)*CE")
-        print(f"Alpha calculated dynamically: α = ||∇LMC|| / (||∇LMC|| + ||∇CE||)")
+        print(f"Combined Loss: β*LMC + (1-β)*CE")
+        print(f"Beta adjusted dynamically: β ± α based on validation loss")
+        print(f"  - If val loss increases: β += α (more LMC regularization)")
+        print(f"  - If val loss decreases: β -= α (more CE focus)")
+        print(f"Alpha (adjustment amount): α = ||∇CE|| / (||∇LMC|| + ||∇CE||)")
         print(f"Runs per configuration: {config.NUM_OF_RUN_PER_CALL}")
         print(f"{'='*80}\n")
         
