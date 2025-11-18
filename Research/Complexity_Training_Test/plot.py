@@ -105,10 +105,11 @@ for folder in folders:
             if epoch_data:
                 training_data[lmc_weight] = epoch_data
                 
-                # Store test metrics if available
+                # Check if test metrics are available in aggregate CSV
                 if all(v is not None for v in [test_loss_wiki, test_loss_wiki_std, test_lmc_wiki, test_lmc_wiki_std,
                                                 test_loss_shakespeare, test_loss_shakespeare_std, 
                                                 test_lmc_shakespeare, test_lmc_shakespeare_std]):
+                    # Use aggregate test metrics
                     lmc_weights.append(lmc_weight)
                     test_losses_wiki_mean.append(test_loss_wiki)
                     test_losses_wiki_std.append(test_loss_wiki_std)
@@ -124,6 +125,53 @@ for folder in folders:
                           f"Test LMC: {test_lmc_wiki:.4f}±{test_lmc_wiki_std:.4f}")
                     print(f"  Tiny-Shakespeare - Test Loss: {test_loss_shakespeare:.4f}±{test_loss_shakespeare_std:.4f}, "
                           f"Test LMC: {test_lmc_shakespeare:.4f}±{test_lmc_shakespeare_std:.4f}")
+                else:
+                    # Fallback: calculate test metrics from individual run CSVs
+                    print(f"  No test metrics in aggregate CSV, calculating from individual runs...")
+                    run_test_wiki_loss = []
+                    run_test_wiki_lmc = []
+                    run_test_shakes_loss = []
+                    run_test_shakes_lmc = []
+                    
+                    # Look for individual run CSV files
+                    run_num = 1
+                    while True:
+                        run_csv = os.path.join(output_dir, folder, f"z_loss_test_results_transformers-{run_num}.csv")
+                        if not os.path.exists(run_csv):
+                            break
+                        
+                        with open(run_csv, 'r') as f:
+                            run_lines = f.readlines()
+                        
+                        for line in run_lines:
+                            if line.startswith('Test Loss (WikiText-2),'):
+                                run_test_wiki_loss.append(float(line.split(',')[1].strip()))
+                            elif line.startswith('Test LMC Complexity (WikiText-2),'):
+                                run_test_wiki_lmc.append(float(line.split(',')[1].strip()))
+                            elif line.startswith('Test Loss (Tiny-Shakespeare),'):
+                                run_test_shakes_loss.append(float(line.split(',')[1].strip()))
+                            elif line.startswith('Test LMC Complexity (Tiny-Shakespeare),'):
+                                run_test_shakes_lmc.append(float(line.split(',')[1].strip()))
+                        
+                        run_num += 1
+                    
+                    # Calculate statistics if we found data
+                    if len(run_test_wiki_loss) > 0:
+                        lmc_weights.append(lmc_weight)
+                        test_losses_wiki_mean.append(np.mean(run_test_wiki_loss))
+                        test_losses_wiki_std.append(np.std(run_test_wiki_loss))
+                        test_lmc_wiki_mean.append(np.mean(run_test_wiki_lmc))
+                        test_lmc_wiki_std.append(np.std(run_test_wiki_lmc))
+                        test_losses_shakespeare_mean.append(np.mean(run_test_shakes_loss))
+                        test_losses_shakespeare_std.append(np.std(run_test_shakes_loss))
+                        test_lmc_shakespeare_mean.append(np.mean(run_test_shakes_lmc))
+                        test_lmc_shakespeare_std.append(np.std(run_test_shakes_lmc))
+                        
+                        print(f"LMC Weight: {lmc_weight:.2f} (from {len(run_test_wiki_loss)} runs)")
+                        print(f"  WikiText-2 - Test Loss: {np.mean(run_test_wiki_loss):.4f}±{np.std(run_test_wiki_loss):.4f}, "
+                              f"Test LMC: {np.mean(run_test_wiki_lmc):.4f}±{np.std(run_test_wiki_lmc):.4f}")
+                        print(f"  Tiny-Shakespeare - Test Loss: {np.mean(run_test_shakes_loss):.4f}±{np.std(run_test_shakes_loss):.4f}, "
+                              f"Test LMC: {np.mean(run_test_shakes_lmc):.4f}±{np.std(run_test_shakes_lmc):.4f}")
     else:
         print(f"Aggregate CSV not found for {folder}")
 
