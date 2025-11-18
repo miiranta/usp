@@ -39,8 +39,8 @@ class Config:
     SMOOTH_ALPHA_MAX = 1.0        # Maximum alpha value
     
     # LMC Complexity weight sweep configuration (used when USE_SMOOTH_GRADIENT=False)
-    LMC_WEIGHT_START = 3.0   # Starting value
-    LMC_WEIGHT_END = 3.0     # Ending value (inclusive)
+    LMC_WEIGHT_START = 4.0   # Starting value
+    LMC_WEIGHT_END = 4.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
