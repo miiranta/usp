@@ -47,33 +47,33 @@ for folder in folders:
         with open(csv_path, 'r') as f:
             lines = f.readlines()
         
-        # Extract test metrics from summary section
-        test_loss_wiki = None
-        test_loss_wiki_std = None
-        test_lmc_wiki = None
-        test_lmc_wiki_std = None
-        test_loss_shakespeare = None
-        test_loss_shakespeare_std = None
-        test_lmc_shakespeare = None
-        test_lmc_shakespeare_std = None
+        # Extract test metrics from summary section (use different variable names to avoid shadowing)
+        csv_test_loss_wiki = None
+        csv_test_loss_wiki_std = None
+        csv_test_lmc_wiki = None
+        csv_test_lmc_wiki_std = None
+        csv_test_loss_shakespeare = None
+        csv_test_loss_shakespeare_std = None
+        csv_test_lmc_shakespeare = None
+        csv_test_lmc_shakespeare_std = None
         
         for i, line in enumerate(lines):
             if 'Test Loss Mean' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
-                test_loss_wiki = float(line.split(',')[1].strip())
+                csv_test_loss_wiki = float(line.split(',')[1].strip())
             elif 'Test Loss Std' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
-                test_loss_wiki_std = float(line.split(',')[1].strip())
+                csv_test_loss_wiki_std = float(line.split(',')[1].strip())
             elif 'Test LMC Mean' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
-                test_lmc_wiki = float(line.split(',')[1].strip())
+                csv_test_lmc_wiki = float(line.split(',')[1].strip())
             elif 'Test LMC Std' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
-                test_lmc_wiki_std = float(line.split(',')[1].strip())
+                csv_test_lmc_wiki_std = float(line.split(',')[1].strip())
             elif 'Test Loss Mean' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
-                test_loss_shakespeare = float(line.split(',')[1].strip())
+                csv_test_loss_shakespeare = float(line.split(',')[1].strip())
             elif 'Test Loss Std' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
-                test_loss_shakespeare_std = float(line.split(',')[1].strip())
+                csv_test_loss_shakespeare_std = float(line.split(',')[1].strip())
             elif 'Test LMC Mean' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
-                test_lmc_shakespeare = float(line.split(',')[1].strip())
+                csv_test_lmc_shakespeare = float(line.split(',')[1].strip())
             elif 'Test LMC Std' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
-                test_lmc_shakespeare_std = float(line.split(',')[1].strip())
+                csv_test_lmc_shakespeare_std = float(line.split(',')[1].strip())
         
         # Find the epoch-by-epoch data section
         epoch_start_idx = None
@@ -106,25 +106,25 @@ for folder in folders:
                 training_data[lmc_weight] = epoch_data
                 
                 # Check if test metrics are available in aggregate CSV
-                if all(v is not None for v in [test_loss_wiki, test_loss_wiki_std, test_lmc_wiki, test_lmc_wiki_std,
-                                                test_loss_shakespeare, test_loss_shakespeare_std, 
-                                                test_lmc_shakespeare, test_lmc_shakespeare_std]):
+                if all(v is not None for v in [csv_test_loss_wiki, csv_test_loss_wiki_std, csv_test_lmc_wiki, csv_test_lmc_wiki_std,
+                                                csv_test_loss_shakespeare, csv_test_loss_shakespeare_std, 
+                                                csv_test_lmc_shakespeare, csv_test_lmc_shakespeare_std]):
                     # Use aggregate test metrics
                     lmc_weights.append(lmc_weight)
-                    test_losses_wiki_mean.append(test_loss_wiki)
-                    test_losses_wiki_std.append(test_loss_wiki_std)
-                    test_lmc_wiki_mean.append(test_lmc_wiki)
-                    test_lmc_wiki_std.append(test_lmc_wiki_std)
-                    test_losses_shakespeare_mean.append(test_loss_shakespeare)
-                    test_losses_shakespeare_std.append(test_loss_shakespeare_std)
-                    test_lmc_shakespeare_mean.append(test_lmc_shakespeare)
-                    test_lmc_shakespeare_std.append(test_lmc_shakespeare_std)
+                    test_losses_wiki_mean.append(csv_test_loss_wiki)
+                    test_losses_wiki_std.append(csv_test_loss_wiki_std)
+                    test_lmc_wiki_mean.append(csv_test_lmc_wiki)
+                    test_lmc_wiki_std.append(csv_test_lmc_wiki_std)
+                    test_losses_shakespeare_mean.append(csv_test_loss_shakespeare)
+                    test_losses_shakespeare_std.append(csv_test_loss_shakespeare_std)
+                    test_lmc_shakespeare_mean.append(csv_test_lmc_shakespeare)
+                    test_lmc_shakespeare_std.append(csv_test_lmc_shakespeare_std)
                     
                     print(f"LMC Weight: {lmc_weight:.2f}")
-                    print(f"  WikiText-2 - Test Loss: {test_loss_wiki:.4f}±{test_loss_wiki_std:.4f}, "
-                          f"Test LMC: {test_lmc_wiki:.4f}±{test_lmc_wiki_std:.4f}")
-                    print(f"  Tiny-Shakespeare - Test Loss: {test_loss_shakespeare:.4f}±{test_loss_shakespeare_std:.4f}, "
-                          f"Test LMC: {test_lmc_shakespeare:.4f}±{test_lmc_shakespeare_std:.4f}")
+                    print(f"  WikiText-2 - Test Loss: {csv_test_loss_wiki:.4f}±{csv_test_loss_wiki_std:.4f}, "
+                          f"Test LMC: {csv_test_lmc_wiki:.4f}±{csv_test_lmc_wiki_std:.4f}")
+                    print(f"  Tiny-Shakespeare - Test Loss: {csv_test_loss_shakespeare:.4f}±{csv_test_loss_shakespeare_std:.4f}, "
+                          f"Test LMC: {csv_test_lmc_shakespeare:.4f}±{csv_test_lmc_shakespeare_std:.4f}")
                 else:
                     # Fallback: calculate test metrics from individual run CSVs
                     print(f"  No test metrics in aggregate CSV, calculating from individual runs...")
