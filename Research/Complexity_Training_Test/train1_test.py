@@ -30,12 +30,17 @@ class Config:
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 500
     
-    # Automatic Lambda Estimation (Gradient Balancing)
-    USE_AUTO_LAMBDA = False   # Enable automatic λ estimation
+    # Smooth Gradient Approach Configuration
+    USE_SMOOTH_GRADIENT = True   # Enable smooth gradient approach
+    SMOOTH_ALPHA_START = 0.0     # Starting value for alpha (0 = pure CE, 1 = pure LMC)
+    SMOOTH_ALPHA_INCREMENT = 0.05 # How much to change alpha when val loss improves
+    SMOOTH_ALPHA_DECREMENT = 0.05  # How much to change alpha when val loss worsens
+    SMOOTH_ALPHA_MIN = 0.0        # Minimum alpha value
+    SMOOTH_ALPHA_MAX = 1.0        # Maximum alpha value
     
-    # LMC Complexity weight sweep configuration (used when USE_AUTO_LAMBDA=False)
-    LMC_WEIGHT_START = 2.0   # Starting value
-    LMC_WEIGHT_END = 2.0     # Ending value (inclusive)
+    # LMC Complexity weight sweep configuration (used when USE_SMOOTH_GRADIENT=False)
+    LMC_WEIGHT_START = 3.0   # Starting value
+    LMC_WEIGHT_END = 3.0     # Ending value (inclusive)
     LMC_WEIGHT_STEP = 1.0   # Step size (e.g., 0.01 gives 0.0, 0.01, 0.02, ..., 1.0)
     
     # Number of runs per configuration call
@@ -354,7 +359,7 @@ def estimate_lambda(ce_loss, lmc_loss, model, eps=1e-12):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean, optimize_lmc=False):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean, alpha=0.0):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
@@ -364,7 +369,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     
     lmc_value = None
     
-    mode_str = "LMC" if optimize_lmc else "CE"
+    mode_str = f"Smooth (α={alpha:.3f})"
     progress_bar = tqdm(train_loader, desc=f"Training ({mode_str})")
     
     for batch_idx, batch in enumerate(progress_bar):
@@ -388,18 +393,15 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_value = lmc_tensor  # Keep tensor for gradient computation
             lmc_value_scalar = lmc_scalar  # Keep scalar for logging
  
-        # Optimize based on whether validation loss decreased in previous epoch
-        if optimize_lmc:
-            # Optimize for LMC: minimize 1/(LMC*10) (which maximizes LMC)
-            loss_to_optimize = lmc_value
-            lambda_weight = 0.0  # Not used in alternating mode, but keep for logging
-        else:
-            # Optimize CE loss
-            loss_to_optimize = ce_loss
-            lambda_weight = 0.0  # Not used in alternating mode, but keep for logging
+        # Smooth gradient approach: combine both gradients
+        # Loss = alpha * LMC + (1 - alpha) * CE
+        # When alpha=0: pure CE optimization
+        # When alpha=1: pure LMC optimization
+        combined_loss = alpha * lmc_value + (1.0 - alpha) * ce_loss
+        lambda_weight = alpha  # Store alpha as lambda for logging compatibility
         
-        # Backward pass
-        loss_to_optimize.backward()
+        # Backward pass on combined loss
+        combined_loss.backward()
         
         # Optimization step
         if config.MAX_GRAD_NORM is not None:
@@ -411,7 +413,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Accumulate metrics (losses are already means from CrossEntropyLoss)
         total_loss += ce_loss.detach().item()
         total_lmc += lmc_value_scalar
-        total_combined_loss += loss_to_optimize.detach().item()
+        total_combined_loss += combined_loss.detach().item()
         total_lambda += lambda_weight
         total_samples += 1  # Count batches, not samples
         
@@ -419,8 +421,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         progress_bar.set_postfix({
             'loss': f'{total_loss / total_samples:.4f}',
             'lmc': f'{total_lmc / total_samples:.4f}',
-            'mode': mode_str,
-            'opt_loss': f'{loss_to_optimize.detach().item():.4f}'
+            'alpha': f'{alpha:.3f}',
+            'combined': f'{combined_loss.detach().item():.4f}'
         })
     
     avg_loss = total_loss / total_samples
@@ -545,7 +547,7 @@ def plot_weight_distribution(probs, bin_centers, epoch, output_dir, run_num):
 def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, lambda_values,
                        weights_entropy_values, weights_disequilibrium_values, 
                        num_bins_values, test_loss_wiki, test_metrics_wiki, 
-                       test_loss_shakespeare, test_metrics_shakespeare, config, run_num=1):
+                       test_loss_shakespeare, test_metrics_shakespeare, config, run_num=1, alpha_history=None):
     """Save training results to CSV file"""
     csv_filename = f'z_loss_test_results_transformers-{run_num}.csv'
     csv_path = os.path.join(output_dir, csv_filename)
@@ -573,21 +575,25 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, lambda
         writer.writerow(['Final Training Loss', f'{train_losses[-1]:.16f}'])
         writer.writerow(['Final Validation Loss', f'{val_losses[-1]:.16f}'])
         writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.16f}'])
-        writer.writerow(['Final Lambda (Average)', f'{lambda_values[-1]:.16f}'])
-        writer.writerow(['Auto Lambda Enabled', f'{config.USE_AUTO_LAMBDA}'])
+        writer.writerow(['Final Alpha', f'{lambda_values[-1]:.16f}'])
+        writer.writerow(['Smooth Gradient Enabled', f'{config.USE_SMOOTH_GRADIENT}'])
+        writer.writerow(['Alpha Start', f'{config.SMOOTH_ALPHA_START:.4f}'])
+        writer.writerow(['Alpha Increment', f'{config.SMOOTH_ALPHA_INCREMENT:.4f}'])
+        writer.writerow(['Alpha Decrement', f'{config.SMOOTH_ALPHA_DECREMENT:.4f}'])
         writer.writerow(['Run Number', f'{run_num}'])
         writer.writerow([])
         
         # Epoch-by-epoch data
-        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Model LMC', 'Avg Lambda',
+        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Model LMC', 'Alpha',
                         'Weights Entropy', 'Weights Disequilibrium', 'Num Bins'])
         for epoch in range(len(train_losses)):
+            alpha_val = alpha_history[epoch] if alpha_history and epoch < len(alpha_history) else lambda_values[epoch]
             writer.writerow([
                 epoch + 1,
                 f'{train_losses[epoch]:.16f}',
                 f'{val_losses[epoch]:.16f}',
                 f'{lmc_values[epoch]:.16f}',
-                f'{lambda_values[epoch]:.16f}',
+                f'{alpha_val:.16f}',
                 f'{weights_entropy_values[epoch]:.16f}',
                 f'{weights_disequilibrium_values[epoch]:.16f}',
                 f'{num_bins_values[epoch]}'
@@ -740,7 +746,11 @@ def aggregate_results_csv(output_dir, config):
         
         # Summary
         writer.writerow(['AGGREGATE RESULTS FROM', f'{config.NUM_OF_RUN_PER_CALL} RUNS'])
-        writer.writerow(['LMC Weight', f'{config.LMC_WEIGHT:.16f}'])
+        if hasattr(config, 'USE_SMOOTH_GRADIENT') and config.USE_SMOOTH_GRADIENT:
+            writer.writerow(['Mode', 'Smooth Gradient'])
+            writer.writerow(['Alpha Start', f'{config.SMOOTH_ALPHA_START:.4f}'])
+        else:
+            writer.writerow(['LMC Weight', f'{config.LMC_WEIGHT:.16f}'])
         writer.writerow([])
         
         # Test metrics statistics
@@ -771,7 +781,7 @@ def aggregate_results_csv(output_dir, config):
                  'Train_Loss_Mean', 'Train_Loss_Std', 'Train_Loss_Min', 'Train_Loss_Max',
                  'Val_Loss_Mean', 'Val_Loss_Std', 'Val_Loss_Min', 'Val_Loss_Max',
                  'LMC_Mean', 'LMC_Std', 'LMC_Min', 'LMC_Max',
-                 'Lambda_Mean', 'Lambda_Std', 'Lambda_Min', 'Lambda_Max',
+                 'Alpha_Mean', 'Alpha_Std', 'Alpha_Min', 'Alpha_Max',
                  'Entropy_Mean', 'Entropy_Std', 'Entropy_Min', 'Entropy_Max',
                  'Diseq_Mean', 'Diseq_Std', 'Diseq_Min', 'Diseq_Max',
                  'Bins_Mean', 'Bins_Std', 'Bins_Min', 'Bins_Max']
@@ -1013,19 +1023,31 @@ def run_training_single(output_dir, config, run_num):
     _, start_weights_lmc, weights_entropy, weights_diseq, num_bins, _, _ = calculate_lmc_from_weights(model)
     
     prev_val_loss = float('inf')  # Initialize with infinity for first epoch
+    current_alpha = config.SMOOTH_ALPHA_START  # Initialize alpha
+    alpha_history = []  # Track alpha changes
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
-        
-        # Determine if we should optimize for LMC (if validation loss increased last epoch)
-        optimize_lmc = (epoch > 0 and val_losses[-1] < prev_val_loss)
+        print(f"Current alpha: {current_alpha:.4f} (0=pure CE, 1=pure LMC)")
         
         train_loss, train_lmc, train_combined, train_lambda = train_epoch(
             model, train_loader, optimizer, scheduler, device, config, vocab_size, 
-            lmc_mean=start_weights_lmc, optimize_lmc=optimize_lmc
+            lmc_mean=start_weights_lmc, alpha=current_alpha
         )
-        prev_val_loss = val_losses[-1] if len(val_losses) > 0 else float('inf')
         val_loss = validate(model, val_loader, device, vocab_size)
+        
+        # Adjust alpha based on validation loss change
+        if epoch > 0:
+            val_loss_delta = val_loss - prev_val_loss
+            if val_loss_delta < 0:  # Validation loss improved
+                current_alpha = min(current_alpha + config.SMOOTH_ALPHA_INCREMENT, config.SMOOTH_ALPHA_MAX)
+                print(f"Val loss improved ({prev_val_loss:.6f} -> {val_loss:.6f}): alpha += {config.SMOOTH_ALPHA_INCREMENT:.3f} -> {current_alpha:.4f}")
+            else:  # Validation loss worsened
+                current_alpha = max(current_alpha - config.SMOOTH_ALPHA_DECREMENT, config.SMOOTH_ALPHA_MIN)
+                print(f"Val loss worsened ({prev_val_loss:.6f} -> {val_loss:.6f}): alpha -= {config.SMOOTH_ALPHA_DECREMENT:.3f} -> {current_alpha:.4f}")
+        
+        prev_val_loss = val_loss
+        alpha_history.append(current_alpha)
         
         _, weights_lmc, weights_entropy, weights_diseq, num_bins, probs, bin_centers = calculate_lmc_from_weights(model)
         
@@ -1070,7 +1092,7 @@ def run_training_single(output_dir, config, run_num):
     save_results_to_csv(
         output_dir, train_losses, val_losses, lmc_values, lambda_values,
         weights_entropy_values, weights_disequilibrium_values, num_bins_values,
-        test_loss_wiki, test_metrics_wiki, test_loss_shakespeare, test_metrics_shakespeare, config, run_num
+        test_loss_wiki, test_metrics_wiki, test_loss_shakespeare, test_metrics_shakespeare, config, run_num, alpha_history
     )
     plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss_wiki, test_loss_shakespeare, config, run_num)
 
@@ -1111,14 +1133,18 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config = Config()
     
-    if config.USE_AUTO_LAMBDA:
-        # Automatic lambda estimation mode
-        output_dir = os.path.join(script_dir, 'output/output_AUTO_LAMBDA')
+    if config.USE_SMOOTH_GRADIENT:
+        # Smooth gradient mode
+        output_dir = os.path.join(script_dir, 'output/output_SMOOTH_GRADIENT')
         
         print(f"\n{'='*80}")
-        print(f"AUTOMATIC LAMBDA ESTIMATION MODE")
+        print(f"SMOOTH GRADIENT MODE")
         print(f"{'='*80}")
-        print(f"Gradient balancing: λ* ≈ ||∇log(CE)|| / ||∇log(LMC)||")
+        print(f"Combined Loss: α*LMC + (1-α)*CE")
+        print(f"Alpha starts at: {config.SMOOTH_ALPHA_START:.4f}")
+        print(f"Alpha increment (val improves): +{config.SMOOTH_ALPHA_INCREMENT:.4f}")
+        print(f"Alpha decrement (val worsens): -{config.SMOOTH_ALPHA_DECREMENT:.4f}")
+        print(f"Alpha range: [{config.SMOOTH_ALPHA_MIN:.4f}, {config.SMOOTH_ALPHA_MAX:.4f}]")
         print(f"Runs per configuration: {config.NUM_OF_RUN_PER_CALL}")
         print(f"{'='*80}\n")
         
