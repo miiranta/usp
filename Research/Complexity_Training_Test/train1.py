@@ -390,15 +390,16 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_value = lmc_tensor  # Keep tensor for gradient computation
             lmc_value_scalar = lmc_scalar  # Keep scalar for logging
  
-        grad_lmc_norm = compute_grad_norm(lmc_value, model)
+        # Normalize LMC to be on same scale as CE loss (for gradient comparison)
+        lmc_loss_normalized = (lmc_start / (lmc_value + 1e-10)) * ce_start
+        
+        # Calculate gradient norms for both losses (using normalized LMC)
+        grad_lmc_norm = compute_grad_norm(lmc_loss_normalized, model)
         grad_ce_norm = compute_grad_norm(ce_loss, model)
         
         # Calculate alpha dynamically based on gradient norms for logging
-        # alpha = ||∇CE|| / (||∇LMC|| + ||∇CE||)
-        lmc_loss_normalized = (lmc_start / lmc_value) * ce_start
-        
-        
-        # Calculate alpha for logging (protect against division by zero)
+        # alpha = ||∇LMC|| / (||∇LMC|| + ||∇CE||)
+        # This represents how much LMC contributes to the total gradient
         if grad_lmc_norm + grad_ce_norm > 1e-12:
             current_alpha = grad_lmc_norm / (grad_lmc_norm + grad_ce_norm)
         else:
