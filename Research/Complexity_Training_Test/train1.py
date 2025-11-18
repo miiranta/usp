@@ -406,7 +406,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             current_alpha = 0.0
         
         # Combine losses with beta (adjusted based on validation loss trajectory)
-        combined_loss = 0 * lmc_loss_normalized + (1.0 - current_beta) * ce_loss
+        combined_loss = ce_loss
         
         # Backward pass on combined loss
         combined_loss.backward()
