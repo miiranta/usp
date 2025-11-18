@@ -25,7 +25,7 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 256 
-    EPOCHS = 30
+    EPOCHS = 20
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 500
@@ -539,7 +539,9 @@ def plot_weight_distribution(probs, bin_centers, epoch, output_dir, run_num):
              fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
     plt.tight_layout()
-    plot_path = os.path.join(dist_dir, f'distribution_epoch_{epoch:03d}_run_{run_num}.png')
+    # Handle both integer epochs and string epochs (e.g., 'final_test_wiki')
+    epoch_str = f'{epoch:03d}' if isinstance(epoch, int) else epoch
+    plot_path = os.path.join(dist_dir, f'distribution_epoch_{epoch_str}_run_{run_num}.png')
     plt.savefig(plot_path, dpi=100)
     plt.close()
 
