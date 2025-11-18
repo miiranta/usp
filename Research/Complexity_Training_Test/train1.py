@@ -586,9 +586,7 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, lambda
         writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.16f}'])
         writer.writerow(['Final Alpha', f'{lambda_values[-1]:.16f}'])
         writer.writerow(['Smooth Gradient Enabled', f'{config.USE_SMOOTH_GRADIENT}'])
-        writer.writerow(['Alpha Start', f'{config.SMOOTH_ALPHA_START:.4f}'])
-        writer.writerow(['Alpha Increment', f'{config.SMOOTH_ALPHA_INCREMENT:.4f}'])
-        writer.writerow(['Alpha Decrement', f'{config.SMOOTH_ALPHA_DECREMENT:.4f}'])
+        writer.writerow(['Alpha Calculation', 'Dynamic: ||∇LMC|| / (||∇LMC|| + ||∇CE||)'])
         writer.writerow(['Run Number', f'{run_num}'])
         writer.writerow([])
         
@@ -1157,10 +1155,7 @@ def main():
         print(f"SMOOTH GRADIENT MODE")
         print(f"{'='*80}")
         print(f"Combined Loss: α*LMC + (1-α)*CE")
-        print(f"Alpha starts at: {config.SMOOTH_ALPHA_START:.4f}")
-        print(f"Alpha increment (val improves): +{config.SMOOTH_ALPHA_INCREMENT:.4f}")
-        print(f"Alpha decrement (val worsens): -{config.SMOOTH_ALPHA_DECREMENT:.4f}")
-        print(f"Alpha range: [{config.SMOOTH_ALPHA_MIN:.4f}, {config.SMOOTH_ALPHA_MAX:.4f}]")
+        print(f"Alpha calculated dynamically: α = ||∇LMC|| / (||∇LMC|| + ||∇CE||)")
         print(f"Runs per configuration: {config.NUM_OF_RUN_PER_CALL}")
         print(f"{'='*80}\n")
         
