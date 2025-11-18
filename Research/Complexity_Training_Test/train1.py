@@ -391,7 +391,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Optimize based on whether validation loss decreased in previous epoch
         if optimize_lmc:
             # Optimize for LMC: minimize 1/(LMC*10) (which maximizes LMC)
-            loss_to_optimize = lmc_value
+            loss_to_optimize = 1 / lmc_value
             lambda_weight = 0.0  # Not used in alternating mode, but keep for logging
         else:
             # Optimize CE loss

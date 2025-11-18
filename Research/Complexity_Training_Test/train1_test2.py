@@ -35,8 +35,8 @@ class Config:
     SMOOTH_ALPHA_START = 1.0     # Starting value for alpha (0 = pure CE, 1 = pure LMC)
     SMOOTH_ALPHA_INCREMENT = 0.05 # How much to change alpha when val loss improves
     SMOOTH_ALPHA_DECREMENT = 0.05  # How much to change alpha when val loss worsens
-    SMOOTH_ALPHA_MIN = 0.0        # Minimum alpha value
-    SMOOTH_ALPHA_MAX = 1.0        # Maximum alpha value
+    SMOOTH_ALPHA_MIN = 0.05        # Minimum alpha value
+    SMOOTH_ALPHA_MAX = 0.95        # Maximum alpha value
     
     # LMC Complexity weight sweep configuration (used when USE_SMOOTH_GRADIENT=False)
     LMC_WEIGHT_START = 4.0   # Starting value
@@ -397,7 +397,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Loss = alpha * LMC + (1 - alpha) * CE
         # When alpha=0: pure CE optimization
         # When alpha=1: pure LMC optimization
-        combined_loss = (1.0 - alpha) * lmc_value + (alpha) * ce_loss
+        combined_loss = (1.0 - alpha) * (1/lmc_value) + (alpha) * ce_loss
         lambda_weight = alpha  # Store alpha as lambda for logging compatibility
         
         # Backward pass on combined loss
