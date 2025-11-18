@@ -25,7 +25,7 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 256 
-    EPOCHS = 20
+    EPOCHS = 50
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 500
@@ -33,9 +33,9 @@ class Config:
     # Smooth Gradient Approach Configuration
     USE_SMOOTH_GRADIENT = True   # Enable smooth gradient approach
     SMOOTH_ALPHA_START = 0.0     # Starting value for alpha (0 = pure CE, 1 = pure LMC)
-    SMOOTH_ALPHA_INCREMENT = 0.01 # How much to change alpha when val loss improves
-    SMOOTH_ALPHA_DECREMENT = 0.01  # How much to change alpha when val loss worsens
-    SMOOTH_ALPHA_MIN = 0.00        # Minimum alpha value
+    SMOOTH_ALPHA_INCREMENT = 0.20 # How much to change alpha when val loss improves
+    SMOOTH_ALPHA_DECREMENT = 0.20  # How much to change alpha when val loss worsens
+    SMOOTH_ALPHA_MIN = 0.05        # Minimum alpha value
     SMOOTH_ALPHA_MAX = 0.95        # Maximum alpha value
     
     # LMC Complexity weight sweep configuration (used when USE_SMOOTH_GRADIENT=False)
