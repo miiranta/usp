@@ -30,7 +30,12 @@ folders = sorted([f for f in os.listdir(output_dir) if os.path.isdir(os.path.joi
 # Extract data from each folder (using AGGREGATE CSVs only)
 for folder in folders:
     # Extract LMC weight from folder name (e.g., "output_LMC_0.00" -> 0.00)
-    lmc_weight = float(folder.split('_')[-1])
+    # Skip folders that don't match the expected pattern (e.g., output_AUTO_LAMBDA)
+    try:
+        lmc_weight = float(folder.split('_')[-1])
+    except ValueError:
+        print(f"Skipping folder (not a numeric LMC weight): {folder}")
+        continue
     
     # Path to the AGGREGATE CSV file
     csv_path = os.path.join(output_dir, folder, "z_loss_test_results_transformers-AGGREGATE.csv")
