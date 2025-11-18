@@ -394,7 +394,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         lmc_loss_normalized = (lmc_start / (lmc_value + 1e-10)) * ce_start
         
         # Calculate gradient norms for both losses (using normalized LMC)
-        grad_lmc_norm = compute_grad_norm(lmc_loss_normalized, model)
+        grad_lmc_norm = compute_grad_norm(lmc_value, model)
         grad_ce_norm = compute_grad_norm(ce_loss, model)
         
         # Calculate alpha dynamically based on gradient norms for logging
@@ -406,7 +406,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             current_alpha = 0.0
         
         # Combine losses with beta (adjusted based on validation loss trajectory)
-        combined_loss = current_beta * lmc_loss_normalized + (1.0 - current_beta) * ce_loss
+        combined_loss = 0 * lmc_loss_normalized + (1.0 - current_beta) * ce_loss
         
         # Backward pass on combined loss
         combined_loss.backward()
