@@ -28,7 +28,7 @@ class Config:
     EPOCHS = 30
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 500
     
     # Automatic Lambda Estimation (Gradient Balancing)
     USE_AUTO_LAMBDA = False   # Enable automatic λ estimation
@@ -484,7 +484,8 @@ def plot_weight_distribution(probs, bin_centers, epoch, output_dir, run_num):
     bin_centers_np = bin_centers.cpu().numpy()
     
     # Save full data to CSV
-    csv_path = os.path.join(dist_dir, f'distribution_epoch_{epoch:03d}_run_{run_num}.csv')
+    epoch_str = f'{epoch:03d}' if isinstance(epoch, int) else epoch
+    csv_path = os.path.join(dist_dir, f'distribution_epoch_{epoch_str}_run_{run_num}.csv')
     with open(csv_path, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['Bin_Center', 'Probability'])
