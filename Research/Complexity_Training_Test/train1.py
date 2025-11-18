@@ -400,7 +400,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         
         # Calculate alpha (protect against division by zero)
         if grad_lmc_norm + grad_ce_norm > 1e-12:
-            current_alpha = grad_lmc_norm / (grad_lmc_norm + grad_ce_norm)
+            current_alpha = (grad_lmc_norm + grad_ce_norm) / grad_lmc_norm 
         else:
             current_alpha = 0.0
         
