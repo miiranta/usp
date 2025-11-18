@@ -359,7 +359,7 @@ def estimate_lambda(ce_loss, lmc_loss, model, eps=1e-12):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_mean, alpha=0.0, optimize_lmc=False):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_start, ce_start, alpha=0.0):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
@@ -394,10 +394,11 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             lmc_value_scalar = lmc_scalar  # Keep scalar for logging
  
         # Smooth gradient approach: combine both gradients
-        # Loss = alpha * LMC + (1 - alpha) * CE
+        # Loss = alpha * ((lmc_start/lmc_value)*ce_start) + (1 - alpha) * CE
         # When alpha=0: pure CE optimization
-        # When alpha=1: pure LMC optimization
-        combined_loss = alpha * (1/lmc_value) + (1.0 - alpha) * ce_loss
+        # When alpha=1: pure LMC optimization (normalized and scaled)
+        lmc_loss_normalized = (lmc_start / lmc_value) * ce_start
+        combined_loss = alpha * lmc_loss_normalized + (1.0 - alpha) * ce_loss
         lambda_weight = alpha  # Store alpha as lambda for logging compatibility
         
         # Backward pass on combined loss
@@ -1024,6 +1025,24 @@ def run_training_single(output_dir, config, run_num):
     
     _, start_weights_lmc, weights_entropy, weights_diseq, num_bins, _, _ = calculate_lmc_from_weights(model)
     
+    # Calculate initial CE loss before training
+    print("\nCalculating initial CE loss...")
+    model.eval()
+    with torch.no_grad():
+        initial_ce_losses = []
+        for batch in train_loader:
+            input_ids = batch['input_ids'].to(device, non_blocking=True)
+            labels = batch['labels'].to(device, non_blocking=True)
+            logits = model(input_ids)
+            logits_flat = logits.view(-1, vocab_size)
+            labels_flat = labels.view(-1)
+            ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
+            initial_ce_losses.append(ce_loss.item())
+        start_ce = sum(initial_ce_losses) / len(initial_ce_losses)
+    print(f"Initial CE loss: {start_ce:.16f}")
+    print(f"Initial LMC: {start_weights_lmc:.16f}")
+    model.train()
+    
     prev_val_loss = float('inf')  # Initialize with infinity for first epoch
     current_alpha = config.SMOOTH_ALPHA_START  # Initialize alpha
     alpha_history = []  # Track alpha changes
@@ -1034,7 +1053,7 @@ def run_training_single(output_dir, config, run_num):
         
         train_loss, train_lmc, train_combined, train_lambda = train_epoch(
             model, train_loader, optimizer, scheduler, device, config, vocab_size, 
-            lmc_mean=start_weights_lmc, alpha=current_alpha
+            lmc_start=start_weights_lmc, ce_start=start_ce, alpha=current_alpha
         )
         val_loss = validate(model, val_loader, device, vocab_size)
         
