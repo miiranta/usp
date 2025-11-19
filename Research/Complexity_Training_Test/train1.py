@@ -1072,17 +1072,20 @@ def run_training_single(output_dir, config, run_num):
         alpha_history.append(train_alpha)
         beta_history.append(current_beta)
         
+        # Calculate average alpha so far (for beta limiting)
+        avg_alpha_so_far = np.mean(alpha_history)
+        
         # Adjust beta based on validation loss trajectory
         # Use alpha (gradient balance metric) as the adjustment amount
         if prev_val_loss is not None:
             if val_loss < prev_val_loss:
                 # Validation loss decreased -> increment beta by alpha (more LMC)
-                current_beta = min(1.0, current_beta + train_alpha)
-                print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}): β += α ({train_alpha:.4f}) → {current_beta:.4f}")
+                current_beta = min(avg_alpha_so_far, current_beta + train_alpha)
+                print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}): β += α ({train_alpha:.4f}) → {current_beta:.4f} (max={avg_alpha_so_far:.4f})")
             else:
                 # Validation loss increased -> decrement beta by alpha (more CE)
                 current_beta = max(0.0, current_beta - train_alpha)
-                print(f"Val loss increased ({prev_val_loss:.4f} → {val_loss:.4f}): β -= α ({train_alpha:.4f}) → {current_beta:.4f}")
+                print(f"Val loss increased ({prev_val_loss:.4f} → {val_loss:.4f}): β -= α ({train_alpha:.4f}) → {current_beta:.4f} (max={avg_alpha_so_far:.4f})")
         
         prev_val_loss = val_loss
         
