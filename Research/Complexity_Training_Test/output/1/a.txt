@@ -1,0 +1,4 @@
+1 - controle
+2 - ce loss e lmc alternados em batches
+3 - se val loss cai, otimize lmc
+4 - se val loss sobe, otimize lmc
