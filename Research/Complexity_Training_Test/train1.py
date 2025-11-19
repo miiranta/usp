@@ -25,7 +25,7 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 256 
-    EPOCHS = 60
+    EPOCHS = 20
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 500
@@ -401,7 +401,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # alpha = ||∇LMC|| / (||∇LMC|| + ||∇CE||)
         # This represents how much LMC contributes to the total gradient
         if grad_lmc_norm + grad_ce_norm > 1e-12:
-            current_alpha = grad_lmc_norm / (grad_lmc_norm + grad_ce_norm)
+            current_alpha = torch.log(1 + (grad_lmc_norm / (grad_lmc_norm + grad_ce_norm)))
         else:
             current_alpha = 0.0
         
