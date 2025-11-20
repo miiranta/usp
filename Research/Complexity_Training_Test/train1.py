@@ -28,7 +28,7 @@ class Config:
     EPOCHS = 20
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 500
     
     # Number of runs per configuration call
     NUM_OF_RUN_PER_CALL = 2
