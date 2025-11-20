@@ -37,7 +37,7 @@ class Config:
     COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
     
     # Device configuration
-    GPU_INDEX = 1  # Which GPU to use (0, 1, 2, etc.)
+    GPU_INDEX = 0  # Which GPU to use (0, 1, 2, etc.)
     DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
     NUM_WORKERS = 8  # DataLoader workers
     
@@ -1208,7 +1208,7 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config = Config()
     
-    output_dir = os.path.join(script_dir, 'output/output_SLOPE_BASED')
+    output_dir = os.path.join(script_dir, 'output/output_SLOPE_BASED_CONTROL')
     
     print(f"\n{'='*80}")
     print(f"SLOPE-BASED OPTIMIZATION MODE")
