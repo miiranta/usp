@@ -393,17 +393,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Normalize LMC to be on same scale as CE loss (for gradient comparison)
         lmc_loss_normalized = (lmc_start / (lmc_value + 1e-10)) * ce_start
         
-        # Slope-based optimization strategy:
-        # If d(Error Val)/dx < 0 (improving), optimize only CE
-        # Else, optimize CE * (1 - lmc_weight) + LMC * lmc_weight
-        if val_error_slope < 0:
-            # Validation error is decreasing, focus on CE
-            ce_weight = 1.0
-            lmc_weight_actual = 0.0
-        else:
-            # Validation error is increasing or flat, use the dynamic lmc_weight
-            ce_weight = 1.0 - lmc_weight
-            lmc_weight_actual = lmc_weight
+        ce_weight = 1.0 - lmc_weight
+        lmc_weight_actual = lmc_weight
         
         # Combine losses based on weights
         combined_loss = ce_weight * ce_loss + lmc_weight_actual * lmc_loss_normalized
@@ -1099,11 +1090,11 @@ def run_training_single(output_dir, config, run_num):
             if current_slope < 0:
                 # Validation loss decreased - decrement lmc_weight by slope magnitude
                 lmc_weight = max(0.0, lmc_weight - slope_magnitude)
-                print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}): raw_slope={raw_slope:.6f}, norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (decreased by {slope_magnitude:.3f}) → Optimizing CE")
+                print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}): norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (decreased by {slope_magnitude:.3f})")
             else:
                 # Validation loss increased/flat - increment lmc_weight by slope magnitude
                 lmc_weight = min(1.0, lmc_weight + slope_magnitude)
-                print(f"Val loss increased/flat ({prev_val_loss:.4f} → {val_loss:.4f}): raw_slope={raw_slope:.6f}, norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (increased by {slope_magnitude:.3f}) → Blending CE and LMC")
+                print(f"Val loss increased/flat ({prev_val_loss:.4f} → {val_loss:.4f}): norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (increased by {slope_magnitude:.3f})")
         else:
             current_slope = 0.0
             lmc_weight = 0.0

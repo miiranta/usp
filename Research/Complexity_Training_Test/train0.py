@@ -393,20 +393,11 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Normalize LMC to be on same scale as CE loss (for gradient comparison)
         lmc_loss_normalized = (lmc_start / (lmc_value + 1e-10)) * ce_start
         
-        # Slope-based optimization strategy:
-        # If d(Error Val)/dx < 0 (improving), optimize only CE
-        # Else, optimize CE * (1 - lmc_weight) + LMC * lmc_weight
-        if val_error_slope < 0:
-            # Validation error is decreasing, focus on CE
-            ce_weight = 1.0
-            lmc_weight_actual = 0.0
-        else:
-            # Validation error is increasing or flat, use the dynamic lmc_weight
-            ce_weight = 1.0 - lmc_weight
-            lmc_weight_actual = lmc_weight
+        ce_weight = 1.0 - lmc_weight
+        lmc_weight_actual = lmc_weight
         
         # Combine losses based on weights
-        combined_loss = ce_weight * ce_loss + lmc_weight_actual * lmc_loss_normalized
+        combined_loss = ce_loss
         
         # Backward pass on combined loss
         combined_loss.backward()
