@@ -588,7 +588,7 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, slope_
         writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.16f}'])
         writer.writerow(['Final Val Error Slope', f'{slope_values[-1]:.16f}'])
         writer.writerow(['Final LMC Weight', f'{lmc_weight_values[-1]:.3f}'])
-        writer.writerow(['Optimization Strategy', 'Slope-based: If d(Val)/dx < 0 → CE only (LMC_weight -= 0.1), else CE*(1-LMC_weight) + LMC*LMC_weight (LMC_weight += 0.1), clamped to [0,1]'])
+        writer.writerow(['Optimization Strategy', 'Slope-based: If d(Val)/dx < 0 → CE only (LMC_weight -= |slope_norm|), else CE*(1-LMC_weight) + LMC*LMC_weight (LMC_weight += |slope_norm|), where slope_norm = arctan(d(Val)/dx)/(π/2), clamped to [0,1]'])
         writer.writerow(['Run Number', f'{run_num}'])
         writer.writerow([])
         
@@ -765,7 +765,7 @@ def aggregate_results_csv(output_dir, config):
         
         # Summary
         writer.writerow(['AGGREGATE RESULTS FROM', f'{config.NUM_OF_RUN_PER_CALL} RUNS'])
-        writer.writerow(['Optimization Strategy', 'Slope-based: If d(Val)/dx < 0 → CE only (LMC_weight -= 0.1), else CE*(1-LMC_weight) + LMC*LMC_weight (LMC_weight += 0.1), clamped to [0,1]'])
+        writer.writerow(['Optimization Strategy', 'Slope-based: If d(Val)/dx < 0 → CE only (LMC_weight -= |slope_norm|), else CE*(1-LMC_weight) + LMC*LMC_weight (LMC_weight += |slope_norm|), where slope_norm = arctan(d(Val)/dx)/(π/2), clamped to [0,1]'])
         writer.writerow([])
         
         # Test metrics statistics
@@ -1081,7 +1081,6 @@ def run_training_single(output_dir, config, run_num):
     prev_val_loss = None
     current_slope = 0.0
     lmc_weight = 0.0
-    lmc_weight_increment = 0.1  # Step size for incrementing/decrementing
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
@@ -1096,14 +1095,16 @@ def run_training_single(output_dir, config, run_num):
         if prev_val_loss is not None:
             raw_slope = val_loss - prev_val_loss
             current_slope = normalize_slope_arctan(raw_slope)
+            # Use absolute value of normalized slope as increment/decrement amount
+            slope_magnitude = abs(current_slope)
             if current_slope < 0:
-                # Validation loss decreased - decrement lmc_weight
-                lmc_weight = max(0.0, lmc_weight - lmc_weight_increment)
-                print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}): raw_slope={raw_slope:.6f}, norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (decreased) → Optimizing CE")
+                # Validation loss decreased - decrement lmc_weight by slope magnitude
+                lmc_weight = max(0.0, lmc_weight - slope_magnitude)
+                print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}): raw_slope={raw_slope:.6f}, norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (decreased by {slope_magnitude:.3f}) → Optimizing CE")
             else:
-                # Validation loss increased/flat - increment lmc_weight
-                lmc_weight = min(1.0, lmc_weight + lmc_weight_increment)
-                print(f"Val loss increased/flat ({prev_val_loss:.4f} → {val_loss:.4f}): raw_slope={raw_slope:.6f}, norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (increased) → Blending CE and LMC")
+                # Validation loss increased/flat - increment lmc_weight by slope magnitude
+                lmc_weight = min(1.0, lmc_weight + slope_magnitude)
+                print(f"Val loss increased/flat ({prev_val_loss:.4f} → {val_loss:.4f}): raw_slope={raw_slope:.6f}, norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (increased by {slope_magnitude:.3f}) → Blending CE and LMC")
         else:
             current_slope = 0.0
             lmc_weight = 0.0
