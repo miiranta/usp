@@ -1,6 +1,7 @@
 
 import os
 import csv
+import math
 import torch
 import torch.nn as nn
 import numpy as np
@@ -306,6 +307,18 @@ def calculate_lmc_from_weights(model):
 
 
 # ============================================================================
+# SLOPE NORMALIZATION
+# ============================================================================
+
+def normalize_slope_arctan(m):
+    """
+    Normalize slope using arctan function to [-1, 1] range.
+    mnorm = arctan(m) / (π/2)
+    """
+    return math.atan(m) / (math.pi / 2)
+
+
+# ============================================================================
 # AUTOMATIC LAMBDA ESTIMATION
 # ============================================================================
 
@@ -346,7 +359,7 @@ def estimate_lambda(ce_loss, lmc_loss, model, eps=1e-12):
 # TRAINING
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_start, ce_start, val_error_slope=0.0, lambda_counter=1):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, lmc_start, ce_start, val_error_slope=0.0, lmc_weight=0.0):
     model.train()
     total_loss = 0.0
     total_lmc = 0.0
@@ -355,8 +368,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     
     lmc_value = None
     
-    mode_str = f"Slope={val_error_slope:.4f}, λ={lambda_counter}"
-    progress_bar = tqdm(train_loader, desc=f"Training ({mode_str})")
+    progress_bar = tqdm(train_loader, desc=f"Train")
     
     for batch_idx, batch in enumerate(progress_bar):
         # Mark step begin for CUDA graphs compatibility
@@ -384,23 +396,18 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         
         # Slope-based optimization strategy:
         # If d(Error Val)/dx < 0 (improving), optimize only CE
-        # Else, optimize CE * (1 - mnorm) + LMC * mnorm, where mnorm = arctan(m) / (pi/2)
+        # Else, optimize CE * (1 - lmc_weight) + LMC * lmc_weight
         if val_error_slope < 0:
             # Validation error is decreasing, focus on CE
             ce_weight = 1.0
-            lmc_weight = 0.0
+            lmc_weight_actual = 0.0
         else:
-            # Validation error is increasing or flat, blend based on slope magnitude
-            # Normalize slope using arctan: mnorm = arctan(m) / (pi/2)
-            # This maps [0, ∞) -> [0, 1) smoothly
-            # Multiply by lambda (consecutive error increase counter) for stronger regularization
-            slope_normalized = (np.arctan(val_error_slope) / (np.pi / 2)) * lambda_counter
-            slope_normalized = min(slope_normalized, 1.0)  # Clamp to [0, 1]
-            ce_weight = 1.0 - slope_normalized
-            lmc_weight = slope_normalized
+            # Validation error is increasing or flat, use the dynamic lmc_weight
+            ce_weight = 1.0 - lmc_weight
+            lmc_weight_actual = lmc_weight
         
-        # Combine losses based on slope
-        combined_loss = ce_weight * ce_loss + lmc_weight * lmc_loss_normalized
+        # Combine losses based on weights
+        combined_loss = ce_weight * ce_loss + lmc_weight_actual * lmc_loss_normalized
         
         # Backward pass on combined loss
         combined_loss.backward()
@@ -422,9 +429,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         progress_bar.set_postfix({
             'loss': f'{total_loss / total_samples:.4f}',
             'lmc': f'{total_lmc / total_samples:.4f}',
-            'lambda': lambda_counter,
-            'ce_w': f'{ce_weight:.3f}',
             'lmc_w': f'{lmc_weight:.3f}',
+            'ce_w': f'{ce_weight:.3f}',
             'combined': f'{combined_loss.detach().item():.4f}'
         })
     
@@ -548,7 +554,8 @@ def plot_weight_distribution(probs, bin_centers, epoch, output_dir, run_num):
     plt.close()
 
 
-def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, slope_values, lambda_values,
+def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, slope_values, lmc_weight_values,
+                       test_losses_wiki_per_epoch, test_losses_shakespeare_per_epoch,
                        weights_entropy_values, weights_disequilibrium_values, 
                        num_bins_values, test_loss_wiki, test_metrics_wiki, 
                        test_loss_shakespeare, test_metrics_shakespeare, config, run_num=1):
@@ -580,22 +587,24 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, slope_
         writer.writerow(['Final Validation Loss', f'{val_losses[-1]:.16f}'])
         writer.writerow(['Final Model LMC', f'{lmc_values[-1]:.16f}'])
         writer.writerow(['Final Val Error Slope', f'{slope_values[-1]:.16f}'])
-        writer.writerow(['Final Lambda Counter', f'{lambda_values[-1]}'])
-        writer.writerow(['Optimization Strategy', 'Slope-based: If d(Val)/dx < 0 → CE only (λ reset to 1), else CE*(1-mnorm) + LMC*mnorm where mnorm=arctan(m)*λ/(π/2), λ increments on consecutive increases'])
+        writer.writerow(['Final LMC Weight', f'{lmc_weight_values[-1]:.3f}'])
+        writer.writerow(['Optimization Strategy', 'Slope-based: If d(Val)/dx < 0 → CE only (LMC_weight -= 0.1), else CE*(1-LMC_weight) + LMC*LMC_weight (LMC_weight += 0.1), clamped to [0,1]'])
         writer.writerow(['Run Number', f'{run_num}'])
         writer.writerow([])
         
         # Epoch-by-epoch data
-        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Model LMC', 'Val Error Slope', 'Lambda',
-                        'Weights Entropy', 'Weights Disequilibrium', 'Num Bins'])
+        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Test Loss Wiki', 'Test Loss Shakespeare',
+                        'Model LMC', 'Val Error Slope', 'LMC Weight', 'Weights Entropy', 'Weights Disequilibrium', 'Num Bins'])
         for epoch in range(len(train_losses)):
             writer.writerow([
                 epoch + 1,
                 f'{train_losses[epoch]:.16f}',
                 f'{val_losses[epoch]:.16f}',
+                f'{test_losses_wiki_per_epoch[epoch]:.16f}',
+                f'{test_losses_shakespeare_per_epoch[epoch]:.16f}',
                 f'{lmc_values[epoch]:.16f}',
                 f'{slope_values[epoch]:.16f}',
-                f'{lambda_values[epoch]}',
+                f'{lmc_weight_values[epoch]:.3f}',
                 f'{weights_entropy_values[epoch]:.16f}',
                 f'{weights_disequilibrium_values[epoch]:.16f}',
                 f'{num_bins_values[epoch]}'
@@ -604,7 +613,7 @@ def save_results_to_csv(output_dir, train_losses, val_losses, lmc_values, slope_
     print(f"Results saved to '{csv_path}'")
 
 
-def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss_wiki, test_loss_shakespeare, config, run_num=1):
+def plot_results(output_dir, train_losses, val_losses, lmc_values, test_losses_wiki_per_epoch, test_losses_shakespeare_per_epoch, test_loss_wiki, test_loss_shakespeare, config, run_num=1):
     plot_filename = f'z_loss_training_losses_transformers-{run_num}.png'
     plot_path = os.path.join(output_dir, plot_filename)
     
@@ -617,8 +626,10 @@ def plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss_wik
     # Primary y-axis: Losses
     ax1.plot(epochs, train_losses, label='Training Loss', marker='o', color='blue')
     ax1.plot(epochs, val_losses, label='Validation Loss', marker='s', color='orange')
-    ax1.axhline(y=test_loss_wiki, color='red', linestyle='--', label=f'Test Loss WikiText-2 ({test_loss_wiki:.16f})')
-    ax1.axhline(y=test_loss_shakespeare, color='purple', linestyle=':', label=f'Test Loss Tiny-Shakespeare ({test_loss_shakespeare:.16f})')
+    ax1.plot(epochs, test_losses_wiki_per_epoch, label='Test Loss WikiText-2 (per epoch)', marker='^', color='red', alpha=0.7)
+    ax1.plot(epochs, test_losses_shakespeare_per_epoch, label='Test Loss Tiny-Shakespeare (per epoch)', marker='v', color='purple', alpha=0.7)
+    ax1.axhline(y=test_loss_wiki, color='red', linestyle='--', linewidth=1.5, alpha=0.5, label=f'Final Test WikiText-2 ({test_loss_wiki:.4f})')
+    ax1.axhline(y=test_loss_shakespeare, color='purple', linestyle=':', linewidth=1.5, alpha=0.5, label=f'Final Test Shakespeare ({test_loss_shakespeare:.4f})')
     ax1.set_xlabel('Epoch', fontsize=12)
     ax1.set_ylabel('Loss', fontsize=12, color='black')
     ax1.tick_params(axis='y', labelcolor='black')
@@ -699,9 +710,11 @@ def aggregate_results_csv(output_dir, config):
                     aggregate_data[epoch] = {
                         'train_loss': [],
                         'val_loss': [],
+                        'test_loss_wiki': [],
+                        'test_loss_shakespeare': [],
                         'lmc': [],
                         'slope': [],
-                        'lambda': [],
+                        'lmc_weight': [],
                         'entropy': [],
                         'diseq': [],
                         'bins': []
@@ -709,18 +722,20 @@ def aggregate_results_csv(output_dir, config):
                 
                 aggregate_data[epoch]['train_loss'].append(float(row[1]))
                 aggregate_data[epoch]['val_loss'].append(float(row[2]))
-                aggregate_data[epoch]['lmc'].append(float(row[3]))
-                aggregate_data[epoch]['slope'].append(float(row[4]))
-                aggregate_data[epoch]['lambda'].append(float(row[5]))
-                aggregate_data[epoch]['entropy'].append(float(row[6]))
-                aggregate_data[epoch]['diseq'].append(float(row[7]))
-                aggregate_data[epoch]['bins'].append(float(row[8]))
+                aggregate_data[epoch]['test_loss_wiki'].append(float(row[3]))
+                aggregate_data[epoch]['test_loss_shakespeare'].append(float(row[4]))
+                aggregate_data[epoch]['lmc'].append(float(row[5]))
+                aggregate_data[epoch]['slope'].append(float(row[6]))
+                aggregate_data[epoch]['lmc_weight'].append(float(row[7]))
+                aggregate_data[epoch]['entropy'].append(float(row[8]))
+                aggregate_data[epoch]['diseq'].append(float(row[9]))
+                aggregate_data[epoch]['bins'].append(float(row[10]))
     
     # Calculate statistics
     aggregate_stats = {}
     for epoch in sorted(aggregate_data.keys()):
         stats_dict = {}
-        for metric in ['train_loss', 'val_loss', 'lmc', 'slope', 'lambda', 'entropy', 'diseq', 'bins']:
+        for metric in ['train_loss', 'val_loss', 'test_loss_wiki', 'test_loss_shakespeare', 'lmc', 'slope', 'lmc_weight', 'entropy', 'diseq', 'bins']:
             values = np.array(aggregate_data[epoch][metric])
             stats_dict[metric] = {
                 'mean': np.mean(values),
@@ -750,7 +765,7 @@ def aggregate_results_csv(output_dir, config):
         
         # Summary
         writer.writerow(['AGGREGATE RESULTS FROM', f'{config.NUM_OF_RUN_PER_CALL} RUNS'])
-        writer.writerow(['Optimization Strategy', 'Slope-based: If d(Val)/dx < 0 → CE only (λ reset to 1), else CE*(1-mnorm) + LMC*mnorm where mnorm=arctan(m)*λ/(π/2), λ increments on consecutive increases'])
+        writer.writerow(['Optimization Strategy', 'Slope-based: If d(Val)/dx < 0 → CE only (LMC_weight -= 0.1), else CE*(1-LMC_weight) + LMC*LMC_weight (LMC_weight += 0.1), clamped to [0,1]'])
         writer.writerow([])
         
         # Test metrics statistics
@@ -780,9 +795,11 @@ def aggregate_results_csv(output_dir, config):
         header = ['Epoch', 
                  'Train_Loss_Mean', 'Train_Loss_Std', 'Train_Loss_Min', 'Train_Loss_Max',
                  'Val_Loss_Mean', 'Val_Loss_Std', 'Val_Loss_Min', 'Val_Loss_Max',
+                 'Test_Wiki_Mean', 'Test_Wiki_Std', 'Test_Wiki_Min', 'Test_Wiki_Max',
+                 'Test_Shakespeare_Mean', 'Test_Shakespeare_Std', 'Test_Shakespeare_Min', 'Test_Shakespeare_Max',
                  'LMC_Mean', 'LMC_Std', 'LMC_Min', 'LMC_Max',
                  'Slope_Mean', 'Slope_Std', 'Slope_Min', 'Slope_Max',
-                 'Lambda_Mean', 'Lambda_Std', 'Lambda_Min', 'Lambda_Max',
+                 'LMC_Weight_Mean', 'LMC_Weight_Std', 'LMC_Weight_Min', 'LMC_Weight_Max',
                  'Entropy_Mean', 'Entropy_Std', 'Entropy_Min', 'Entropy_Max',
                  'Diseq_Mean', 'Diseq_Std', 'Diseq_Min', 'Diseq_Max',
                  'Bins_Mean', 'Bins_Std', 'Bins_Min', 'Bins_Max']
@@ -790,7 +807,7 @@ def aggregate_results_csv(output_dir, config):
         
         for epoch in sorted(aggregate_stats.keys()):
             row = [epoch]
-            for metric in ['train_loss', 'val_loss', 'lmc', 'slope', 'lambda', 'entropy', 'diseq', 'bins']:
+            for metric in ['train_loss', 'val_loss', 'test_loss_wiki', 'test_loss_shakespeare', 'lmc', 'slope', 'lmc_weight', 'entropy', 'diseq', 'bins']:
                 row.extend([
                     f'{aggregate_stats[epoch][metric]["mean"]:.16f}',
                     f'{aggregate_stats[epoch][metric]["std"]:.16f}',
@@ -823,6 +840,12 @@ def plot_aggregate_results(output_dir, config, aggregate_stats, test_stats):
     val_loss_mean = np.array([aggregate_stats[e]['val_loss']['mean'] for e in epochs])
     val_loss_std = np.array([aggregate_stats[e]['val_loss']['std'] for e in epochs])
     
+    test_wiki_mean_per_epoch = np.array([aggregate_stats[e]['test_loss_wiki']['mean'] for e in epochs])
+    test_wiki_std_per_epoch = np.array([aggregate_stats[e]['test_loss_wiki']['std'] for e in epochs])
+    
+    test_shakespeare_mean_per_epoch = np.array([aggregate_stats[e]['test_loss_shakespeare']['mean'] for e in epochs])
+    test_shakespeare_std_per_epoch = np.array([aggregate_stats[e]['test_loss_shakespeare']['std'] for e in epochs])
+    
     lmc_mean = np.array([aggregate_stats[e]['lmc']['mean'] for e in epochs])
     lmc_std = np.array([aggregate_stats[e]['lmc']['std'] for e in epochs])
     
@@ -830,6 +853,8 @@ def plot_aggregate_results(output_dir, config, aggregate_stats, test_stats):
     ci_factor = 1.96
     train_loss_ci = ci_factor * train_loss_std
     val_loss_ci = ci_factor * val_loss_std
+    test_wiki_ci_per_epoch = ci_factor * test_wiki_std_per_epoch
+    test_shakespeare_ci_per_epoch = ci_factor * test_shakespeare_std_per_epoch
     lmc_ci = ci_factor * lmc_std
     
     # Create figure with dual axes
@@ -843,6 +868,15 @@ def plot_aggregate_results(output_dir, config, aggregate_stats, test_stats):
     ax1.plot(epochs, val_loss_mean, label='Validation Loss (Mean)', marker='s', color='orange', linewidth=2)
     ax1.fill_between(epochs, val_loss_mean - val_loss_ci, val_loss_mean + val_loss_ci, 
                      alpha=0.2, color='orange', label='Validation Loss (95% CI)')
+    
+    # Per-epoch test losses
+    ax1.plot(epochs, test_wiki_mean_per_epoch, label='Test WikiText-2 (Mean, per epoch)', marker='^', color='red', linewidth=1.5, alpha=0.8)
+    ax1.fill_between(epochs, test_wiki_mean_per_epoch - test_wiki_ci_per_epoch, test_wiki_mean_per_epoch + test_wiki_ci_per_epoch,
+                     alpha=0.15, color='red')
+    
+    ax1.plot(epochs, test_shakespeare_mean_per_epoch, label='Test Tiny-Shakespeare (Mean, per epoch)', marker='v', color='purple', linewidth=1.5, alpha=0.8)
+    ax1.fill_between(epochs, test_shakespeare_mean_per_epoch - test_shakespeare_ci_per_epoch, test_shakespeare_mean_per_epoch + test_shakespeare_ci_per_epoch,
+                     alpha=0.15, color='purple')
     
     # Add test loss lines with error bars
     if 'test_loss_wiki' in test_stats:
@@ -1017,7 +1051,9 @@ def run_training_single(output_dir, config, run_num):
     val_losses = []
     lmc_values = []
     slope_values = []
-    lambda_values = []
+    lmc_weight_values = []
+    test_losses_wiki = []
+    test_losses_shakespeare = []
     weights_entropy_values = []
     weights_disequilibrium_values = []
     num_bins_values = []
@@ -1044,34 +1080,45 @@ def run_training_single(output_dir, config, run_num):
     
     prev_val_loss = None
     current_slope = 0.0
-    lambda_counter = 1
+    lmc_weight = 0.0
+    lmc_weight_increment = 0.1  # Step size for incrementing/decrementing
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
         
         train_loss, train_lmc, train_combined = train_epoch(
             model, train_loader, optimizer, scheduler, device, config, vocab_size, 
-            lmc_start=start_weights_lmc, ce_start=start_ce, val_error_slope=current_slope, lambda_counter=lambda_counter
+            lmc_start=start_weights_lmc, ce_start=start_ce, val_error_slope=current_slope, lmc_weight=lmc_weight
         )
         val_loss = validate(model, val_loader, device, vocab_size)
         
-        # Calculate validation error slope d(Val)/dx and update lambda counter
+        # Calculate validation error slope d(Val)/dx and update lmc_weight
         if prev_val_loss is not None:
-            current_slope = val_loss - prev_val_loss
+            raw_slope = val_loss - prev_val_loss
+            current_slope = normalize_slope_arctan(raw_slope)
             if current_slope < 0:
-                # Validation loss decreased - reset lambda counter
-                lambda_counter = 1
-                print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}): slope={current_slope:.6f}, λ=1 (reset) → Optimizing CE only")
+                # Validation loss decreased - decrement lmc_weight
+                lmc_weight = max(0.0, lmc_weight - lmc_weight_increment)
+                print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}): raw_slope={raw_slope:.6f}, norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (decreased) → Optimizing CE")
             else:
-                # Validation loss increased/flat - increment lambda counter
-                lambda_counter += 1
-                print(f"Val loss increased/flat ({prev_val_loss:.4f} → {val_loss:.4f}): slope={current_slope:.6f}, λ={lambda_counter} → Blending CE and LMC")
+                # Validation loss increased/flat - increment lmc_weight
+                lmc_weight = min(1.0, lmc_weight + lmc_weight_increment)
+                print(f"Val loss increased/flat ({prev_val_loss:.4f} → {val_loss:.4f}): raw_slope={raw_slope:.6f}, norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (increased) → Blending CE and LMC")
         else:
             current_slope = 0.0
-            lambda_counter = 1
-            print(f"First epoch: slope=0.0, λ=1 (no previous val loss)")
+            lmc_weight = 0.0
+            print(f"First epoch: slope=0.0, LMC_weight=0.0 (no previous val loss)")
         
         prev_val_loss = val_loss
+        
+        # Test on both datasets after each epoch
+        print("  Testing on WikiText-2...")
+        test_loss_wiki_epoch = test(model, test_loader_wiki, device, vocab_size)
+        print(f"  Test Loss (WikiText-2): {test_loss_wiki_epoch:.16f}")
+        
+        print("  Testing on Tiny-Shakespeare...")
+        test_loss_shakespeare_epoch = test(model, test_loader_shakespeare, device, vocab_size)
+        print(f"  Test Loss (Tiny-Shakespeare): {test_loss_shakespeare_epoch:.16f}")
         
         _, weights_lmc, weights_entropy, weights_diseq, num_bins, probs, bin_centers = calculate_lmc_from_weights(model)
         
@@ -1083,7 +1130,9 @@ def run_training_single(output_dir, config, run_num):
         val_losses.append(val_loss)
         lmc_values.append(weights_lmc)
         slope_values.append(current_slope)
-        lambda_values.append(lambda_counter)
+        lmc_weight_values.append(lmc_weight)
+        test_losses_wiki.append(test_loss_wiki_epoch)
+        test_losses_shakespeare.append(test_loss_shakespeare_epoch)
         weights_entropy_values.append(weights_entropy)
         weights_disequilibrium_values.append(weights_diseq)
         num_bins_values.append(num_bins)
@@ -1115,11 +1164,12 @@ def run_training_single(output_dir, config, run_num):
     
     # Save results with run number
     save_results_to_csv(
-        output_dir, train_losses, val_losses, lmc_values, slope_values, lambda_values,
+        output_dir, train_losses, val_losses, lmc_values, slope_values, lmc_weight_values,
+        test_losses_wiki, test_losses_shakespeare,
         weights_entropy_values, weights_disequilibrium_values, num_bins_values,
         test_loss_wiki, test_metrics_wiki, test_loss_shakespeare, test_metrics_shakespeare, config, run_num
     )
-    plot_results(output_dir, train_losses, val_losses, lmc_values, test_loss_wiki, test_loss_shakespeare, config, run_num)
+    plot_results(output_dir, train_losses, val_losses, lmc_values, test_losses_wiki, test_losses_shakespeare, test_loss_wiki, test_loss_shakespeare, config, run_num)
 
 
 def run_training(output_dir, config):
