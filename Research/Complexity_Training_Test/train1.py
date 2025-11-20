@@ -25,13 +25,13 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 256 
-    EPOCHS = 60
+    EPOCHS = 30
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 1000
+    MAX_SAMPLES = None
     
     # Number of runs per configuration call
-    NUM_OF_RUN_PER_CALL = 2
+    NUM_OF_RUN_PER_CALL = 3
     
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1  # Calculate LMC every X batches (1 = every batch)
