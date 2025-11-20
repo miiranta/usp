@@ -1,0 +1,96 @@
+\documentclass[]{preppgca}
+
+\usepackage{lipsum}                             % para geração de dummy text
+
+\begin{document}
+\titulo{Titulo do Projeto de Pesquisa}
+\aluno{nome aluno}
+\emailaluno{aluno@usp.br}
+\orientador{nome orientador}
+\emailorientador{orientador@usp.br}
+\data{\today}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% IMPORTANTE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Se o documento for um projeto de pesquisa, ao invés de uma proposta,
+% ou seja, você já estiver incrito no programa, retire o comentário
+% da próxima linha.
+%% \PREPPGCAtipodocumento{projeto}
+
+
+\maketitle
+
+\begin{resumo}
+
+  \lipsum[1]
+  
+\end{resumo}
+
+\section*{Introdução}
+\label{intro}
+
+\lipsum[2-3]
+
+\section{Fundamentação Teórica}
+
+\lipsum[4-5]
+
+O manual do \TeX~\cite{knuth1986} pode ser usado para aprendê-lo, e o
+livro do Lamport~\cite{lamport1994} para aprender o
+\LaTeX\index{LaTeX}, mas se quiser ir a fundo tem que ver como o \TeX
+quebra os parágrafos em linhas~\cite{knuth1981}.
+
+\section{Objetivos}
+
+\lipsum[6]
+
+\section{Metodologia}
+
+\lipsum[7]
+
+A Figura~\ref{fig:cilindro}\index{cilindro} mostra o $\ldots$?
+
+\begin{figure}[ht]
+  \caption{Cilindro.}
+  \centering
+  \includegraphics{cilindro.png} 
+  \label{fig:cilindro}
+\end{figure}
+
+
+\subsection{Plano de Trabalho}
+
+\lipsum[8]
+
+O plano de trabalho obedecerá a seguinte sequência:
+
+\begin{enumerate}
+\item Cumprimento dos créditos e estudo do referencial teórico;
+\item Elaboração do modelo;
+\item Desenvolvimento, teste e análise;
+\item Escrita e defesa da dissertação.
+\end{enumerate}
+
+A Tabela~\ref{tab:crono} apresenta o cronograma de execução para o
+plano de trabalho.
+
+\def\mark{$\star$}
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|l|l|l|l|l|l|l|}
+\hline
+                         & \multicolumn{4}{c|}{\textbf{Atividade}} \\ \hline
+\textbf{Semestre}        & 1     & 2     & 3     &    4    \\ \hline
+1/2021 & \mark &       &       &         \\ \hline
+2/2021 & \mark & \mark & \mark &         \\ \hline
+1/2022 &       &       & \mark &         \\ \hline
+2/2022 &       &       &       &  \mark  \\ \hline
+\end{tabular}
+\caption{Cronograma de execução do plano de trabalho.}
+\label{tab:crono}
+\end{table}
+
+\bibliography{refs}
+
+\end{document}

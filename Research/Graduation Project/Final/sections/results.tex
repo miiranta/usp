@@ -45,7 +45,7 @@
         \label{fig:regression_bins_per_filtering}
     \end{figure}
 
-    The average bins show a weak fit with $R^2 = 0.045$, indicating high variability. In contrast, the maximum bins demonstrate an exceptional fit with $R^2 = 0.999$. This is expected, as the maximum bins are only one data point per filtering setting, making it easier to fit a curve through them. The fact that both curves follow an \textbf{exponential trend}, however, is noteworthy.
+    The average bins show a weak fit ($R^2 = 0.045$), indicating high variability. In contrast, the maximum bins demonstrate an exceptional fit ($R^2 = 0.999$). This is expected, as the maximum bins are only one data point per filtering setting, making it easier to fit a curve through them. The fact that both curves follow an \textbf{exponential trend}, however, is noteworthy.
 
     The maximum bins (green dashed line) explodes faster than the average bins (red line) as the filtering becomes less aggressive, meaning that a worst-case scenario grows more rapidly than the average case. Mathematically, while maximum bins grow at a rate of $e ^{0.250x}$, average bins only grow $e ^{0.236x}$.
 
@@ -65,11 +65,11 @@
 
     We can see that the shapes of the plots are similar to each other but follow a different trend compared to the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering}. Except for the spike at 0.125 $\sigma$, they appear to follow a \textbf{logarithmic trend}.
     
-    Overall, the maximum values tend to be a bit more flat and unstable, while the average values show a smoother curve. The shapes are not as simple as the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering} since it does not follow a monotonic downward trend. For reasons unknown, the 0.25 $\sigma$ bar is the global minimum as we can observe an upward trend from 0.25 to 0.125 $\sigma$.
+    Overall, the maximum values tend to be a bit more flat and unstable, while the average values show a smoother curve. The shapes are not as simple as the previous figures \ref{fig:average_bins_per_filtering} and \ref{fig:maximum_bins_per_filtering} since they do not follow a monotonic downward trend. For reasons unknown, the 0.25 $\sigma$ bar is the global minimum as we can observe an upward trend from 0.25 to 0.125 $\sigma$.
 
     Complexity values in 10 and 20 $\sigma$ are almost identical to the unfiltered setting (40 $\sigma$), followed by a gradual decrease that accelerates as the filtering becomes more aggressive until reaching the global minimum.
 
-    We can take a look at the regression lines to understand this behavior better:
+    We can observe the regression lines to understand this behavior better:
 
     \begin{figure}[H] 
         \centering
@@ -77,7 +77,7 @@
         \caption{Average and maximum number of complexity per filtering setting.}
     \end{figure}
 
-    As expected, both average (red line) and maximum (green dashed line) complexity values follow a \textbf{logarithmic trend}, with $R^2 = 0.014$ and $R^2 = 0.578$ respectively. The maximum fit is much better than the average fit due to the same reasons as explained in figure \ref{fig:regression_bins_per_filtering}. The maximum fit here is, however, much worse than the maximum fit in figure \ref{fig:regression_bins_per_filtering}, probably due to the unusual spike at 0.125 $\sigma$.
+    As expected, both average (red line) and maximum (green dashed line) complexity values follow a \textbf{logarithmic trend} ($R^2 = 0.014$ and $R^2 = 0.578$ respectively). The maximum fit is much better than the average fit due to the same reasons as explained in figure \ref{fig:regression_bins_per_filtering}. The maximum fit here is, however, much worse than the maximum fit in figure \ref{fig:regression_bins_per_filtering}, probably due to the unusual spike at 0.125 $\sigma$.
 
     Both curves show a downward trend as the filtering becomes more aggressive that accelerates the more we approach 0 $\sigma$, where all the values are removed. This acceleration is faster in the maximum complexity fit. 
     
@@ -95,15 +95,17 @@
         \centering
         \includegraphics[width=0.85\linewidth]{img/weight_average_complexity_bar.png}
         \caption{Average complexity per weight-type combination.}
+        \label{fig:average_complexity_per_weight_type}
     \end{figure}
 
     \begin{figure}[H] 
         \centering
         \includegraphics[width=0.85\linewidth]{img/weight_maximum_complexity_bar.png}
         \caption{Maximum complexity per weight-type combination.}
+        \label{fig:maximum_complexity_per_weight_type}
     \end{figure}
 
-    Looking at both plots, we can see that the shapes appear to be similar to each other. For a more careful analysis we will divide the ranking in multiple weight types (e.g. bias-embedding; norm-other) and single weight types (e.g. bias; other).
+    Observing figures \ref{fig:average_complexity_per_weight_type} and \ref{fig:maximum_complexity_per_weight_type}, we can see that the shapes appear to be similar to each other. For a more careful analysis we will divide the ranking in multiple weight types (e.g. bias-embedding; norm-other) and single weight types (e.g. bias; other).
 
     We could not find a consistent pattern while analyzing the multiple weight types. It is obvious, however, that classes that include \textbf{other} have similar values since \textbf{other} weights are the majority of parameters in a model.
 
@@ -169,7 +171,7 @@
 
     As expected, all the benchmarks show a positive correlation with parameter count, validating the control set. It is also noticeable that the linear regression $R^2$ values are relatively low indicating a non-linear relationship between parameter count and benchmark performance.
 
-    The concatenation of all benchmarks (\textbf{all}) shows a correlation value of 0.5476 and an $R^2$ value of 0.3002, indicating a moderate positive correlation. This result is an intermediate between the individual benchmarks.
+    The concatenation of all benchmarks (\textbf{all}) shows a correlation value of 0.5476 and an $R^2$ value of 0.3002, indicating a moderate positive correlation. This lies between the individual benchmarks.
 
     Now, we can analyze the actual relationship of interest: LMC complexity vs benchmark performance. The results are as follows:
 
@@ -218,7 +220,7 @@
         \label{tab:statistical_significance}
     \end{table}
 
-    For individual benchmarks, it is possible to observe that only the \textbf{MMLU} correlation is statistically significant at a 0.05 significance level. While \textbf{LMArena} is not significant, it is really close. Still, the margins of error are quite high due to the small sample sizes (n $<$ 30), which makes it difficult to draw strong conclusions from the correlations found. 
+    For individual benchmarks, it is possible to observe that only the \textbf{MMLU} correlation is statistically significant at a 0.05 significance level. While \textbf{LMArena} is not significant, it is really close. Still, the margins of error are quite high due to the small sample sizes (n $<$ 30), making it difficult to draw strong conclusions from the correlations found. 
 
     Interestingly, the benchmarks that are the furthest from significance are the ones with negative correlation (\textbf{MMLU-Pro} and \textbf{OpenLLM}), further indicating that there is more likely a positive bias towards correlation between complexity and benchmark performance than the other way around.
 
@@ -294,7 +296,7 @@
 
     \textbf{All} was put in the first category since the influence of the first category benchmarks made it follow the same trend approximately. 
     
-    Also, it is interesting to see that \textbf{MMLU} and \textbf{MMLU-Pro}, both really similar benchmarks, behaved quite differently. It is noticeable that \textbf{MMLU-Pro} has a bigger concentration of newer models which might indicate the reason, but still further investigation is required.
+    Also, it is interesting to see that \textbf{MMLU} and \textbf{MMLU-Pro}, which are very similar benchmarks, behaved quite differently. It is noticeable that \textbf{MMLU-Pro} has a bigger concentration of newer models which might indicate the reason, but still further investigation is required.
 
     In all cases, we can see that the free regressions do not appear to be able to capture the behavior of the data points well due to their outliers. The linear regressions are also influenced by the same factor, leading to low $R^2$ values. This is a further indicator that LMC complexity appears not to be a reliable predictor of benchmark performance.
 

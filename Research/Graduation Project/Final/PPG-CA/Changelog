@@ -1,0 +1,137 @@
+# Changelog
+
+## 2.5 - 2020-06-10
+### [dissertacao](dissertacao)
+- update Overleaf link
+- resend to Overleaf
+- add command for 'folharosto' in english, \coversheet
+- update Overleaf link
+- fix 'versao corrigida' macros
+
+## 2.4 - 2018-02-27
+### [dissertacao](dissertacao)
+- Mudança em `ppgca.cls` com a não-utilização do pacote `fancyhdr`.
+ O erro descrito no [issue 1](https://github.com/ajholanda/modelos-ppgca/issues/1)
+ era causado por uma variável chamada `\mark` definida no arquivo principal `main.tex`.
+
+## 2.3 - 2018-02-27
+### [dissertacao](dissertacao)
+- Mudança em `ppgca.cls` para gerar o cabeçalho usando o pacote `fancyhdr`
+- Adição da opção em `main.tex` para adicionar tabulação na primeira linha
+  do primeiro parágrafo de cada capítulo.
+- Adição da opção em `main.tex` para remover o cabeçalho deixando-o em branco.
+## 2.2 - 2018-02-21
+- Os capítulos ainda apareciam repetidos pois faltava "zerar" a
+  variável `chaptermark`.
+
+## 2.1 - 2018-02-21
+### [dissertacao](dissertacao)
+- Os títulos dos capítulos e seções estavam duplicando em algumas compilações.
+  O comando  `\renewcommand{\sectionmark}[1]{}` deve que ser adicionado antes
+  da construções dos títulos dos capítulos.
+
+## 2.0 - 2018-11-21
+### [dissertacao](dissertacao)
+- Retirada do ambiente `otherlanguage*` do "Abstract" em `[main.tex](dissertacao/main.tex)`, pois
+quando o idioma inglês era escolhido, após passar por este ambiente, a linguagem era trocada para
+o português após executar o `latex`, isto não acontecia com o `xelatex` ou `lualatex` pois estes usam o `polyglossia`.
+- Adição da opção `englishwr` como argumento para `\documentclass`
+em `[main.tex](dissertacao/main.tex)` que faz com que os principais
+elementos da capa e folha de rosto e alguns títulos como
+"Biobliografia" sejam convertidos para o inglês. A opção vem
+comentada e basta retirar o comentário para que o efeito seja
+produzido.
+- O pacote `babel` estava causando conflito quando se escolhia a
+linguagem "english" pois este já era carregado na classe
+`abntex.cls`. A solução foi usar o comando
+`\selectlanguage{english}` com a condição indireta de carregar se
+`engliswr` for fornecido como argumento para
+`\documentclass{ppgca}`. `[ppgca.cls](dissertacao/ppgca.cls)`
+- A capa e folha de rosto estão obedecendo estritamento a norma ABNT seguindo
+  o modelo sugerido no documento
+	[ABNT Parte
+	I](http://www.livrosabertos.sibi.usp.br/portaldelivrosUSP/catalog/view/111/95/491-1). `[main.tex](dissertacao/main.tex)`
+- Foram adicionadas variáveis locais para evitar o uso muitas variáveis globais
+  e muitas varias do pacote ABNTeX foram substituídas para reduzir a dependência
+  do pacote. [ppgca.cls](dissertacao/ppgca.cls)
+
+### [poster](poster)
+- Foi adicionado mais espaço na parte superior e inferior do poster para que um suporte
+para fixá-lo possa ser colocado.
+
+## v1.7 - 2018-07-16
+- Retirada do comando `\PPGCAtipodocumento` ao qual poderiam ser atribuídos os valores
+  "impresso", para versão impressa e "digital" para a versão digital do documento.
+  O documento só pode ter uma única versão após decisão do Conselho de Pós-Graduação.
+
+## v1.6 - 2018-06-25
+- [`dissertacao/ppgca.cls`](dissertacao/ppgca.cls) - adição dos pacotes algorithmicx and listings
+  para manipulação de algoritmo e código fonte.
+
+## v1.5 - 2018-06-25
+- [`dissertacao/ppgca.cls`](dissertacao/ppgca.cls) - adição dos pacotes amsfonts, amsmath, amssymb.
+
+## v1.4 - 2018-06-25
+- [`dissertacao/ppgca.cls`](dissertacao/ppgca.cls) - posicionamento da ficha catalográfica no
+  verso da folha de rosto am ambos os tipos de documento.
+  - [`dissertacao/ppgca.cls`](dissertacao/ppgca.cls) - remoção do pacote `backref` para que o
+  texto "Nenhuma citação no texto." não apareça nas referências, pois a citação do texto nas
+  referências não é necessária.
+  - [`dissertacao/ppgca.cls`](dissertacao/ppgca.cls) - adição de comando `PPGCAdocumentversion`
+  que se for inserido argumento `"corrigida"`, aparecerá o texto "Versão Corrigida" após o "título"
+  na folha de rosto, indicando que é a versão do manuscrito que já passou pelas correções feitas
+  pela banca. Caso contrário, "Versão Original" será impresa indicando que é a versão entregue
+para a defesa.
+
+## V1.3 - 2018-06-20
+- [`poster/ppgcaposter.cls`](`poster/ppgcaposter.cls`) - change "Campus de Ribeirão Preto" by
+  "Universidade de São Paulo".
+- [`poster/main.tex`](`poster/main.tex`) - change the font size of affiliation and
+ add the meaning of the abbreaviture "FFCLRP".
+
+## v1.2 - 2018-06-20
+- [`projeto-pesquisa/preppgca.cls`](`projeto-pesquisa/preppgca.cls`) - add graduate program name
+ into `\maketitle` output, when argument is 'projeto' in `\PREPPGCAtipodocument` command.
+
+## v1.1 - 2018-06-18
+### Changed
+- [`README.md`](README.md) - link to research proposal project LaTeX template.
+- [`projeto-pesquisa/main.tex`](`projeto-pesquisa/main.tex`) - comment \PREPPGCAtipodocument
+  command.
+
+## v1.0 - 2018-06-18
+### Added
+- LaTeX template for research project/proposal manuscript
+  in the directory [`projeto-pesquisa`](projeto-pesquisa).
+  Three main files were created: class
+  [`projeto-pesquisa/preppgca.cls`](projeto-pesquisa/preppgca.cls),
+  LaTeX file [`projeto-pesquisa/main.tex`](projeto-pesquisa/main.tex) and
+  BibTeX file [`projeto-pesquisa/refs.bib`](projeto-pesquisa/refs.bib).
+- `projeto-pesquisa/README.md`](projeto-pesquisa/README.md) - recipe
+  to generate the files and link to Overleaf template.
+
+- [`ignoreMe`](ignoreMe) directory with notes like time spent in the
+  project and writings about each step.
+
+### Changed
+- [`dissertacao/ppgca.cls`](dissertacao/ppgca.cls) - change macros to accept
+  switch from digital to press version. A lot of temporary variables were created
+  and some configurations from base classes `memoir.cls` and `abntex2.cls` were
+  changed.
+- [`dissertacao/ppgca.cls`](dissertacao/ppgca.cls) - change format for _capa_ and
+  _folha_ _de_ _rosto_, and the chapter title header for elements before main text.
+- [`dissertacao/main.tex`](dissertacao/main.tex) - add command `\PPGCAtipodocumento`
+  to set if the manuscript will be print or only be in digital format.
+
+## v0.11 - 2018-06-11
+### Changed
+- Insert overleaf initial page link for poster.
+
+## v0.1 - 2018-06-07
+### Changed
+- Insert dissertation/thesis template overleaf link
+  into [`dissertacao/README.md`](dissertacao/README.md`).
+
+## 2017-10-23
+### Changed
+- Chapter style becomes fancier based on existing tips at http://zoonek.free.fr/LaTeX/LaTeX_samples_chapter/0.html.
