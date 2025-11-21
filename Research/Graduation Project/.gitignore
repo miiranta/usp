@@ -8,6 +8,11 @@
 *.bbl
 *.run.xml
 *.bcf
+*.idx
+*.ilg
+*.ind
+*.out
+*.log
 
 papers-and-books
 examples

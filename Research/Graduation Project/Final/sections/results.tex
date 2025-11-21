@@ -1,6 +1,6 @@
-\section{Results}
+\chapter{Results}
 
-\subsection{Extraction process}
+\section{Extraction process}
 
     The dataset in section \ref{sec:building_testing_dataset} was built successfully through the process described. 
 
@@ -12,7 +12,7 @@
         \item Some numerical values such as count, min, max, mean, std, bin\_count, shannon\_entropy, disequilibrium, and complexity were reported as NaN or infinite values in certain model and weight-type combinations, which required their exclusion from the dataset. The reasons are unknown, but the main suspects are floating-point precision errors and divisions by zero in some edge cases.
     \end{itemize}
 
-\subsection{Filter dimension}
+\section{Filter dimension}
 
     Following the methodology described in section \ref{sec:best_filtering_setting}, we obtained the plots for average and maximum number of histogram bins per filtering setting across all models and weight-type combinations:
     
@@ -87,7 +87,7 @@
 
     Analyzing the criteria together, we can conclude that the best filtering setting is \textbf{20 $\sigma$}, as it provides a significant reduction in the number of histogram bins while maintaining an almost identical complexity value compared to the unfiltered data. 
     
-\subsection{Weight-type dimension}
+\section{Weight-type dimension}
 
     Following the methodology described in section \ref{sec:weight_type_analysis}, we obtained the plots for average and maximum LMC complexity values per weight-type combination across all models using the best filtering setting (20 $\sigma$):
 
@@ -115,7 +115,7 @@
 
     We will proceed with the analysis using all weight types combined except \textbf{embedding} (the \textbf{bias-norm-other} combination). This is justified as \textbf{embedding} has the lowest complexity values and is not likely to contribute significantly to the overall complexity of the model. Also because removing them allows us to follow the same methodology as the scaling laws study \cite{Kaplan2020}.
 
-\subsection{Complexity vs Number of parameters}
+\section{Complexity vs Number of parameters}
 \label{sec:complexity_vs_num_params_results}
 
     Following the methodology described in section \ref{sec:complexity_vs_num_params}, we obtained the following plot for average and maximum LMC complexity values against the number of parameters across the bias-norm-other weight-type combination using the best filtering setting (20 $\sigma$):
@@ -136,7 +136,7 @@
 
     Also, since number of parameters is a known predictor of model performance \cite{Kaplan2020}, we can conclude right away that the high average complexity values found in the spike regions at the end, genuine or not, are likely to induce a bias towards better performance in the final analysis.
 
-\subsection{Complexity vs Number of bins}
+\section{Complexity vs Number of bins}
 
     Following the methodology described in section \ref{sec:complexity_vs_num_bins}, we obtained the following plot for average LMC complexity values against the number of histogram bins across the bias-norm-other weight-type combination using the best filtering setting (20 $\sigma$):
 
@@ -150,21 +150,21 @@
 
     The graphical similarity to the previous section (\ref{sec:complexity_vs_num_params_results}) might indicate that there may be a strong correlation between the number of parameters and the number of histogram bins. A possible explanation is that larger models tend to have a wider range of weight values, leading to more histogram bins when using the Freedman-Diaconis choice \cite{FreedmanDiaconis1981}. However, in this case, we don't have a gap between two spikes, which may indicate that this correlation is probably a coincidence.
     
-\subsection{Complexity vs Benchmarks}
+\section{Complexity vs Benchmarks}
 \label{sec:complexity_vs_benchmark_performance_results}
 
     Following the methodology described in section \ref{sec:complexity_vs_benchmark_performance}, using the bias-norm-other combination and the best filtering setting (20 $\sigma$) dataset, we made a control plot using a known correlation: parameter count vs benchmark performance. The results are as follows:
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.8\linewidth]{img/noembed-weights/control_correlation_comparison.png}
+        \includegraphics[width=0.7\linewidth]{img/noembed-weights/control_correlation_comparison.png}
         \caption{Pearson correlation for parameter count vs benchmark performance.}
         \label{fig:control_correlation_comparison}
     \end{figure}
 
     \begin{figure}[H]
         \centering
-        \includegraphics[width=0.8\linewidth]{img/noembed-weights/control_r2_linear_comparison.png}
+        \includegraphics[width=0.7\linewidth]{img/noembed-weights/control_r2_linear_comparison.png}
         \caption{$R^2$ values for parameter count vs benchmark performance.}
         \label{fig:control_r2_linear_comparison}
     \end{figure}
@@ -177,14 +177,14 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=0.8\linewidth]{img/noembed-weights/complexity_correlation_comparison.png}
+        \includegraphics[width=0.7\linewidth]{img/noembed-weights/complexity_correlation_comparison.png}
         \caption{Pearson correlation for Complexity vs benchmark performance.}   
         \label{fig:complexity_correlation_comparison}
     \end{figure}
 
     \begin{figure}[H]
         \centering
-        \includegraphics[width=0.8\linewidth]{img/noembed-weights/complexity_r2_linear_comparison.png}
+        \includegraphics[width=0.7\linewidth]{img/noembed-weights/complexity_r2_linear_comparison.png}
         \caption{$R^2$ values for complexity vs benchmark performance.}
         \label{fig:complexity_r2_linear_comparison}
     \end{figure}

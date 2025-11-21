@@ -1,4 +1,4 @@
-\section{Introduction}
+\chapter{Introduction}
 
 Since the creation of Transformers in 2017 \cite{Vaswani2017} and the subsequent usage of this new technique in the training of Large Language Models (LLMs), there has been a gold rush within the machine learning world. GPT-3.5, the original ChatGPT model, rapidly gained widespread adoption, becoming the fastest-growing consumer application in history after its launch in 2022 \cite{ChatGPTAdoption2022}, sparking further interest in researchers, investors, and the general public for more powerful and cost-efficient models. 
 
@@ -14,15 +14,14 @@ The second approach is what we intend to contribute in this work: an improvement
 
 Discussing the understanding of the learning process is out of the scope of this work. Yet, we are going to analyze what may be a piece of the puzzle: the LMC statistical complexity \cite{LopezRuiz1995}, a metric that appears to be related to the model's performance and might help in understanding the behavior of such by providing insights about the weight's distribution.
 
-\subsection{Work thesis}
+\section{Work thesis}
 
     The main hypothesis of this work comes from Professor Luiz Otavio Murta Junior \cite{MurtaJunior2025} and can be summarized as: \textbf{"There exists a relationship between model complexity and its inference capability"}.
 
-\subsection{Objective}
+\section{Objective}
 
     Validating the work thesis means we would have a new way of indirectly assessing a model's performance by just looking at the distribution of its weights, opening the door to new optimization processes during training, potentially reducing the amount of compute necessary to reach the best performance or even discovering new maxima. Also, having a validated weights distribution vs. performance comparison should improve the data richness when studying a model's learning process in future studies. Thus, we can establish the following objectives for this work:
     \begin{itemize}
         \item Validate the existence of a meaningful relationship between the complexity of neural network weights and their inference performance.
-        \item If possible, find the mathematical relation between those measures.
         \item Explore other dimensions of the problem that can affect complexity and performance measures such as parameter count.
     \end{itemize}

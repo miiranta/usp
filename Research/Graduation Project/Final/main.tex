@@ -1,76 +1,63 @@
-\documentclass[12pt,a4paper]{article}
-\usepackage{a4wide}
-\usepackage[english]{babel}
-\usepackage[utf8]{inputenc}
-\usepackage[style=ieee,backend=biber,citestyle=numeric]{biblatex}
+\documentclass[
+12pt,
+openany,
+twoside,
+a4paper,
+englishwr,
+english
+]{ppgca}
+
+%\usepackage[style=ieee,backend=biber,citestyle=numeric]{biblatex}
 \usepackage{csquotes}
-\usepackage{amsmath}
 \usepackage{enumitem}
-\usepackage{geometry} 
-\usepackage{graphicx}
 \usepackage{float}
 \usepackage{tcolorbox}
+\usepackage[left=2.5cm,right=2.5cm,top=3cm,bottom=2cm]{geometry}
 
-\addbibresource{refs.bib}
+%\addbibresource{refs.bib}
 
+% User's custom commands
 \setcounter{secnumdepth}{4}
 \setcounter{tocdepth}{4}
 
-\newcommand{\subsubsubsection}[1]{%
-    \refstepcounter{paragraph}%
-    \addcontentsline{toc}{paragraph}{\theparagraph\quad #1}
-    \vspace{0.6em}%
-    \noindent\textbf{\theparagraph\quad #1}\par
-    \vspace{0.2em}%
-}
+% Info
+\title{Comparing the LMC Complexity of Neural Networks with their Inference Capability}
+\author{Lucas Miranda Mendonça Rezende}
+\local{Ribeirão Preto--SP}
+\data{2025}
+\orientador{Ph.D. Luiz Otavio Murta Junior}
+\tipotrabalho{Dissertation}
 
-\title{
-    {\small 
-        Universidade de São Paulo\\
-        Faculdade de Filosofia, Ciências e Letras de Ribeirão Preto\\
-        Departamento de Computação e Matemática\\[1cm]
-    }
+\preambulo{Dissertation presented to the Faculty of Philosophy, Sciences and Letters of Ribeirão Preto (FFCLRP) from the University of São Paulo (USP), as part of the requirements to hold the Bachelor of Science degree.}
 
-    \vspace*{\fill}
-    Comparing the LMC Complexity of Neural Networks with their Inference Capability
-    \vspace*{\fill}
-}
-\author{
-    Author: Lucas Miranda Mendonça Rezende\\ 
-    Supervisor: Ph.D. Luiz Otavio Murta Junior
-}
-\date{\today}
-
-\setlength{\parskip}{.5ex}
+\makeindex
 
 \begin{document}
-    \pagenumbering{gobble}
-        \maketitle
 
-    \newpage
-    \pagenumbering{arabic}
-        \vspace*{\fill}
-            \begin{abstract}
-                Current scaling laws suggest that model performance improves with increased parameters, dataset size, and compute, but these improvements follow power laws requiring exponential resources for constant gains. Understanding the learning process through alternative metrics could enable architectural improvements and optimization during training. This work investigates whether LMC statistical complexity, a measure combining Shannon entropy and disequilibrium of weight distributions, correlates with neural network inference capability. We analyzed 35 open-weight transformer-based language models from Meta, Google, Microsoft, and OpenAI, ranging from 117 million to 150 billion parameters, computing LMC complexity across different weight-type combinations (bias, norm, embedding, other) and filtering settings. Model performance was evaluated using four benchmarks: MMLU, MMLU-Pro, OpenLLM, and LMArena. Results showed no statistically significant general correlation between LMC complexity and benchmark performance while individual benchmarks exhibited mixed results.
-            \end{abstract}
-        \vspace*{\fill}
+\selectlanguage{english}
+\renewcommand{\contentsname}{Table of Contents}
+\renewcommand{\bibname}{References}
 
-    \newpage
-        \tableofcontents
+\imprimircapa
+\imprimirfolhaderosto
 
-    \newpage
-    \input{sections/introduction}
+% Abstract
+\begin{resumo}[Abstract]
+    Current scaling laws suggest that model performance improves with increased parameters, dataset size, and compute, but these improvements follow power laws requiring exponential resources for constant gains. Understanding the learning process through alternative metrics could enable architectural improvements and optimization during training. This work investigates whether LMC statistical complexity, a measure combining Shannon entropy and disequilibrium of weight distributions, correlates with neural network inference capability. We analyzed 35 open-weight transformer-based language models from Meta, Google, Microsoft, and OpenAI, ranging from 117 million to 150 billion parameters, computing LMC complexity across different weight-type combinations (bias, norm, embedding, other) and filtering settings. Model performance was evaluated using four benchmarks: MMLU, MMLU-Pro, OpenLLM, and LMArena. Results revealed that, despite statistical significance in aggregated analyses and specific benchmarks like MMLU, a general correlation between LMC complexity and benchmark performance cannot be confirmed. The observed positive trends were often driven by outliers or showed inconsistent patterns, suggesting that LMC complexity might not be a reliable predictor of inference capability in the studied context.
+\end{resumo}
 
-    \newpage
-    \input{sections/methods}
+\pdfbookmark[0]{\contentsname}{toc}
+\tableofcontents*
+\cleardoublepage
 
-    \newpage
-    \input{sections/results}
+\textual
 
-    \newpage
-    \input{sections/conclusion}
+\input{sections/introduction}
+\input{sections/methods}
+\input{sections/results}
+\input{sections/conclusion}
 
-    \newpage
-    \printbibliography
+\bibliographystyle{ieeetr}
+\bibliography{refs}
 
 \end{document}

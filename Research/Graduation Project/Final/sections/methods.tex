@@ -1,7 +1,7 @@
-\section{Methodology}
+\chapter{Methodology}
 \label{sec:methodology}
 
-\subsection{Testing Environment}
+\section{Testing Environment}
 \label{sec:experimental_setup}
 
 We used the following computational environment for our experiments:
@@ -30,7 +30,7 @@ We used the following tools and libraries:
 \end{itemize}
 The choice of versions was motivated by compatibility with our computational environment's GPU.
 
-\subsection{Model Selection}
+\section{Model Selection}
 
 Due to the wide availability of open models combined with the ease of accessing them through the Transformers library \cite{Wolf2019} and Hub library \cite{HuggingFaceHub}, \textbf{Hugging Face} was chosen as the source for model selection in this study.
 
@@ -128,7 +128,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     \cite{OpenAIGPT2}
 \end{tcolorbox}
 
-\subsection{LMC Complexity}
+\section{LMC Complexity}
 \label{sec:lmc_complexity}
 
     According to \cite{LopezRuiz1995}, LMC Statistical Complexity is the product of two other measures: Disequilibrium and Shannon entropy. 
@@ -143,7 +143,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
     The values \( p_i \) represent the probabilities associated with each state \( i \) in the distribution, and \( n \) is the total number of states. K is a positive constant and, in our case, is set to 1 for simplicity. K can be changed later since \( C_{LMC} = (-K \sum_{i=1}^{n} p_i \log p_i)  \times D \) is equivalent to \( C_{LMC} = K \times (- \sum_{i=1}^{n} p_i \log p_i)  \times D \).
 
-    \subsubsection{Reading Model Weights}
+    \subsection{Reading Model Weights}
     \label{sec:reading_model_weights}
 
         Model weights are fetched using the Hugging Face Hub library \cite{HuggingFaceHub} and loaded using the Transformers library \cite{Wolf2019}. For each selected model, we instantiate the model using the \textbf{AutoModel} utility, which automatically handles model architecture loading and weight initialization. 
@@ -166,7 +166,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         
         The choice of also analyzing by weight type is motivated by the fact that different weight types may exhibit different statistical properties and, as a consequence, different complexity characteristics. Studies such as the already cited OpenAI's \cite{Kaplan2020} take into account different weight types when analyzing scaling laws.
 
-    \subsubsection{Filtering}
+    \subsection{Filtering}
     \label{sec:filtering}
 
         Casting different encoding formats to float32 may introduce rounding errors that manifest as extreme outliers in the weight distribution. This is rare (approximately 10 to 30 values in 100 billion) but can be problematic for our next step: histogram construction (section \ref{sec:data_discretization}), since the number of bins will be affected by the range of values in the data. The reasons for these rounding errors could not be fully investigated within the scope of this work, but they are likely related to floating point rounding errors.
@@ -186,7 +186,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             \item has the least amount of filtering or, in other words, the highest value of \( \sigma_{\text{filter}} \) among the ones chosen in the first criterion.
         \end{enumerate}
 
-    \subsubsection{Data Discretization and Histogram}
+    \subsection{Data Discretization and Histogram}
     \label{sec:data_discretization}
 
         To compute the LMC complexity of a finite array of floating-point numbers, we first construct a histogram to discretize the data into a probability distribution. This is justified as the chance of finding two identical numbers is extremely low and, as a consequence, it is hard to determine the probability of each value. 
@@ -209,11 +209,11 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         Finally, we can use the already filtered data and the calculated \( n \) to build a histogram using a simple function provided by PyTorch \cite{Paszke2019}. Then, compute the probabilities \( p_i \) for each bin \( i \).
 
-    \subsubsection{Complexity Calculation}
+    \subsection{Complexity Calculation}
 
         With the probabilities \( p_i \) computed from the histogram, we can now calculate the LMC complexity \( C_{LMC} \) using the formulas provided in the beginning of section \ref{sec:lmc_complexity}. This involves calculating the Disequilibrium \( D \) and the Shannon entropy \( H \) using the probabilities, and then multiplying them to obtain the final complexity measure \( C_{LMC} \).
 
-\subsection{Inference Capability}
+\section{Inference Capability}
 \label{sec:inference_capability}
 
     Often called model performance, inference capability refers to how well a trained neural network performs on unseen data. This is typically measured using various metrics depending on the specific task the model is designed for. 
@@ -221,7 +221,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     In the previously cited research paper by OpenAI \cite{Kaplan2020}, performance was associated with test cross-entropy loss. This metric quantifies the difference between the predicted probability distribution output by the model and the true distribution of the target labels. Lower cross-entropy loss values indicate better model performance, as they reflect a closer alignment between predictions and actual outcomes.
 
         Unfortunately, not all models we intend to analyze have publicly available training and test data. It is also not possible to run models in a training setting due to performance limitations of the computational environment available. Therefore, we have to rely on imperfect proxies for performance such as \textbf{benchmarks}.
-    \subsubsection{Benchmark Selection}
+    \subsection{Benchmark Selection}
     \label{sec:benchmark_selection}
 
         Benchmarks are standardized tests designed to evaluate the performance of machine learning models across various tasks. They provide a common ground for comparison by measuring how well different models perform on the same datasets using predefined metrics. 
@@ -250,7 +250,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             \item \textbf{LMArena (Score)}: An online platform where users can submit questions and receive responses from two anonymous large language models (LLMs), then vote on which answer they prefer, helping to crowdsource human preferences for evaluating and ranking LLMs. Its evaluation works by collecting thousands of pairwise comparisons from users, using the Bradley-Terry system to estimate win rates and compute rankings/scores \cite{Chiang2024}.
         \end{itemize}
 
-    \subsubsection{Benchmark Collection Procedure}
+    \subsection{Benchmark Collection Procedure}
     \label{sec:benchmark_collection_procedure}
 
         Benchmark values were manually collected from multiple sources, in the following order of priority:
@@ -323,9 +323,9 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             \label{fig:benchmark_availability}
         \end{figure}
 
-\subsection{Comparing LMC Complexity and Inference Capability}
+\section{Comparing LMC Complexity and Inference Capability}
 
-    \subsubsection{Building the testing dataset}
+    \subsection{Building the testing dataset}
     \label{sec:building_testing_dataset}
 
         We will build a dataset by creating tuples that encode all dimensions of our analysis: model information, weight-type combination, filtering setting, the resulting LMC complexity value, the number of histogram bins used, and the available benchmark results for the model.
@@ -363,7 +363,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             \item \texttt{(Llama-4-Scout-17B-16E, 17B params, \{bias\}, 0.125, 0.324, 8592, [MMLU: 71.2, MMLU-Pro: 68.5, ...])}
         \end{itemize}
 
-    \subsubsection{Regression procedures}
+    \subsection{Regression procedures}
     \label{sec:regression_procedures}
             
         We will also use two important concepts defined as follows:
@@ -395,7 +395,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         \end{itemize}
 
-    \subsubsection{Influence of filtering}
+    \subsection{Influence of filtering}
     \label{sec:best_filtering_setting}
 
         In more detail, the criteria defined in section \ref{sec:filtering} to choose the best filtering setting work as follows:
@@ -411,7 +411,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         We will also make a free regression on a scatter plot for the data obtained in steps 1 and 2 to analyze how filtering strength affects histogram bin count and complexity, respectively.
 
-    \subsubsection{Influence of weight types}
+    \subsection{Influence of weight types}
     \label{sec:weight_type_analysis}
 
         After defining the best filtering setting, we will analyze how the choice of weight types influences the final complexity results. This will help us understand if certain weight types contribute more significantly to the overall complexity measure.
@@ -425,21 +425,21 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
         After choosing the best weight-type combination, we will discard all the runs in \( R_{f} \) where the weight-type combination is different from the chosen one, creating a new set $\mathbf{R}_{\mathbf{best}}$. There will be a total of: \( 35 \text{ models } \times 1 \text{ weight-type combination } \times 1 \text{ filtering setting } = 35 \text{ data points}\).
 
 
-    \subsubsection{Complexity vs Number of parameters}   
+    \subsection{Complexity vs Number of parameters}   
     \label{sec:complexity_vs_num_params}
 
         We will analyze how LMC complexity varies with the number of model parameters. This will be done by calculating the \textbf{average complexity} for each range of parameters and plotting it as a histogram. The number of bins of this plot will be defined using the Freedman-Diaconis rule \cite{FreedmanDiaconis1981} to adapt to the distribution.
 
         We will look for trends or patterns that may indicate a relationship between model size and complexity.
 
-    \subsubsection{Complexity vs Number of bins}
+    \subsection{Complexity vs Number of bins}
     \label{sec:complexity_vs_num_bins}
 
         Similarly to \ref{sec:complexity_vs_num_params}, we will analyze how LMC complexity varies with the number of histogram bins used in its calculation. This will be done by calculating the \textbf{average complexity} for each range of bins and plotting it as a histogram. The number of bins of this plot will be defined using the Freedman-Diaconis rule \cite{FreedmanDiaconis1981} to adapt to the distribution.
 
         We will look for trends or patterns that may indicate a relationship between histogram granularity and complexity.
 
-    \subsubsection{Complexity vs Benchmark performance}
+    \subsection{Complexity vs Benchmark performance}
     \label{sec:complexity_vs_benchmark_performance}
 
         Finally, we will analyze the relationship between LMC complexity and benchmark performance. This analysis aims to determine whether higher LMC complexity is associated with better model performance across different benchmarks, in order to validate or refute the hypothesis that complexity correlates with inference capability.
