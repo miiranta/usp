@@ -487,10 +487,7 @@
 }
 
 \def\@ENdescription{
-  \@ENdocumenttype~presented to \@faculty~(FFCLRP) from
-  the \@institution~(USP),
-  as part of the requirements to hold the Master of
-  Science degree.\par
+  \imprimirpreambulo\par
 
   \vspace{.7cm}
   Field of Study: Applied Computing.\par
