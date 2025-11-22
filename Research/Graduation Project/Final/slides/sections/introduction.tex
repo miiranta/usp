@@ -1,0 +1,34 @@
+\section{Introduction}
+
+\begin{frame}{Context: The Era of Large Language Models}
+    \begin{itemize}
+        \item \textbf{Transformers (2017)}: Revolutionized NLP, enabling massive parallelization.
+        \item \textbf{Rapid Adoption}: GPT-3.5 (ChatGPT) became the fastest-growing consumer app.
+        \item \textbf{Scaling Laws} \cite{Kaplan2020}:
+        \begin{itemize}
+            \item Performance depends strongly on scale ($N$, $D$, $C$) and weakly on shape.
+            \item Follows \textbf{Power Laws}: $L(N) \approx (N_c/N)^\alpha$.
+        \end{itemize}
+        \item \textbf{The Cost}: Exponential increase in resources (Compute, Data, Parameters) required for constant linear gains in performance.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Problem Statement and Thesis}
+    \textbf{The Problem}:
+    \begin{itemize}
+        \item Current scaling is resource-intensive and showing signs of diminishing returns.
+        \item Understanding the "learning" process is crucial for architectural improvements.
+    \end{itemize}
+
+    \vspace{0.5cm}
+    \begin{block}{Work Thesis}
+        "There exists a relationship between model complexity and its inference capability." \cite{MurtaJunior2025}
+    \end{block}
+
+    \vspace{0.5cm}
+    \textbf{Objectives}:
+    \begin{enumerate}
+        \item Validate if LMC statistical complexity of weights correlates with inference performance.
+        \item Analyze the influence of other dimensions: Parameter count, Weight types, and Filtering.
+    \end{enumerate}
+\end{frame}

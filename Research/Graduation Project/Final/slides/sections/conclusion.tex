@@ -1,0 +1,48 @@
+\section{Conclusion}
+
+\begin{frame}{Conclusion}
+    \begin{block}{Main Finding}
+        \textbf{A general correlation between LMC Complexity and Inference Capability cannot be confirmed.}
+    \end{block}
+
+    \vspace{0.5cm}
+    \textbf{Evidence For Hypothesis}:
+    \begin{itemize}
+        \item Statistically significant positive correlation in aggregated data ($r \approx 0.31$).
+        \item MMLU shows significant positive correlation ($p < 0.05$).
+        \item Positive correlations are stronger/more significant than negative ones.
+    \end{itemize}
+
+    \textbf{Evidence Against Hypothesis}:
+    \begin{itemize}
+        \item Positive trends are heavily driven by outliers (GPT-OSS).
+        \item Inconsistent trends across benchmarks (some negative).
+        \item Low $R^2$ values compared to parameter count control.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Future Work}
+    \begin{enumerate}
+        \item \textbf{Controlled Training}: 
+        \begin{itemize}
+            \item Train models from scratch.
+            \item Compare Test Loss vs Complexity directly (removes benchmark noise).
+        \end{itemize}
+        \item \textbf{Self-Comparison}: 
+        \begin{itemize}
+            \item Track complexity evolution of a \textit{single} model during training.
+        \end{itemize}
+        \item \textbf{Optimization}: 
+        \begin{itemize}
+            \item Can maximizing LMC complexity (e.g., of Norm layers) during training improve efficiency or performance?
+        \end{itemize}
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}
+    \centering
+    \Huge \textbf{Thank You!}
+    
+    \vspace{1cm}
+    \large Questions?
+\end{frame}

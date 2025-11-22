@@ -1,0 +1,115 @@
+\section{Methodology}
+
+\begin{frame}{Experimental Setup}
+    \textbf{Hardware Constraints}:
+    \begin{itemize}
+        \item \textbf{RAM}: 512GB DDR4 (Crucial for loading large models).
+        \item \textbf{GPU}: NVIDIA Quadro P5000 (16GB) - Insufficient for inference of >70B models.
+        \item \textbf{CPU}: 2x Intel Xeon Gold 6130 (64 threads).
+    \end{itemize}
+
+    \textbf{Implication}:
+    \begin{itemize}
+        \item Models loaded in \textbf{Main Memory (CPU)} cast to \texttt{float32}.
+        \item Inference not possible locally; reliance on reported benchmarks.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Model Selection Strategy}
+    \textbf{Source}: Hugging Face (Open Weights).
+    
+    \textbf{Selection Criteria}:
+    \begin{itemize}
+        \item Transformer-based, Text-only, Base models (no fine-tunes).
+        \item Parameter count $< 150$ Billion.
+        \item Supported by \texttt{AutoModel} utility.
+    \end{itemize}
+
+    \textbf{Selected Models (35 Total)}:
+    \begin{itemize}
+        \item \textbf{Meta}: Llama 2, 3, 3.1, 3.2, 4 (Scout).
+        \item \textbf{Google}: Gemma 1, 2, 3, RecurrentGemma.
+        \item \textbf{Microsoft}: Phi-1, 1.5, 2, 4 (Mini/Reasoning).
+        \item \textbf{OpenAI}: GPT-2 (Small to XL), GPT-OSS (120B, 20B).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{LMC Statistical Complexity}
+    Defined by Lopez-Ruiz, Mancini, and Calbet (1995) \cite{LopezRuiz1995}:
+    \[ C_{LMC} = H \times D \]
+    
+    \textbf{1. Disequilibrium ($D$)}:
+    \begin{itemize}
+        \item Measures distance from uniform distribution (Order).
+        \item $D = \sum_{i=1}^{n} (p_i - \frac{1}{n})^2$
+    \end{itemize}
+
+    \textbf{2. Shannon Entropy ($H$)}:
+    \begin{itemize}
+        \item Measures uncertainty or randomness.
+        \item $H = -K \sum_{i=1}^{n} p_i \log p_i$
+    \end{itemize}
+    
+    \textit{Interpretation}: High complexity requires both structure (high $D$) and information content (high $H$).
+\end{frame}
+
+\begin{frame}{Data Processing Pipeline}
+    \begin{enumerate}
+        \item \textbf{Weight Extraction}: Flatten tensors from \texttt{named\_parameters()}.
+        \item \textbf{Filtering}: Remove outliers caused by float32 casting.
+        \begin{itemize}
+            \item Range: $\mu \pm \sigma_{\text{filter}} \cdot \sigma$.
+            \item Tested $\sigma_{\text{filter}} \in \{0.125, \dots, 20, 40(\text{unfiltered})\}$.
+        \end{itemize}
+        \item \textbf{Discretization (Histogram)}:
+        \begin{itemize}
+            \item \textbf{Freedman-Diaconis Rule}: $h = \frac{2 \times IQR}{N^{1/3}}$.
+            \item Adapts to distribution spread and sample size ($N$).
+            \item Crucial for stable probability ($p_i$) calculation.
+        \end{itemize}
+        \item \textbf{Calculation}: Compute $C_{LMC}$ from histogram probabilities.
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Inference Capability: Benchmarks}
+    Used as proxies for Test Loss (Performance).
+    
+    \begin{table}
+        \centering
+        \small
+        \begin{tabular}{l p{6cm}}
+            \toprule
+            \textbf{Benchmark} & \textbf{Description} \\
+            \midrule
+            \textbf{MMLU} & 57 tasks, STEM/Humanities. Standard for LLMs. \\
+            \textbf{MMLU-Pro} & Enhanced MMLU, harder reasoning. \\
+            \textbf{OpenLLM} & Aggregated score of multiple datasets. \\
+            \textbf{LMArena} & Crowdsourced Elo ratings based on human preference. \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+    
+    \textbf{Data Collection}: Manually aggregated from Hugging Face, Papers, and Leaderboards.
+\end{frame}
+
+\begin{frame}{Analysis Dimensions}
+    We constructed a dataset of $\approx 5500$ tuples to analyze:
+    
+    \begin{enumerate}
+        \item \textbf{Filtering Setting}: How $\sigma$ affects bin count and complexity.
+        \item \textbf{Weight Types}: 
+        \begin{itemize}
+            \item Categories: Bias, Norm, Embedding, Other.
+            \item Combinations: Power set (15 combinations).
+        \end{itemize}
+        \item \textbf{Parameter Count}: Relation to complexity.
+        \item \textbf{Performance}: Correlation between $C_{LMC}$ and Benchmarks.
+    \end{enumerate}
+
+    \textbf{Statistical Tools}:
+    \begin{itemize}
+        \item Pearson Correlation ($r$).
+        \item Linear and Free Regression (Curve fitting).
+        \item T-tests for statistical significance ($p < 0.05$).
+    \end{itemize}
+\end{frame}

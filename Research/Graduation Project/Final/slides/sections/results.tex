@@ -1,0 +1,162 @@
+\section{Results}
+
+\begin{frame}{Extraction Statistics}
+    \begin{itemize}
+        \item \textbf{Total Parameters Processed}: 652,802,782,352 ($\approx$ 652 Billion).
+        \item \textbf{Compute Time}: 228 hours ($\approx$ 9.5 days).
+        \item \textbf{Dataset Size}: 5511 valid data points.
+    \end{itemize}
+    \vspace{0.5cm}
+    \textit{Note: Some models excluded due to exceeding 1 billion histogram bins.}
+\end{frame}
+
+\begin{frame}{Filter Dimension Analysis}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{Histogram Bins}:
+        \begin{itemize}
+            \item Follows \textbf{Exponential Decay}.
+            \item Max bins explode without filtering.
+        \end{itemize}
+        \includegraphics[width=\linewidth]{../img/filterbins_average_bins_bar.png}
+
+        \column{0.5\textwidth}
+        \textbf{Complexity}:
+        \begin{itemize}
+            \item Follows \textbf{Logarithmic Trend}.
+            \item Spike at 0.125 $\sigma$ (Global Min at 0.25).
+        \end{itemize}
+        \includegraphics[width=\linewidth]{../img/filtercomplexity_average_complexity_bar.png}
+    \end{columns}
+    
+    \vspace{0.2cm}
+    \textbf{Decision}: \textbf{20 $\sigma$} chosen (Significant bin reduction, minimal complexity loss).
+\end{frame}
+
+\begin{frame}{Weight-Type Analysis}
+    \begin{columns}
+        \column{0.6\textwidth}
+        \includegraphics[width=\linewidth]{../img/weight_average_complexity_bar.png}
+        \column{0.4\textwidth}
+        \textbf{Ranking}:
+        \begin{enumerate}
+            \item \textbf{Norm}: Highest complexity.
+            \item \textbf{Bias/Other}: Medium.
+            \item \textbf{Embedding}: Near zero.
+        \end{enumerate}
+    \end{columns}
+    
+    \vspace{0.2cm}
+    \textbf{Decision}: Use \textbf{Bias + Norm + Other} (No Embeddings).
+    \begin{itemize}
+        \item Embeddings dilute complexity.
+        \item Aligns with Kaplan et al. (2020) methodology.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Complexity vs. Parameter Count}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.8\linewidth]{../img/noembed-weights/param_average_complexity_histogram.png}
+        \caption{Average complexity vs number of parameters.}
+    \end{figure}
+    \begin{itemize}
+        \item \textbf{Trend}: Mostly flat/stable.
+        \item \textbf{Spikes}: Observed in high-parameter ranges ($10^{9.7}$ - $10^{10.5}$).
+        \item \textbf{Cause}: Driven by \textbf{GPT-OSS} and \textbf{Phi-4} families.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Control: Parameters vs. Benchmarks}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \includegraphics[width=\linewidth]{../img/noembed-weights/control_correlation_comparison.png}
+        \column{0.5\textwidth}
+        \begin{itemize}
+            \item \textbf{Validation}: All benchmarks show positive correlation with parameter count.
+            \item \textbf{Expected}: Confirms scaling laws.
+            \item \textbf{Baseline}: $R^2$ values indicate non-linear relationship.
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Complexity vs. Benchmarks: Overview}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \includegraphics[width=\linewidth]{../img/noembed-weights/complexity_correlation_comparison.png}
+        \column{0.5\textwidth}
+        \textbf{Inconsistency}:
+        \begin{itemize}
+            \item \textbf{Positive}: MMLU, LMArena, All.
+            \item \textbf{Negative}: MMLU-Pro, OpenLLM.
+        \end{itemize}
+        \textbf{Comparison}:
+        \begin{itemize}
+            \item Lower correlations than Control.
+            \item Lower $R^2$ values.
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Statistical Significance (t-test)}
+    \begin{table}
+        \centering
+        \small
+        \begin{tabular}{l c c c c}
+            \toprule
+            \textbf{Benchmark} & \textbf{$r$} & \textbf{$n$} & \textbf{p-value} & \textbf{Sig. ($<0.05$)} \\
+            \midrule
+            LMArena & 0.3860 & 21 & 0.0839 & No \\
+            \textbf{MMLU} & \textbf{0.4176} & \textbf{26} & \textbf{0.0338} & \textbf{Yes} \\
+            MMLU-Pro & -0.1813 & 15 & 0.5179 & No \\
+            OpenLLM & -0.2534 & 24 & 0.2322 & No \\
+            \textbf{All (Aggregated)} & \textbf{0.3066} & \textbf{86} & \textbf{0.0041} & \textbf{Yes} \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+    \begin{itemize}
+        \item \textbf{MMLU} and \textbf{Aggregated (All)} show statistically significant positive correlations.
+        \item Negative correlations (MMLU-Pro, OpenLLM) are \textbf{not} significant.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Regression Analysis: MMLU}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.7\linewidth]{../img/noembed-weights/comp_mmlu_regression.png}
+        \caption{LMC complexity vs MMLU benchmark.}
+    \end{figure}
+    \begin{itemize}
+        \item \textbf{Shape}: Constant trend with outliers.
+        \item \textbf{Driver}: GPT-OSS family (High complexity, High performance).
+        \item Without outliers, correlation drops to near zero.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Regression Analysis: OpenLLM}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.7\linewidth]{../img/noembed-weights/comp_openllm_regression.png}
+        \caption{LMC complexity vs OpenLLM benchmark.}
+    \end{figure}
+    \begin{itemize}
+        \item \textbf{Dual Trend}:
+        \begin{itemize}
+            \item \textbf{Upward}: LLaMA, Phi-4, Gemma-3.
+            \item \textbf{Downward}: Gemma-2, Phi-1.5, GPT-2.
+        \end{itemize}
+        \item Suggests architectural or generational differences.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Top 20 Correlations}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.8\linewidth]{../img/all-weights/top_20_correlations.png}
+        \caption{Top 20 configurations by Pearson correlation.}
+    \end{figure}
+    \begin{itemize}
+        \item Dominated by \textbf{High Filtering} (0.25 $\sigma$).
+        \item \textbf{Bias} weights appear in almost all top configurations.
+    \end{itemize}
+\end{frame}
