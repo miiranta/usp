@@ -6,11 +6,29 @@
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{amsmath}
+\usepackage[backend=biber,style=numeric]{biblatex}
+\addbibresource{refs.bib}
+
+% Remove navigation bar
+\setbeamertemplate{footline}{}
+\setbeamertemplate{navigation symbols}{}
+
+% Section slides
+\AtBeginSection[]{
+  \begin{frame}
+  \vfill
+  \centering
+  \begin{beamercolorbox}[sep=8pt,center,shadow=true,rounded=true]{title}
+    \usebeamerfont{title}\insertsectionhead\par%
+  \end{beamercolorbox}
+  \vfill
+  \end{frame}
+}
 
 % Meta-data
 \title[LMC Complexity vs Inference]{Comparing the LMC Complexity of Neural Networks with their Inference Capability}
 \author{Lucas Miranda Mendonça Rezende \\ \small Supervisor: Ph.D. Luiz Otavio Murta Junior}
-\institute[USP]{University of São Paulo (USP) \\ Faculty of Philosophy, Sciences and Letters of Ribeirão Preto}
+\institute[USP]{University of São Paulo (USP) \\ Faculty of Philosophy, Sciences and Letters of Ribeirão Preto \\ Department of Computing and Mathematics}
 \date{2025}
 
 \begin{document}
@@ -30,5 +48,9 @@
 \input{sections/results}
 
 \input{sections/conclusion}
+
+\begin{frame}[allowframebreaks]{References}
+    \printbibliography
+\end{frame}
 
 \end{document}

@@ -1,104 +1,207 @@
 \section{Results}
 
-\begin{frame}{Extraction Statistics}
+\begin{frame}{Data Extraction Statistics}
     \begin{itemize}
-        \item \textbf{Total Parameters Processed}: 652,802,782,352 ($\approx$ 652 Billion).
-        \item \textbf{Compute Time}: 228 hours ($\approx$ 9.5 days).
-        \item \textbf{Dataset Size}: 5511 valid data points.
-    \end{itemize}
-    \vspace{0.5cm}
-    \textit{Note: Some models excluded due to exceeding 1 billion histogram bins.}
-\end{frame}
-
-\begin{frame}{Filter Dimension Analysis}
-    \begin{columns}
-        \column{0.5\textwidth}
-        \textbf{Histogram Bins}:
+        \item \textbf{Scale}:
         \begin{itemize}
-            \item Follows \textbf{Exponential Decay}.
-            \item Max bins explode without filtering.
+            \item Total Parameters Processed: \textbf{652.8 Billion}.
+            \item Compute Time: \textbf{228 hours} ($\approx$ 9.5 days).
         \end{itemize}
-        \includegraphics[width=\linewidth]{../img/filterbins_average_bins_bar.png}
-
-        \column{0.5\textwidth}
-        \textbf{Complexity}:
+        \item \textbf{Dataset}:
         \begin{itemize}
-            \item Follows \textbf{Logarithmic Trend}.
-            \item Spike at 0.125 $\sigma$ (Global Min at 0.25).
+            \item Expected: 5775 data points.
+            \item Actual: \textbf{5511 data points}.
+            \item \textbf{Exclusions}: Models exceeding 1 billion bins (unfiltered) or containing NaN/Infinite values (numerical errors).
         \end{itemize}
-        \includegraphics[width=\linewidth]{../img/filtercomplexity_average_complexity_bar.png}
-    \end{columns}
-    
-    \vspace{0.2cm}
-    \textbf{Decision}: \textbf{20 $\sigma$} chosen (Significant bin reduction, minimal complexity loss).
-\end{frame}
-
-\begin{frame}{Weight-Type Analysis}
-    \begin{columns}
-        \column{0.6\textwidth}
-        \includegraphics[width=\linewidth]{../img/weight_average_complexity_bar.png}
-        \column{0.4\textwidth}
-        \textbf{Ranking}:
-        \begin{enumerate}
-            \item \textbf{Norm}: Highest complexity.
-            \item \textbf{Bias/Other}: Medium.
-            \item \textbf{Embedding}: Near zero.
-        \end{enumerate}
-    \end{columns}
-    
-    \vspace{0.2cm}
-    \textbf{Decision}: Use \textbf{Bias + Norm + Other} (No Embeddings).
-    \begin{itemize}
-        \item Embeddings dilute complexity.
-        \item Aligns with Kaplan et al. (2020) methodology.
     \end{itemize}
 \end{frame}
 
-\begin{frame}{Complexity vs. Parameter Count}
+\begin{frame}{Filter Dimension: Histogram Bins (Average)}
     \begin{figure}
         \centering
-        \includegraphics[width=0.8\linewidth]{../img/noembed-weights/param_average_complexity_histogram.png}
+        \includegraphics[width=0.8\linewidth]{../img/filterbins_average_bins_bar.png}
+        \caption{Average number of histogram bins per filtering setting.}
+    \end{figure}
+    \begin{itemize}
+        \item Unfiltered data (40 $\sigma$) leads to massive bin counts.
+        \item Filtering drastically reduces bin count.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Filter Dimension: Histogram Bins (Maximum)}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.8\linewidth]{../img/filterbins_maximum_bins_bar.png}
+        \caption{Maximum number of histogram bins per filtering setting.}
+    \end{figure}
+    \begin{itemize}
+        \item Similar trend to average bins.
+        \item Maximum bins explode without filtering.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Filter Dimension: Histogram Bins Regression}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.6\linewidth]{../img/filterbins_regression.png}
+        \caption{Regression of histogram bins per filtering setting.}
+    \end{figure}
+    \begin{itemize}
+        \item Maximum bins follow strict exponential trend ($R^2 = 0.999$).
+        \item Average bins show higher variability ($R^2 = 0.045$).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Filter Dimension: Complexity (Average)}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.8\linewidth]{../img/filtercomplexity_average_complexity_bar.png}
+        \caption{Average complexity per filtering setting.}
+    \end{figure}
+    \begin{itemize}
+        \item Follows a \textbf{Logarithmic Trend}.
+        \item Global Minimum at 0.25 $\sigma$.
+        \item Spike at 0.125 $\sigma$.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Filter Dimension: Complexity (Maximum)}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.8\linewidth]{../img/filtercomplexity_maximum_complexity_bar.png}
+        \caption{Maximum complexity per filtering setting.}
+    \end{figure}
+    \begin{itemize}
+        \item Similar shape to average complexity.
+        \item More flat and unstable.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Filter Dimension: Complexity Regression}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.6\linewidth]{../img/filtercomplexity_regression.png}
+        \caption{Regression of complexity per filtering setting.}
+    \end{figure}
+    \begin{itemize}
+        \item Both follow logarithmic trend.
+        \item Maximum fit ($R^2 = 0.578$) is better than average fit ($R^2 = 0.014$).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Filter Selection}
+    \textbf{Decision}: \textbf{20 $\sigma$} chosen.
+    \begin{itemize}
+        \item Significant bin reduction.
+        \item Complexity values almost identical to unfiltered data.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Weight-Type Dimension: Average Complexity}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.85\linewidth]{../img/weight_average_complexity_bar.png}
+        \caption{Average complexity per weight-type combination.}
+    \end{figure}
+    \begin{itemize}
+        \item \textbf{Norm}: Highest complexity.
+        \item \textbf{Embedding}: Lowest complexity (near zero).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Weight-Type Dimension: Maximum Complexity}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.85\linewidth]{../img/weight_maximum_complexity_bar.png}
+        \caption{Maximum complexity per weight-type combination.}
+    \end{figure}
+    \begin{itemize}
+        \item Similar ranking to average complexity.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Weight-Type Selection}
+    \textbf{Decision}: Use \textbf{Bias + Norm + Other} (No Embeddings).
+    \begin{itemize}
+        \item Embeddings have very low complexity (near zero).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Complexity vs. Number of Parameters}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.9\linewidth]{../img/noembed-weights/param_average_complexity_histogram.png}
         \caption{Average complexity vs number of parameters.}
     \end{figure}
     \begin{itemize}
-        \item \textbf{Trend}: Mostly flat/stable.
-        \item \textbf{Spikes}: Observed in high-parameter ranges ($10^{9.7}$ - $10^{10.5}$).
-        \item \textbf{Cause}: Driven by \textbf{GPT-OSS} and \textbf{Phi-4} families.
+        \item Mostly flat/stable.
+        \item Spikes in high-parameter ranges ($10^{9.7}$ - $10^{10.5}$).
+        \item Driven by \textbf{GPT-OSS family}.
     \end{itemize}
 \end{frame}
 
-\begin{frame}{Control: Parameters vs. Benchmarks}
-    \begin{columns}
-        \column{0.5\textwidth}
-        \includegraphics[width=\linewidth]{../img/noembed-weights/control_correlation_comparison.png}
-        \column{0.5\textwidth}
-        \begin{itemize}
-            \item \textbf{Validation}: All benchmarks show positive correlation with parameter count.
-            \item \textbf{Expected}: Confirms scaling laws.
-            \item \textbf{Baseline}: $R^2$ values indicate non-linear relationship.
-        \end{itemize}
-    \end{columns}
+\begin{frame}{Complexity vs. Number of Bins}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.9\linewidth]{../img/noembed-weights/bin_average_complexity_histogram.png}
+        \caption{Average complexity vs number of histogram bins.}
+    \end{figure}
+    \begin{itemize}
+        \item Similar trend to parameters.
+        \item Spike at the end ($10^{3.8}$ - $10^{3.9}$ bins).
+        \item Also driven by \textbf{GPT-OSS family}.
+    \end{itemize}
 \end{frame}
 
-\begin{frame}{Complexity vs. Benchmarks: Overview}
-    \begin{columns}
-        \column{0.5\textwidth}
-        \includegraphics[width=\linewidth]{../img/noembed-weights/complexity_correlation_comparison.png}
-        \column{0.5\textwidth}
-        \textbf{Inconsistency}:
-        \begin{itemize}
-            \item \textbf{Positive}: MMLU, LMArena, All.
-            \item \textbf{Negative}: MMLU-Pro, OpenLLM.
-        \end{itemize}
-        \textbf{Comparison}:
-        \begin{itemize}
-            \item Lower correlations than Control.
-            \item Lower $R^2$ values.
-        \end{itemize}
-    \end{columns}
+\begin{frame}{Control: Parameters vs. Benchmarks (Correlation)}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.6\linewidth]{../img/noembed-weights/control_correlation_comparison.png}
+        \caption{Pearson correlation for parameter count vs benchmark performance \cite{Fisher1921}.}
+    \end{figure}
+    \begin{itemize}
+        \item All benchmarks show \textbf{positive correlation}.
+        \item Validates methodology and scaling laws.
+    \end{itemize}
 \end{frame}
 
-\begin{frame}{Statistical Significance (t-test)}
+\begin{frame}{Control: Parameters vs. Benchmarks ($R^2$)}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.7\linewidth]{../img/noembed-weights/control_r2_linear_comparison.png}
+        \caption{$R^2$ values for parameter count vs benchmark performance.}
+    \end{figure}
+    \begin{itemize}
+        \item Low $R^2$ values indicate non-linear relationship.
+        \item Consistent with Power Laws.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Complexity vs. Benchmarks: Correlation}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.6\linewidth]{../img/noembed-weights/complexity_correlation_comparison.png}
+        \caption{Pearson correlation for Complexity vs benchmark performance.}
+    \end{figure}
+    \begin{itemize}
+        \item \textbf{Inconsistent}: Positive (MMLU, LMArena) vs Negative (MMLU-Pro, OpenLLM).
+        \item Lower correlations than Control.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Complexity vs. Benchmarks: $R^2$}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.7\linewidth]{../img/noembed-weights/complexity_r2_linear_comparison.png}
+        \caption{$R^2$ values for complexity vs benchmark performance.}
+    \end{figure}
+    \begin{itemize}
+        \item Very low $R^2$ values.
+        \item Indicates weak predictive power.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Statistical Significance}
     \begin{table}
         \centering
         \small
@@ -115,48 +218,78 @@
         \end{tabular}
     \end{table}
     \begin{itemize}
-        \item \textbf{MMLU} and \textbf{Aggregated (All)} show statistically significant positive correlations.
-        \item Negative correlations (MMLU-Pro, OpenLLM) are \textbf{not} significant.
+        \item \textbf{MMLU} and \textbf{Aggregated (All)} are significant (T-test \cite{Freedman2007}).
+        \item Negative correlations are not significant.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Regression Analysis: LMArena}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.55\linewidth]{../img/noembed-weights/comp_lmarena_regression.png}
+        \caption{LMC complexity vs LMArena benchmark.}
+    \end{figure}
+    \begin{itemize}
+        \item Constant trend with outliers.
+        \item Outliers (GPT-OSS) drive positive correlation.
     \end{itemize}
 \end{frame}
 
 \begin{frame}{Regression Analysis: MMLU}
     \begin{figure}
         \centering
-        \includegraphics[width=0.7\linewidth]{../img/noembed-weights/comp_mmlu_regression.png}
+        \includegraphics[width=0.55\linewidth]{../img/noembed-weights/comp_mmlu_regression.png}
         \caption{LMC complexity vs MMLU benchmark.}
     \end{figure}
     \begin{itemize}
-        \item \textbf{Shape}: Constant trend with outliers.
-        \item \textbf{Driver}: GPT-OSS family (High complexity, High performance).
-        \item Without outliers, correlation drops to near zero.
+        \item Similar to LMArena.
+        \item Exponential fit suggested, but driven by outliers.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Regression Analysis: MMLU-Pro}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.55\linewidth]{../img/noembed-weights/comp_mmlupro_regression.png}
+        \caption{LMC complexity vs MMLU-Pro benchmark.}
+    \end{figure}
+    \begin{itemize}
+        \item Slight downward trend.
+        \item Outliers (Gemma-2) drive negative correlation.
     \end{itemize}
 \end{frame}
 
 \begin{frame}{Regression Analysis: OpenLLM}
     \begin{figure}
         \centering
-        \includegraphics[width=0.7\linewidth]{../img/noembed-weights/comp_openllm_regression.png}
+        \includegraphics[width=0.55\linewidth]{../img/noembed-weights/comp_openllm_regression.png}
         \caption{LMC complexity vs OpenLLM benchmark.}
     \end{figure}
     \begin{itemize}
-        \item \textbf{Dual Trend}:
-        \begin{itemize}
-            \item \textbf{Upward}: LLaMA, Phi-4, Gemma-3.
-            \item \textbf{Downward}: Gemma-2, Phi-1.5, GPT-2.
-        \end{itemize}
-        \item Suggests architectural or generational differences.
+        \item \textbf{Dual Trend}: Upward (LLaMA, Phi-4) vs Downward (Gemma-2, Phi-1.5).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Regression Analysis: All Benchmarks}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.55\linewidth]{../img/noembed-weights/comp_all_regression.png}
+        \caption{LMC complexity vs all benchmarks aggregated.}
+    \end{figure}
+    \begin{itemize}
+        \item Follows the "Constant + Outlier" pattern.
+        \item Statistically significant positive correlation.
     \end{itemize}
 \end{frame}
 
 \begin{frame}{Top 20 Correlations}
     \begin{figure}
         \centering
-        \includegraphics[width=0.8\linewidth]{../img/all-weights/top_20_correlations.png}
+        \includegraphics[width=0.6\linewidth]{../img/all-weights/top_20_correlations.png}
         \caption{Top 20 configurations by Pearson correlation.}
     \end{figure}
     \begin{itemize}
-        \item Dominated by \textbf{High Filtering} (0.25 $\sigma$).
-        \item \textbf{Bias} weights appear in almost all top configurations.
+        \item Dominated by high filtering (0.25 $\sigma$).
+        \item \textbf{Bias} weights are prevalent.
     \end{itemize}
 \end{frame}

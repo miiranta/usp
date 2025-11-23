@@ -2,33 +2,85 @@
 
 \begin{frame}{Context: The Era of Large Language Models}
     \begin{itemize}
-        \item \textbf{Transformers (2017)}: Revolutionized NLP, enabling massive parallelization.
-        \item \textbf{Rapid Adoption}: GPT-3.5 (ChatGPT) became the fastest-growing consumer app.
-        \item \textbf{Scaling Laws} \cite{Kaplan2020}:
+        \item \textbf{Transformers (2017)}:
         \begin{itemize}
-            \item Performance depends strongly on scale ($N$, $D$, $C$) and weakly on shape.
-            \item Follows \textbf{Power Laws}: $L(N) \approx (N_c/N)^\alpha$.
+            \item Introduced by Vaswani et al. \cite{Vaswani2017}.
+            \item Enabled massive parallelization, sparking a "gold rush" in ML.
         \end{itemize}
-        \item \textbf{The Cost}: Exponential increase in resources (Compute, Data, Parameters) required for constant linear gains in performance.
+        \item \textbf{Rapid Adoption}:
+        \begin{itemize}
+            \item GPT-3.5 (ChatGPT) became the fastest-growing consumer app in history (2022) \cite{ChatGPTAdoption2022}.
+            \item Triggered massive investment from Tech Giants (Google, Microsoft, Meta).
+        \end{itemize}
     \end{itemize}
 \end{frame}
 
-\begin{frame}{Problem Statement and Thesis}
-    \textbf{The Problem}:
+\begin{frame}{The Scaling Paradigm}
     \begin{itemize}
-        \item Current scaling is resource-intensive and showing signs of diminishing returns.
-        \item Understanding the "learning" process is crucial for architectural improvements.
+        \item \textbf{Scaling Laws by Kaplan et al., 2020} \cite{Kaplan2020}:
+        \begin{itemize}
+            \item Performance depends strongly on scale:
+            \begin{itemize}
+                \item $N$: Number of Parameters.
+                \item $D$: Dataset Size.
+                \item $C$: Amount of Compute.
+            \end{itemize}
+            \item Performance depends weakly on shape (depth vs width).
+        \end{itemize}
+        \item \textbf{Power Laws}:
+        \begin{itemize}
+            \item $L(N) \approx (N_c/N)^\alpha$
+            \item \textbf{Implication}: Exponential increase in resources is required for constant linear gains in performance.
+        \end{itemize}
     \end{itemize}
+\end{frame}
 
-    \vspace{0.5cm}
+\begin{frame}{Problem Statement}
+    \begin{itemize}
+        \item \textbf{Diminishing Returns}:
+        \begin{itemize}
+            \item Recent models show marginal gains despite massive cost increases.
+            \item "Data Wall": Running out of high-quality internet data.
+        \end{itemize}
+        \item \textbf{The Challenge}:
+        \begin{itemize}
+            \item Relying solely on scaling ($N, D, C$) is becoming unsustainable.
+            \item Need for alternative approaches to improve efficiency.
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Motivation \& Proposed Solution}
+    \begin{itemize}
+        \item \textbf{Two Approaches}:
+        \begin{enumerate}
+            \item \textbf{Brute Force}: Continue scaling (Current Industry Standard).
+            \item \textbf{Understanding}: Analyze the learning process to engineer better architectures.
+        \end{enumerate}
+        \item \textbf{Our Focus}:
+        \begin{itemize}
+            \item Investigate \textbf{LMC Statistical Complexity} \cite{LopezRuiz1995}.
+            \item A metric combining \textbf{Disequilibrium} (Order) and \textbf{Entropy} (Randomness).
+            \item Hypothesis: It might help creating a better model by relating inference performance and its distribution.
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Thesis and Objectives}
     \begin{block}{Work Thesis}
-        "There exists a relationship between model complexity and its inference capability." \cite{MurtaJunior2025}
+        "There exists a relationship between model complexity and its inference capability." (Murta Junior, 2025)
     \end{block}
 
     \vspace{0.5cm}
-    \textbf{Objectives}:
-    \begin{enumerate}
-        \item Validate if LMC statistical complexity of weights correlates with inference performance.
-        \item Analyze the influence of other dimensions: Parameter count, Weight types, and Filtering.
-    \end{enumerate}
+    \textbf{Main Objective}:
+    \begin{itemize}
+        \item Validate the existence of a meaningful relationship between neural network weight complexity and inference performance.
+    \end{itemize}
+
+    \textbf{Secondary Objectives}:
+    \begin{itemize}
+        \item Explore the influence of \textbf{Parameter Count}.
+        \item Analyze the impact of \textbf{Weight Types} (Bias, Norm, Embedding).
+        \item Determine the effect of \textbf{Filtering} outliers.
+    \end{itemize}
 \end{frame}
