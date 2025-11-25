@@ -16,7 +16,7 @@ from torch.utils.data import Dataset, DataLoader
 # ============================================================================
 
 class Config:
-    CONTROL_MODE = False  # False = CE + LMC optimization | True = CE only
+    CONTROL_MODE = True  # False = CE + LMC optimization | True = CE only
     
     # Model hyperparameters
     HIDDEN_DIM = 256
