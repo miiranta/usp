@@ -16,7 +16,7 @@ from torch.utils.data import Dataset, DataLoader
 # ============================================================================
 
 class Config:
-    CONTROL_MODE = True  # False = CE + LMC optimization | True = CE only
+    CONTROL_MODE = False  # False = CE + LMC optimization | True = CE only
     
     # Model hyperparameters
     HIDDEN_DIM = 256
@@ -25,13 +25,13 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 256 
-    EPOCHS = 100
+    EPOCHS = 400
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 2000
+    MAX_SAMPLES = 500
     
     # Number of runs
-    NUM_OF_RUN_PER_CALL = 3
+    NUM_OF_RUN_PER_CALL = 1
     
     # Complexity calculation interval | Calculate LMC every X batches (1 = every batch)
     COMPLEXITY_UPDATE_INTERVAL = 1 
@@ -928,7 +928,6 @@ def run_training_single(output_dir, config, run_num):
     prev_val_loss = None
     current_slope = 0.0
     lmc_weight = 0.0
-    prev_lmc_weight = 0.0
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
@@ -939,38 +938,25 @@ def run_training_single(output_dir, config, run_num):
         )
         val_loss = validate(model, val_loader, device, vocab_size)
         
-        # Adaptive optimization strategy:
-        # 1. Start with CE only (weight = 0)
-        # 2. If val loss increases → switch to LMC only (weight = 1) next epoch
-        # 3. If currently optimizing for LMC → force CE (weight = 0) next epoch regardless of val loss
+        # Calculate validation error slope d(Val)/dx and update lmc_weight
         if prev_val_loss is not None:
             raw_slope = val_loss - prev_val_loss
             current_slope = normalize_slope_arctan(raw_slope)
-            
-            # Check if we just optimized for LMC (prev_lmc_weight == 1)
-            if prev_lmc_weight == 1.0:
-                # Force switch back to CE regardless of val loss
-                lmc_weight = 0.0
-                print(f"Val loss: {prev_val_loss:.4f} → {val_loss:.4f}, norm_slope={current_slope:.6f}")
-                print(f"Was optimizing for LMC last epoch: forcing LMC_weight=0.0 (CE only)")
+
+            slope_magnitude = abs(current_slope)
+            if current_slope < 0:
+                # Validation loss decreased - decrement lmc_weight by slope magnitude
+                lmc_weight = max(0.0, lmc_weight - slope_magnitude)
+                print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}): norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (decreased by {slope_magnitude:.3f})")
             else:
-                # Currently optimizing for CE, check if val loss increased
-                if current_slope >= 0:  # Val loss increased or stayed flat
-                    # Switch to LMC only next epoch
-                    lmc_weight = 1.0
-                    print(f"Val loss increased/flat ({prev_val_loss:.4f} → {val_loss:.4f}), norm_slope={current_slope:.6f}")
-                    print(f"Val loss worsened: switching to LMC_weight=1.0 (LMC only)")
-                else:
-                    # Val loss decreased, keep optimizing for CE
-                    lmc_weight = 0.0
-                    print(f"Val loss decreased ({prev_val_loss:.4f} → {val_loss:.4f}), norm_slope={current_slope:.6f}")
-                    print(f"Val loss improved: keeping LMC_weight=0.0 (CE only)")
+                # Validation loss increased/flat - increment lmc_weight by slope magnitude
+                lmc_weight = min(1.0, lmc_weight + slope_magnitude)
+                print(f"Val loss increased/flat ({prev_val_loss:.4f} → {val_loss:.4f}): norm_slope={current_slope:.6f}, LMC_weight={lmc_weight:.3f} (increased by {slope_magnitude:.3f})")
         else:
             current_slope = 0.0
             lmc_weight = 0.0
-            print(f"First epoch: LMC_weight=0.0 (CE only, no previous val loss)")
+            print(f"First epoch: slope=0.0, LMC_weight=0.0 (no previous val loss)")
         
-        prev_lmc_weight = lmc_weight
         prev_val_loss = val_loss
         
         # Test on both datasets after each epoch
@@ -1065,7 +1051,7 @@ def main():
         output_dir = os.path.join(script_dir, 'output/output_0.0')
     else:
         mode = "experimental (lmc + ce)"
-        output_dir = os.path.join(script_dir, 'output/output_2.0')
+        output_dir = os.path.join(script_dir, 'output/output_100.0')
         
     print(f"{'='*80}")
     print(f"Transformer LMC Training - Mode: {mode.upper()}")
