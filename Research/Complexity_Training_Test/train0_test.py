@@ -16,7 +16,7 @@ from torch.utils.data import Dataset, DataLoader
 # ============================================================================
 
 class Config:
-    CONTROL_MODE = False  # False = CE + LMC optimization | True = CE only
+    CONTROL_MODE = True  # False = CE + LMC optimization | True = CE only
     
     # Model hyperparameters
     HIDDEN_DIM = 256
@@ -25,10 +25,10 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 256 
-    EPOCHS = 400
+    EPOCHS = 500
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 500
+    MAX_SAMPLES = 2000
     
     # Number of runs
     NUM_OF_RUN_PER_CALL = 1
@@ -1048,10 +1048,10 @@ def main():
 
     if config.CONTROL_MODE == True:
         mode = "control (ce only)"
-        output_dir = os.path.join(script_dir, 'output/output_0.0')
+        output_dir = os.path.join(script_dir, 'output/output_0.0_test')
     else:
         mode = "experimental (lmc + ce)"
-        output_dir = os.path.join(script_dir, 'output/output_100.0')
+        output_dir = os.path.join(script_dir, 'output/output_1.0_test')
         
     print(f"{'='*80}")
     print(f"Transformer LMC Training - Mode: {mode.upper()}")
