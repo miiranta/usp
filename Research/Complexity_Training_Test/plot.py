@@ -880,6 +880,79 @@ def plot_adaptive_mechanism(master_df):
     plt.close()
     print(f"Saved plot: {output_path}")
 
+def plot_adaptive_mechanism_faceted(master_df):
+    """
+    Plots LMC Weight and Validation Error Slope in faceted subplots by Source.
+    """
+    if master_df is None: return
+    
+    required = ['LMC Weight', 'Val Error Slope']
+    if not all(c in master_df.columns for c in required): return
+
+    sources = master_df['Source'].unique()
+    n_sources = len(sources)
+    
+    # Create subplots - 1 row, n_sources columns
+    fig, axes = plt.subplots(1, n_sources, figsize=(6 * n_sources, 6), sharex=True)
+    if n_sources == 1: axes = [axes]
+    
+    # Define colors for metrics
+    metric_colors = sns.color_palette('deep', n_colors=2)
+    color_weight = metric_colors[0]
+    color_slope = metric_colors[1]
+    
+    for i, source in enumerate(sources):
+        ax1 = axes[i]
+        subset = master_df[master_df['Source'] == source]
+        
+        # Group by Epoch to get mean (if multiple runs)
+        subset_mean = subset.groupby('Epoch')[required].mean()
+        
+        # Plot LMC Weight (Left Axis)
+        ax1.plot(subset_mean.index, subset_mean['LMC Weight'], 
+                 color=color_weight, linewidth=2, label='LMC Weight')
+        
+        ax1.set_xlabel('Epoch', fontsize=12)
+        ax1.set_ylabel('LMC Weight', color=color_weight, fontsize=12)
+        ax1.tick_params(axis='y', labelcolor=color_weight)
+        ax1.set_title(f'{source}', fontsize=14)
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot Slope (Right Axis)
+        ax2 = ax1.twinx()
+        ax2.plot(subset_mean.index, subset_mean['Val Error Slope'], 
+                 color=color_slope, linewidth=2, linestyle='--', alpha=0.8, label='Val Error Slope')
+                 
+        ax2.set_ylabel('Val Error Slope', color=color_slope, fontsize=12)
+        ax2.tick_params(axis='y', labelcolor=color_slope)
+        
+        # Add zero line for slope
+        ax2.axhline(0, color='gray', linestyle=':', alpha=0.5)
+        
+        # Spines
+        ax1.spines['left'].set_color(color_weight)
+        ax1.spines['left'].set_linewidth(2)
+        ax2.spines['right'].set_color(color_slope)
+        ax2.spines['right'].set_linewidth(2)
+        ax1.spines['top'].set_visible(False)
+        ax2.spines['top'].set_visible(False)
+
+    # Common title
+    fig.suptitle('Adaptive Mechanism by Source', fontsize=16)
+    fig.subplots_adjust(top=0.85, wspace=0.5)
+    
+    # Legend
+    legend_elements = [
+        Line2D([0], [0], color=color_weight, lw=2, label='LMC Weight'),
+        Line2D([0], [0], color=color_slope, lw=2, linestyle='--', label='Val Error Slope')
+    ]
+    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.92), ncol=2, frameon=False)
+
+    output_path = os.path.join(PLOTS_DIR, 'mechanism_adaptive_control_faceted.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved plot: {output_path}")
+
 def plot_complexity_phase_space(master_df):
     """
     Plots Weights Entropy vs Weights Disequilibrium (The two components of LMC).
@@ -1233,6 +1306,7 @@ def main():
     # Faceted Plots
     plot_train_val_test_loss_faceted(master_df)
     plot_complexity_metrics_faceted(master_df)
+    plot_adaptive_mechanism_faceted(master_df)
     
     print("Done.")
 
