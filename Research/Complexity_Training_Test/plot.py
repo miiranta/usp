@@ -2,6 +2,7 @@ import os
 import glob
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 import numpy as np
 import re
 
@@ -13,6 +14,9 @@ import re
 BASE_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
 PLOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots')
 
+# Set Seaborn Theme
+sns.set_theme(style="whitegrid", context="talk", font_scale=1.1)
+
 # List of tuples: (label, folder_path)
 # Configure which folders to use for plotting here.
 SOURCES = [
@@ -21,21 +25,6 @@ SOURCES = [
     ('output_1.0', os.path.join(BASE_OUTPUT_DIR, 'output_1.0')),
     ('output_1.0_test', os.path.join(BASE_OUTPUT_DIR, 'output_1.0_test')),
 ]
-
-# if os.path.exists(BASE_OUTPUT_DIR):
-#     # Find all folders starting with output_
-#     candidates = glob.glob(os.path.join(BASE_OUTPUT_DIR, 'output_*'))
-#     for folder_path in candidates:
-#         if os.path.isdir(folder_path):
-#             folder_name = os.path.basename(folder_path)
-#             # Check if it matches the pattern output_x.x (digits and dots)
-#             # User mentioned "output_x.x", so we'll be inclusive of anything starting with output_
-#             # We can use the suffix as the label
-#             label = folder_name
-#             SOURCES.append((label, folder_path))
-
-# Sort sources by label to ensure consistent color assignment
-SOURCES.sort(key=lambda x: x[0])
 
 # Create plots directory if it doesn't exist
 os.makedirs(PLOTS_DIR, exist_ok=True)
@@ -74,13 +63,11 @@ def parse_run_csv(file_path):
         print(f"Error parsing {file_path}: {e}")
         return None
 
-def aggregate_metrics(folder_path):
+def load_source_data(folder_path, label):
     """
     Reads all run CSVs in the folder (ignoring AGGREGATE),
-    and calculates mean, std, and count for each metric per epoch.
+    and returns a concatenated DataFrame with a 'Source' column.
     """
-    # Find all csv files that look like z_loss_test_results_transformers-*.csv
-    # and do NOT end with AGGREGATE.csv
     csv_files = glob.glob(os.path.join(folder_path, 'z_loss_test_results_transformers-*.csv'))
     run_dfs = []
     
@@ -96,14 +83,9 @@ def aggregate_metrics(folder_path):
         print(f"No valid run CSVs found in {folder_path}")
         return None
         
-    # Concatenate all runs
-    all_runs = pd.concat(run_dfs)
-    
-    # Group by Epoch and calculate stats
-    # We want mean, std, and count (to calculate confidence interval)
-    aggregated = all_runs.groupby('Epoch').agg(['mean', 'std', 'count'])
-    
-    return aggregated
+    combined = pd.concat(run_dfs)
+    combined['Source'] = label
+    return combined
 
 def load_distribution_file(file_path):
     """Loads a single distribution CSV file."""
@@ -119,65 +101,52 @@ def load_distribution_file(file_path):
 
 def plot_all_metrics(sources):
     """
-    Generates plots for each metric comparing all sources.
+    Generates plots for each metric comparing all sources using Seaborn.
     """
-    # Pre-load and aggregate data for all sources
-    source_data = {}
+    all_data = []
     for label, folder_path in sources:
-        print(f"Processing metrics for: {label}")
-        agg_df = aggregate_metrics(folder_path)
-        if agg_df is not None:
-            source_data[label] = agg_df
+        print(f"Loading data for: {label}")
+        df = load_source_data(folder_path, label)
+        if df is not None:
+            all_data.append(df)
             
-    if not source_data:
+    if not all_data:
         print("No data found to plot metrics.")
         return
 
-    # Identify all metrics (columns at level 0 of the multi-index)
-    # The columns are MultiIndex: (Metric, Stat)
-    first_df = next(iter(source_data.values()))
-    metrics = first_df.columns.levels[0]
+    master_df = pd.concat(all_data)
+    
+    # Identify all metrics (columns except Epoch and Source)
+    metrics = [c for c in master_df.columns if c not in ['Epoch', 'Source']]
     
     for metric in metrics:
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(12, 8))
         
-        for label, df in source_data.items():
-            if metric not in df:
-                continue
-                
-            stats = df[metric]
-            epochs = stats.index
-            mean = stats['mean']
-            std = stats['std']
-            count = stats['count']
-            
-            # Calculate 95% Confidence Interval
-            # CI = 1.96 * (std / sqrt(n))
-            # If count is 1, std is NaN, so fill with 0
-            std = std.fillna(0)
-            ci = 1.96 * (std / np.sqrt(count))
-            
-            # Use consistent colors
-            # Find index of label in original sources list to ensure consistent coloring
-            try:
-                color_idx = [s[0] for s in sources].index(label)
-            except ValueError:
-                color_idx = 0
-            color = plt.cm.tab10(color_idx % 10)
-
-            line, = plt.plot(epochs, mean, label=label, color=color)
-            plt.fill_between(epochs, mean - ci, mean + ci, color=color, alpha=0.2)
-            
-        plt.title(f'{metric} Comparison')
+        # Plot using Seaborn
+        # errorbar=('se', 1.96) corresponds to 95% CI for normal distribution
+        sns.lineplot(
+            data=master_df,
+            x='Epoch',
+            y=metric,
+            hue='Source',
+            style='Source',
+            dashes=False,
+            errorbar=('se', 1.96),
+            palette='tab10',
+            linewidth=2.5,
+            alpha=0.9
+        )
+        
+        plt.title(f'{metric} Comparison', fontweight='bold')
         plt.xlabel('Epoch')
         plt.ylabel(metric)
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+        plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left')
+        sns.despine()
         
         # Sanitize filename
         safe_metric_name = re.sub(r'[^\w\s-]', '', metric).strip().replace(' ', '_')
         output_path = os.path.join(PLOTS_DIR, f'metric_{safe_metric_name}.png')
-        plt.savefig(output_path, dpi=300)
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"Saved plot: {output_path}")
 
@@ -208,11 +177,10 @@ def plot_distributions_overlay(sources):
     _plot_dynamic_epoch_distribution(sources, lambda epochs: epochs[-1] if epochs else None, "Distribution - End", "distribution_end")
 
 def _plot_dynamic_epoch_distribution(sources, epoch_selector, title, filename_suffix):
-    plt.figure(figsize=(12, 7))
+    plt.figure(figsize=(14, 8))
     
-    # Use a color cycle
-    # Use standard tab10 colors which are designed to be distinct
-    colors = [plt.cm.tab10(i % 10) for i in range(len(sources))]
+    # Use standard tab10 colors
+    palette = sns.color_palette('tab10', n_colors=len(sources))
     
     for idx, (label, folder_path) in enumerate(sources):
         epochs = get_epochs_for_folder(folder_path)
@@ -231,27 +199,28 @@ def _plot_dynamic_epoch_distribution(sources, epoch_selector, title, filename_su
             print(f"No distribution files found for {label} epoch {target_epoch}")
             continue
             
-        color = colors[idx]
+        color = palette[idx]
         
         # Plot each run
         for i, fpath in enumerate(files):
             df = load_distribution_file(fpath)
             if df is not None:
                 # Plot line
-                # Only add label for the first run to avoid legend clutter
                 lbl = f"{label} (Ep {target_epoch})" if i == 0 else None
-                # Use a thicker line for individual runs
-                plt.plot(df['Bin_Center'], df['Probability'], color=color, alpha=1.0, linewidth=2.0, label=lbl)
-                plt.fill_between(df['Bin_Center'], df['Probability'], color=color, alpha=0.4)
                 
-    plt.title(title)
+                # Use matplotlib directly for fine-grained control over fill and line
+                # but use seaborn's color
+                plt.plot(df['Bin_Center'], df['Probability'], color=color, alpha=1.0, linewidth=2.5, label=lbl)
+                plt.fill_between(df['Bin_Center'], df['Probability'], color=color, alpha=0.3)
+                
+    plt.title(title, fontweight='bold')
     plt.xlabel('Value')
     plt.ylabel('Probability Density')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left')
+    sns.despine()
     
     output_path = os.path.join(PLOTS_DIR, f'{filename_suffix}_overlay.png')
-    plt.savefig(output_path, dpi=300)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved plot: {output_path}")
 
