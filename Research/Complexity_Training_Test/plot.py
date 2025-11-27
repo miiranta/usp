@@ -25,10 +25,10 @@ plt.rcParams['axes.linewidth'] = 0.9
 # List of tuples: (label, folder_path)
 # Configure which folders to use for plotting here.
 SOURCES = [
-    ('Control', os.path.join(BASE_OUTPUT_DIR, 'output_0.0')),
-    #('output_0.0_test', os.path.join(BASE_OUTPUT_DIR, 'output_0.0_test')),
-    ('Optimized', os.path.join(BASE_OUTPUT_DIR, 'output_1.0')),
-    #('output_1.0_test', os.path.join(BASE_OUTPUT_DIR, 'output_1.0_test')),
+    #('Control', os.path.join(BASE_OUTPUT_DIR, 'output_0.0')),
+    ('Control', os.path.join(BASE_OUTPUT_DIR, 'output_0.0_test')),
+    #('Optimized', os.path.join(BASE_OUTPUT_DIR, 'output_1.0')),
+    ('Optimized', os.path.join(BASE_OUTPUT_DIR, 'output_1.0_test')),
 ]
 
 # Create plots directory if it doesn't exist
@@ -280,7 +280,8 @@ def plot_correlation_heatmaps(master_df):
         corr = source_df[cols_to_corr].corr()
         
         plt.figure(figsize=(12, 10))
-        sns.heatmap(corr, annot=True, fmt=".2f", cmap='coolwarm', vmin=-1, vmax=1)
+        mask = np.triu(np.ones_like(corr, dtype=bool))
+        sns.heatmap(corr, mask=mask, annot=True, fmt=".2f", cmap='coolwarm', vmin=-1, vmax=1)
         plt.title(f'Correlation Matrix - {source}', fontweight='bold')
         
         safe_source = re.sub(r'[^\w\s-]', '', source).strip().replace(' ', '_')
@@ -344,6 +345,9 @@ def _plot_dynamic_epoch_distribution(sources, epoch_selector, title, filename_su
         for i, fpath in enumerate(files):
             df = load_distribution_file(fpath)
             if df is not None:
+                df = df.sort_values('Bin_Center')
+                # Shift x-axis to center at 0 (assuming [0, 1] range)
+                df['Bin_Center'] = df['Bin_Center'] - 0.5
                 # Plot line
                 lbl = f"{label} (Ep {target_epoch})" if i == 0 else None
                 
@@ -641,7 +645,7 @@ def plot_global_best_metrics_barplot(master_df):
         direction = "Max" if is_accuracy else "Min"
         plt.title(f'Best {metric} per Run ({direction})', fontweight='normal', fontsize=16)
         plt.ylabel(f'Best {metric}', fontsize=12)
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
+        # plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
         sns.despine(left=True, bottom=True)
         
         safe_metric_name = re.sub(r'[^\w\s-]', '', metric).strip().replace(' ', '_')
@@ -649,6 +653,331 @@ def plot_global_best_metrics_barplot(master_df):
         plt.savefig(output_path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"Saved plot: {output_path}")
+
+def plot_final_metrics_barplot(master_df):
+    """
+    Bar plot comparing the FINAL value (last epoch) for each metric for each source.
+    Aggregates across runs (mean +/- error).
+    """
+    if master_df is None: return
+
+    # Get final epoch data
+    final_epochs_df = master_df.loc[master_df.groupby('Run_ID')['Epoch'].idxmax()]
+
+    numeric_cols = final_epochs_df.select_dtypes(include=[np.number]).columns
+    metrics = [c for c in numeric_cols if c not in ['Epoch']]
+
+    for metric in metrics:
+        plt.figure(figsize=(10, 6))
+        
+        # Use hue='Source' to ensure consistent coloring with other plots
+        # dodge=False because x and hue are the same
+        ax = sns.barplot(
+            data=final_epochs_df,
+            x='Source',
+            y=metric,
+            hue='Source',
+            palette='pastel', # Use pastel as requested
+            edgecolor='.2',
+            errorbar=('se', 1.96), # Match lineplot error bars
+            dodge=False
+        )
+        
+        # Add numeric labels
+        for p in ax.patches:
+            height = p.get_height()
+            if np.isfinite(height) and height != 0:
+                ax.annotate(f'{height:.4f}', 
+                            (p.get_x() + p.get_width() / 2., height / 2), 
+                            ha='center', va='center', 
+                            xytext=(0, 0), 
+                            textcoords='offset points',
+                            fontsize=10,
+                            color='black')
+        
+        plt.title(f'Final {metric} per Run', fontweight='normal', fontsize=16)
+        plt.ylabel(f'Final {metric}', fontsize=12)
+        # plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
+        sns.despine(left=True, bottom=True)
+        
+        safe_metric_name = re.sub(r'[^\w\s-]', '', metric).strip().replace(' ', '_')
+        output_path = os.path.join(PLOTS_DIR, f'barplot_final_{safe_metric_name}.png')
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Saved plot: {output_path}")
+
+def plot_complexity_metrics_comparison(master_df):
+    """Plots Model LMC, Weights Entropy, and Weights Disequilibrium comparison with different scales."""
+    if master_df is None: return
+    
+    cols = ['Model LMC', 'Weights Entropy', 'Weights Disequilibrium']
+    available_cols = [c for c in cols if c in master_df.columns]
+    
+    if len(available_cols) < 2:
+        return
+
+    # Create figure and first axis
+    fig, ax1 = plt.subplots(figsize=(14, 8))
+    
+    # Colors for metrics - use a palette that is distinct
+    metric_colors = sns.color_palette('deep', n_colors=len(available_cols))
+    
+    # Line styles for sources
+    sources = master_df['Source'].unique()
+    # Map sources to line styles
+    styles = ['-', '--', ':', '-.']
+    source_styles = {source: styles[i % len(styles)] for i, source in enumerate(sources)}
+    
+    axes = [ax1]
+    # Create additional axes
+    for i in range(1, len(available_cols)):
+        axes.append(ax1.twinx())
+        
+    # Offset the third+ axis
+    if len(axes) > 2:
+        for i in range(2, len(axes)):
+            # Offset the right spine of the new axes
+            axes[i].spines['right'].set_position(('outward', 60 * (i-1)))
+            
+    for i, metric in enumerate(available_cols):
+        ax = axes[i]
+        color = metric_colors[i]
+        
+        for source in sources:
+            subset = master_df[master_df['Source'] == source]
+            # Group by epoch to get mean (if multiple runs)
+            subset_mean = subset.groupby('Epoch')[metric].mean()
+            
+            # Plot
+            ax.plot(subset_mean.index, subset_mean.values, 
+                    color=color, linestyle=source_styles.get(source, '-'),
+                    linewidth=2, alpha=0.8)
+            
+        ax.set_ylabel(metric, color=color, fontsize=12)
+        ax.tick_params(axis='y', labelcolor=color)
+        
+        # Color the spine to match
+        if i == 0:
+            ax.spines['left'].set_color(color)
+            ax.spines['left'].set_linewidth(2)
+        else:
+            ax.spines['right'].set_color(color)
+            ax.spines['right'].set_linewidth(2)
+
+    ax1.set_xlabel('Epoch', fontsize=12)
+    plt.title('Complexity Metrics Comparison', fontweight='normal', fontsize=16)
+    
+    # Custom Legend
+    legend_elements = []
+    
+    # Metric Section
+    # legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Metric}$'))
+    for i, metric in enumerate(available_cols):
+        legend_elements.append(Line2D([0], [0], color=metric_colors[i], lw=2, label=metric))
+    
+    # Spacer
+    legend_elements.append(Line2D([0], [0], color='none', label=''))
+
+    # Source Section
+    legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Source}$'))
+    for source in sources:
+        legend_elements.append(Line2D([0], [0], color='gray', linestyle=source_styles.get(source, '-'), lw=2, label=source))
+
+    # Combined legend
+    ax1.legend(handles=legend_elements, bbox_to_anchor=(1.05 + (0.05 * (len(axes)-1)), 1), loc='upper left', frameon=False)
+    
+    # Remove top spine
+    ax1.spines['top'].set_visible(False)
+    for ax in axes[1:]:
+        ax.spines['top'].set_visible(False)
+        ax.spines['left'].set_visible(False) # Hide left spine of secondary axes
+        
+    output_path = os.path.join(PLOTS_DIR, 'comparison_complexity_metrics.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved plot: {output_path}")
+
+def plot_adaptive_mechanism(master_df):
+    """
+    Plots LMC Weight and Validation Error Slope to visualize the adaptive mechanism.
+    """
+    if master_df is None: return
+    
+    required = ['LMC Weight', 'Val Error Slope']
+    if not all(c in master_df.columns for c in required): return
+
+    # Create figure and first axis
+    fig, ax1 = plt.subplots(figsize=(14, 8))
+    
+    sources = master_df['Source'].unique()
+    
+    # Define colors for metrics
+    metric_colors = sns.color_palette('deep', n_colors=2)
+    color_weight = metric_colors[0]
+    color_slope = metric_colors[1]
+    
+    # Define styles for sources
+    styles = ['-', '--', ':', '-.']
+    source_styles = {source: styles[i % len(styles)] for i, source in enumerate(sources)}
+    
+    # Plot LMC Weight on left axis (ax1)
+    for source in sources:
+        subset = master_df[master_df['Source'] == source]
+        subset_mean = subset.groupby('Epoch')['LMC Weight'].mean()
+        ax1.plot(subset_mean.index, subset_mean.values, 
+                 color=color_weight, linestyle=source_styles[source], linewidth=2, label=f"{source}")
+                 
+    ax1.set_xlabel('Epoch', fontsize=12)
+    ax1.set_ylabel('LMC Weight', color=color_weight, fontsize=12)
+    ax1.tick_params(axis='y', labelcolor=color_weight)
+    ax1.spines['left'].set_color(color_weight)
+    ax1.spines['left'].set_linewidth(2)
+    
+    # Plot Slope on right axis (ax2)
+    ax2 = ax1.twinx()
+    for source in sources:
+        subset = master_df[master_df['Source'] == source]
+        subset_mean = subset.groupby('Epoch')['Val Error Slope'].mean()
+        ax2.plot(subset_mean.index, subset_mean.values, 
+                 color=color_slope, linestyle=source_styles[source], linewidth=2, alpha=0.8)
+                 
+    ax2.set_ylabel('Val Error Slope', color=color_slope, fontsize=12)
+    ax2.tick_params(axis='y', labelcolor=color_slope)
+    ax2.spines['right'].set_color(color_slope)
+    ax2.spines['right'].set_linewidth(2)
+    ax2.spines['right'].set_position(('outward', 10)) # Offset slightly
+    
+    # Add zero line for slope
+    ax2.axhline(0, color='gray', linestyle=':', alpha=0.5)
+
+    plt.title('Adaptive Mechanism: LMC Weight vs Val Error Slope', fontweight='normal', fontsize=16)
+    
+    # Custom Legend
+    legend_elements = []
+    
+    # Metric Section
+    # legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Metric}$'))
+    legend_elements.append(Line2D([0], [0], color=color_weight, lw=2, label='LMC Weight'))
+    legend_elements.append(Line2D([0], [0], color=color_slope, lw=2, label='Val Error Slope'))
+    
+    # Spacer
+    legend_elements.append(Line2D([0], [0], color='none', label=''))
+
+    # Source Section
+    legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Source}$'))
+    for source in sources:
+        legend_elements.append(Line2D([0], [0], color='gray', linestyle=source_styles[source], lw=2, label=source))
+
+    ax1.legend(handles=legend_elements, bbox_to_anchor=(1.15, 1), loc='upper left', frameon=False)
+    
+    # Remove top spine
+    ax1.spines['top'].set_visible(False)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['left'].set_visible(False)
+    
+    output_path = os.path.join(PLOTS_DIR, 'mechanism_adaptive_control.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved plot: {output_path}")
+
+def plot_complexity_phase_space(master_df):
+    """
+    Plots Weights Entropy vs Weights Disequilibrium (The two components of LMC).
+    """
+    if master_df is None: return
+    
+    required = ['Weights Entropy', 'Weights Disequilibrium']
+    if not all(c in master_df.columns for c in required): return
+
+    plt.figure(figsize=(12, 8))
+    
+    # Aggregate mean per epoch per source
+    agg_df = master_df.groupby(['Source', 'Epoch'])[required].mean().reset_index()
+    
+    sns.lineplot(
+        data=agg_df,
+        x='Weights Entropy',
+        y='Weights Disequilibrium',
+        hue='Source',
+        sort=False,
+        palette='muted',
+        linewidth=2,
+        alpha=0.8,
+        marker='o',
+        markevery=5
+    )
+    
+    # Add start/end annotations
+    for source in agg_df['Source'].unique():
+        subset = agg_df[agg_df['Source'] == source]
+        if not subset.empty:
+            # Start
+            plt.text(subset.iloc[0]['Weights Entropy'], subset.iloc[0]['Weights Disequilibrium'], 'Start', 
+                     fontsize=9, ha='right', va='bottom')
+            # End
+            plt.text(subset.iloc[-1]['Weights Entropy'], subset.iloc[-1]['Weights Disequilibrium'], 'End', 
+                     fontsize=9, ha='left', va='top')
+
+    plt.title('Complexity Phase Space (Entropy vs Disequilibrium)', fontweight='normal', fontsize=16)
+    plt.xlabel('Weights Entropy (H)', fontsize=12)
+    plt.ylabel('Weights Disequilibrium (D)', fontsize=12)
+    plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
+    sns.despine(left=True, bottom=True)
+    
+    output_path = os.path.join(PLOTS_DIR, 'phase_space_entropy_diseq.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved plot: {output_path}")
+
+def plot_overfitting_vs_complexity(master_df):
+    """
+    Plots Generalization Gap vs Model LMC to see if complexity correlates with overfitting.
+    """
+    if master_df is None: return
+    
+    if 'Validation Loss' not in master_df.columns or 'Training Loss' not in master_df.columns or 'Model LMC' not in master_df.columns:
+        return
+        
+    df = master_df.copy()
+    df['Generalization Gap'] = df['Validation Loss'] - df['Training Loss']
+    
+    plt.figure(figsize=(12, 8))
+    
+    sns.scatterplot(
+        data=df,
+        x='Model LMC',
+        y='Generalization Gap',
+        hue='Source',
+        style='Source',
+        alpha=0.6,
+        palette='muted',
+        s=50
+    )
+    
+    # Add trend lines
+    sources = df['Source'].unique()
+    palette = sns.color_palette('muted', n_colors=len(sources))
+    
+    for i, source in enumerate(sources):
+        subset = df[df['Source'] == source]
+        if len(subset) > 1:
+            # Simple linear regression for trend
+            z = np.polyfit(subset['Model LMC'], subset['Generalization Gap'], 1)
+            p = np.poly1d(z)
+            
+            x_range = np.linspace(subset['Model LMC'].min(), subset['Model LMC'].max(), 100)
+            plt.plot(x_range, p(x_range), color=palette[i], linestyle='--', alpha=0.5, linewidth=1.5)
+
+    plt.title('Overfitting vs Complexity (Gen Gap vs LMC)', fontweight='normal', fontsize=16)
+    plt.xlabel('Model LMC', fontsize=12)
+    plt.ylabel('Generalization Gap (Val - Train)', fontsize=12)
+    plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
+    sns.despine(left=True, bottom=True)
+    
+    output_path = os.path.join(PLOTS_DIR, 'scatter_overfitting_vs_complexity.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved plot: {output_path}")
 
 def plot_3d_trajectory_improved(master_df):
     """
@@ -794,7 +1123,7 @@ def plot_train_val_test_loss_comparison(master_df):
     legend_elements.append(Line2D([0], [0], color='none', label=''))
 
     # Loss Type Section (Style)
-    legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Loss\ Type}$'))
+    # legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Loss\ Type}$'))
     for loss_type in loss_types:
         legend_elements.append(Line2D([0], [0], color='gray', linestyle=loss_styles[loss_type], lw=2, label=loss_type))
 
@@ -806,312 +1135,60 @@ def plot_train_val_test_loss_comparison(master_df):
     plt.close()
     print(f"Saved plot: {output_path}")
 
-def plot_final_metrics_barplot(master_df):
-    """
-    Bar plot comparing the FINAL value (last epoch) for each metric for each source.
-    Aggregates across runs (mean +/- error).
-    """
+def plot_train_val_test_loss_faceted(master_df):
+    """Plots Training vs Validation vs Test Loss in faceted subplots."""
     if master_df is None: return
+    
+    # Identify loss columns
+    loss_cols = ['Training Loss', 'Validation Loss']
+    test_cols = [c for c in master_df.columns if 'Test Loss' in c]
+    all_loss_cols = loss_cols + test_cols
+    available_cols = [c for c in all_loss_cols if c in master_df.columns]
+    
+    if len(available_cols) < 2: return
 
-    # Get final epoch data
-    final_epochs_df = master_df.loc[master_df.groupby('Run_ID')['Epoch'].idxmax()]
+    df_melted = master_df.melt(
+        id_vars=['Epoch', 'Source', 'Run_ID'], 
+        value_vars=available_cols,
+        var_name='Loss Type', 
+        value_name='Loss'
+    )
+    
+    # Facet by Loss Type
+    g = sns.FacetGrid(df_melted, col="Loss Type", hue="Source", height=5, aspect=1.2, sharey=False)
+    g.map(sns.lineplot, "Epoch", "Loss", errorbar=('se', 1.96))
+    g.add_legend()
+    g.fig.suptitle('Loss Comparison by Type', fontsize=16)
+    g.fig.subplots_adjust(top=0.85)
+    
+    output_path = os.path.join(PLOTS_DIR, 'comparison_train_val_test_loss_faceted.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved plot: {output_path}")
 
-    numeric_cols = final_epochs_df.select_dtypes(include=[np.number]).columns
-    metrics = [c for c in numeric_cols if c not in ['Epoch']]
-
-    for metric in metrics:
-        plt.figure(figsize=(10, 6))
-        
-        # Use hue='Source' to ensure consistent coloring with other plots
-        # dodge=False because x and hue are the same
-        ax = sns.barplot(
-            data=final_epochs_df,
-            x='Source',
-            y=metric,
-            hue='Source',
-            palette='pastel', # Use pastel as requested
-            edgecolor='.2',
-            errorbar=('se', 1.96), # Match lineplot error bars
-            dodge=False
-        )
-        
-        # Add numeric labels
-        for p in ax.patches:
-            height = p.get_height()
-            if np.isfinite(height) and height != 0:
-                ax.annotate(f'{height:.4f}', 
-                            (p.get_x() + p.get_width() / 2., height / 2), 
-                            ha='center', va='center', 
-                            xytext=(0, 0), 
-                            textcoords='offset points',
-                            fontsize=10,
-                            color='black')
-        
-        plt.title(f'Final {metric} per Run', fontweight='normal', fontsize=16)
-        plt.ylabel(f'Final {metric}', fontsize=12)
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
-        sns.despine(left=True, bottom=True)
-        
-        safe_metric_name = re.sub(r'[^\w\s-]', '', metric).strip().replace(' ', '_')
-        output_path = os.path.join(PLOTS_DIR, f'barplot_final_{safe_metric_name}.png')
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        plt.close()
-        print(f"Saved plot: {output_path}")
-
-def plot_complexity_metrics_comparison(master_df):
-    """Plots Model LMC, Weights Entropy, and Weights Disequilibrium comparison with different scales."""
+def plot_complexity_metrics_faceted(master_df):
+    """Plots complexity metrics in faceted subplots."""
     if master_df is None: return
     
     cols = ['Model LMC', 'Weights Entropy', 'Weights Disequilibrium']
     available_cols = [c for c in cols if c in master_df.columns]
     
-    if len(available_cols) < 2:
-        return
+    if not available_cols: return
 
-    # Create figure and first axis
-    fig, ax1 = plt.subplots(figsize=(14, 8))
-    
-    # Colors for metrics - use a palette that is distinct
-    metric_colors = sns.color_palette('deep', n_colors=len(available_cols))
-    
-    # Line styles for sources
-    sources = master_df['Source'].unique()
-    # Map sources to line styles
-    styles = ['-', '--', ':', '-.']
-    source_styles = {source: styles[i % len(styles)] for i, source in enumerate(sources)}
-    
-    axes = [ax1]
-    # Create additional axes
-    for i in range(1, len(available_cols)):
-        axes.append(ax1.twinx())
-        
-    # Offset the third+ axis
-    if len(axes) > 2:
-        for i in range(2, len(axes)):
-            # Offset the right spine of the new axes
-            axes[i].spines['right'].set_position(('outward', 60 * (i-1)))
-            
-    for i, metric in enumerate(available_cols):
-        ax = axes[i]
-        color = metric_colors[i]
-        
-        for source in sources:
-            subset = master_df[master_df['Source'] == source]
-            # Group by epoch to get mean (if multiple runs)
-            subset_mean = subset.groupby('Epoch')[metric].mean()
-            
-            # Plot
-            ax.plot(subset_mean.index, subset_mean.values, 
-                    color=color, linestyle=source_styles.get(source, '-'),
-                    linewidth=2, alpha=0.8)
-            
-        ax.set_ylabel(metric, color=color, fontsize=12)
-        ax.tick_params(axis='y', labelcolor=color)
-        
-        # Color the spine to match
-        if i == 0:
-            ax.spines['left'].set_color(color)
-            ax.spines['left'].set_linewidth(2)
-        else:
-            ax.spines['right'].set_color(color)
-            ax.spines['right'].set_linewidth(2)
-
-    ax1.set_xlabel('Epoch', fontsize=12)
-    plt.title('Complexity Metrics Comparison', fontweight='normal', fontsize=16)
-    
-    # Custom Legend
-    legend_elements = []
-    
-    # Metric Section
-    legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Metric}$'))
-    for i, metric in enumerate(available_cols):
-        legend_elements.append(Line2D([0], [0], color=metric_colors[i], lw=2, label=metric))
-    
-    # Spacer
-    legend_elements.append(Line2D([0], [0], color='none', label=''))
-
-    # Source Section
-    legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Source}$'))
-    for source in sources:
-        legend_elements.append(Line2D([0], [0], color='gray', linestyle=source_styles.get(source, '-'), lw=2, label=source))
-
-    # Combined legend
-    ax1.legend(handles=legend_elements, bbox_to_anchor=(1.05 + (0.05 * (len(axes)-1)), 1), loc='upper left', frameon=False)
-    
-    # Remove top spine
-    ax1.spines['top'].set_visible(False)
-    for ax in axes[1:]:
-        ax.spines['top'].set_visible(False)
-        ax.spines['left'].set_visible(False) # Hide left spine of secondary axes
-        
-    output_path = os.path.join(PLOTS_DIR, 'comparison_complexity_metrics.png')
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Saved plot: {output_path}")
-
-def plot_adaptive_mechanism(master_df):
-    """
-    Plots LMC Weight and Validation Error Slope to visualize the adaptive mechanism.
-    """
-    if master_df is None: return
-    
-    required = ['LMC Weight', 'Val Error Slope']
-    if not all(c in master_df.columns for c in required): return
-
-    # Create figure and first axis
-    fig, ax1 = plt.subplots(figsize=(14, 8))
-    
-    sources = master_df['Source'].unique()
-    palette = sns.color_palette('muted', n_colors=len(sources))
-    source_colors = {source: palette[i] for i, source in enumerate(sources)}
-    
-    # Plot LMC Weight on left axis
-    for source in sources:
-        subset = master_df[master_df['Source'] == source]
-        subset_mean = subset.groupby('Epoch')['LMC Weight'].mean()
-        ax1.plot(subset_mean.index, subset_mean.values, 
-                 color=source_colors[source], linestyle='-', linewidth=2, label=f"{source} (Weight)")
-                 
-    ax1.set_xlabel('Epoch', fontsize=12)
-    ax1.set_ylabel('LMC Weight', fontsize=12)
-    ax1.tick_params(axis='y')
-    
-    # Plot Slope on right axis
-    ax2 = ax1.twinx()
-    for source in sources:
-        subset = master_df[master_df['Source'] == source]
-        subset_mean = subset.groupby('Epoch')['Val Error Slope'].mean()
-        # Use dashed line for slope
-        ax2.plot(subset_mean.index, subset_mean.values, 
-                 color=source_colors[source], linestyle='--', linewidth=1.5, alpha=0.7, label=f"{source} (Slope)")
-                 
-    ax2.set_ylabel('Val Error Slope', fontsize=12)
-    ax2.tick_params(axis='y')
-    
-    # Add zero line for slope
-    ax2.axhline(0, color='gray', linestyle=':', alpha=0.5)
-
-    plt.title('Adaptive Mechanism: LMC Weight vs Val Error Slope', fontweight='normal', fontsize=16)
-    
-    # Custom Legend
-    legend_elements = []
-    legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Source}$'))
-    for source in sources:
-        legend_elements.append(Line2D([0], [0], color=source_colors[source], lw=2, label=source))
-        
-    legend_elements.append(Line2D([0], [0], color='none', label=''))
-    legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Metric}$'))
-    legend_elements.append(Line2D([0], [0], color='gray', linestyle='-', lw=2, label='LMC Weight'))
-    legend_elements.append(Line2D([0], [0], color='gray', linestyle='--', lw=2, label='Val Error Slope'))
-
-    ax1.legend(handles=legend_elements, bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
-    
-    sns.despine(left=True, bottom=True, right=False)
-    # Fix right spine for ax2
-    ax2.spines['right'].set_visible(True)
-    ax2.spines['top'].set_visible(False)
-    ax2.spines['left'].set_visible(False)
-    
-    output_path = os.path.join(PLOTS_DIR, 'mechanism_adaptive_control.png')
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Saved plot: {output_path}")
-
-def plot_complexity_phase_space(master_df):
-    """
-    Plots Weights Entropy vs Weights Disequilibrium (The two components of LMC).
-    """
-    if master_df is None: return
-    
-    required = ['Weights Entropy', 'Weights Disequilibrium']
-    if not all(c in master_df.columns for c in required): return
-
-    plt.figure(figsize=(12, 8))
-    
-    # Aggregate mean per epoch per source
-    agg_df = master_df.groupby(['Source', 'Epoch'])[required].mean().reset_index()
-    
-    sns.lineplot(
-        data=agg_df,
-        x='Weights Entropy',
-        y='Weights Disequilibrium',
-        hue='Source',
-        sort=False,
-        palette='muted',
-        linewidth=2,
-        alpha=0.8,
-        marker='o',
-        markevery=5
+    df_melted = master_df.melt(
+        id_vars=['Epoch', 'Source', 'Run_ID'], 
+        value_vars=available_cols,
+        var_name='Metric', 
+        value_name='Value'
     )
     
-    # Add start/end annotations
-    for source in agg_df['Source'].unique():
-        subset = agg_df[agg_df['Source'] == source]
-        if not subset.empty:
-            # Start
-            plt.text(subset.iloc[0]['Weights Entropy'], subset.iloc[0]['Weights Disequilibrium'], 'Start', 
-                     fontsize=9, ha='right', va='bottom')
-            # End
-            plt.text(subset.iloc[-1]['Weights Entropy'], subset.iloc[-1]['Weights Disequilibrium'], 'End', 
-                     fontsize=9, ha='left', va='top')
-
-    plt.title('Complexity Phase Space (Entropy vs Disequilibrium)', fontweight='normal', fontsize=16)
-    plt.xlabel('Weights Entropy (H)', fontsize=12)
-    plt.ylabel('Weights Disequilibrium (D)', fontsize=12)
-    plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
-    sns.despine(left=True, bottom=True)
+    g = sns.FacetGrid(df_melted, col="Metric", hue="Source", height=5, aspect=1.2, sharey=False)
+    g.map(sns.lineplot, "Epoch", "Value", errorbar=('se', 1.96))
+    g.add_legend()
+    g.fig.suptitle('Complexity Metrics Comparison', fontsize=16)
+    g.fig.subplots_adjust(top=0.85)
     
-    output_path = os.path.join(PLOTS_DIR, 'phase_space_entropy_diseq.png')
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Saved plot: {output_path}")
-
-def plot_overfitting_vs_complexity(master_df):
-    """
-    Plots Generalization Gap vs Model LMC to see if complexity correlates with overfitting.
-    """
-    if master_df is None: return
-    
-    if 'Validation Loss' not in master_df.columns or 'Training Loss' not in master_df.columns or 'Model LMC' not in master_df.columns:
-        return
-        
-    df = master_df.copy()
-    df['Generalization Gap'] = df['Validation Loss'] - df['Training Loss']
-    
-    plt.figure(figsize=(12, 8))
-    
-    sns.scatterplot(
-        data=df,
-        x='Model LMC',
-        y='Generalization Gap',
-        hue='Source',
-        style='Source',
-        alpha=0.6,
-        palette='muted',
-        s=50
-    )
-    
-    # Add trend lines
-    sources = df['Source'].unique()
-    palette = sns.color_palette('muted', n_colors=len(sources))
-    
-    for i, source in enumerate(sources):
-        subset = df[df['Source'] == source]
-        if len(subset) > 1:
-            # Simple linear regression for trend
-            z = np.polyfit(subset['Model LMC'], subset['Generalization Gap'], 1)
-            p = np.poly1d(z)
-            
-            x_range = np.linspace(subset['Model LMC'].min(), subset['Model LMC'].max(), 100)
-            plt.plot(x_range, p(x_range), color=palette[i], linestyle='--', alpha=0.5, linewidth=1.5)
-
-    plt.title('Overfitting vs Complexity (Gen Gap vs LMC)', fontweight='normal', fontsize=16)
-    plt.xlabel('Model LMC', fontsize=12)
-    plt.ylabel('Generalization Gap (Val - Train)', fontsize=12)
-    plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
-    sns.despine(left=True, bottom=True)
-    
-    output_path = os.path.join(PLOTS_DIR, 'scatter_overfitting_vs_complexity.png')
+    output_path = os.path.join(PLOTS_DIR, 'comparison_complexity_metrics_faceted.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Saved plot: {output_path}")
@@ -1138,7 +1215,7 @@ def main():
     plot_scatter_phase_space(master_df, 'Model LMC', 'Validation Loss')
     plot_scatter_phase_space(master_df, 'Weights Entropy', 'Validation Loss')
     plot_scatter_phase_space(master_df, 'Weights Entropy', 'Model LMC')
-    plot_final_metrics_boxplot(master_df)
+    # plot_final_metrics_boxplot(master_df)
     plot_correlation_heatmaps(master_df)
     plot_train_vs_val_loss(master_df)
     plot_test_loss_barplot(master_df)
@@ -1152,6 +1229,10 @@ def main():
     plot_adaptive_mechanism(master_df)
     plot_complexity_phase_space(master_df)
     plot_overfitting_vs_complexity(master_df)
+    
+    # Faceted Plots
+    plot_train_val_test_loss_faceted(master_df)
+    plot_complexity_metrics_faceted(master_df)
     
     print("Done.")
 
