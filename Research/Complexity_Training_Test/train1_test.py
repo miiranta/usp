@@ -25,7 +25,7 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 256 
-    EPOCHS = 500
+    EPOCHS = 5000
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 2000
@@ -1051,7 +1051,7 @@ def main():
         output_dir = os.path.join(script_dir, 'output/output_0.0_test')
     else:
         mode = "experimental (lmc + ce)"
-        output_dir = os.path.join(script_dir, 'output/output_1.0_test')
+        output_dir = os.path.join(script_dir, 'output/output_2.0_test')
         
     print(f"{'='*80}")
     print(f"Transformer LMC Training - Mode: {mode.upper()}")
