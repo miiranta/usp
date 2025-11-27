@@ -1,562 +1,275 @@
 import os
+import glob
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
-from mpl_toolkits.mplot3d import Axes3D
-from scipy.interpolate import griddata
+import re
 
-# Define the output directory
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-output_dir = os.path.join(SCRIPT_DIR, "output")
+# ==========================================
+# Configuration
+# ==========================================
 
-# Lists to store data
-lmc_weights = []
-test_losses_wiki_mean = []
-test_losses_wiki_std = []
-test_lmc_wiki_mean = []
-test_lmc_wiki_std = []
-test_losses_shakespeare_mean = []
-test_losses_shakespeare_std = []
-test_lmc_shakespeare_mean = []
-test_lmc_shakespeare_std = []
+# Define the base output directory relative to this script
+BASE_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
+PLOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots')
 
-# Dictionary to store training curves for each LMC weight
-training_data = {}
+# List of tuples: (label, folder_path)
+# Configure which folders to use for plotting here.
+SOURCES = [
+    ('output_0.0', os.path.join(BASE_OUTPUT_DIR, 'output_0.0')),
+    ('output_0.0_test', os.path.join(BASE_OUTPUT_DIR, 'output_0.0_test')),
+    ('output_1.0', os.path.join(BASE_OUTPUT_DIR, 'output_1.0')),
+    ('output_1.0_test', os.path.join(BASE_OUTPUT_DIR, 'output_1.0_test')),
+]
 
-# Get all folders in the output directory
-folders = sorted([f for f in os.listdir(output_dir) if os.path.isdir(os.path.join(output_dir, f))])
+# if os.path.exists(BASE_OUTPUT_DIR):
+#     # Find all folders starting with output_
+#     candidates = glob.glob(os.path.join(BASE_OUTPUT_DIR, 'output_*'))
+#     for folder_path in candidates:
+#         if os.path.isdir(folder_path):
+#             folder_name = os.path.basename(folder_path)
+#             # Check if it matches the pattern output_x.x (digits and dots)
+#             # User mentioned "output_x.x", so we'll be inclusive of anything starting with output_
+#             # We can use the suffix as the label
+#             label = folder_name
+#             SOURCES.append((label, folder_path))
 
-# Extract data from each folder (using AGGREGATE CSVs only)
-for folder in folders:
-    # Extract LMC weight from folder name (e.g., "output_LMC_0.00" -> 0.00)
-    # Skip folders that don't match the expected pattern (e.g., output_AUTO_LAMBDA)
+# Sort sources by label to ensure consistent color assignment
+SOURCES.sort(key=lambda x: x[0])
+
+# Create plots directory if it doesn't exist
+os.makedirs(PLOTS_DIR, exist_ok=True)
+
+# ==========================================
+# Data Loading and Aggregation
+# ==========================================
+
+def parse_run_csv(file_path):
+    """
+    Parses a single run CSV file.
+    Skips the summary header and reads the epoch data table.
+    """
     try:
-        lmc_weight = float(folder.split('_')[-1])
-    except ValueError:
-        print(f"Skipping folder (not a numeric LMC weight): {folder}")
-        continue
-    
-    # Path to the AGGREGATE CSV file
-    csv_path = os.path.join(output_dir, folder, "z_loss_test_results_transformers-AGGREGATE.csv")
-    
-    if os.path.exists(csv_path):
-        print(f"Reading aggregate CSV: {csv_path}")
-        
-        # Read the file manually to extract summary metrics
-        with open(csv_path, 'r') as f:
+        with open(file_path, 'r') as f:
             lines = f.readlines()
         
-        # Extract test metrics from summary section (use different variable names to avoid shadowing)
-        csv_test_loss_wiki = None
-        csv_test_loss_wiki_std = None
-        csv_test_lmc_wiki = None
-        csv_test_lmc_wiki_std = None
-        csv_test_loss_shakespeare = None
-        csv_test_loss_shakespeare_std = None
-        csv_test_lmc_shakespeare = None
-        csv_test_lmc_shakespeare_std = None
-        
+        # Find the line number where the epoch data starts
+        header_line_idx = -1
         for i, line in enumerate(lines):
-            if 'Test Loss Mean' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
-                csv_test_loss_wiki = float(line.split(',')[1].strip())
-            elif 'Test Loss Std' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
-                csv_test_loss_wiki_std = float(line.split(',')[1].strip())
-            elif 'Test LMC Mean' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
-                csv_test_lmc_wiki = float(line.split(',')[1].strip())
-            elif 'Test LMC Std' in line and 'WikiText-2' in ''.join(lines[max(0,i-5):i]):
-                csv_test_lmc_wiki_std = float(line.split(',')[1].strip())
-            elif 'Test Loss Mean' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
-                csv_test_loss_shakespeare = float(line.split(',')[1].strip())
-            elif 'Test Loss Std' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
-                csv_test_loss_shakespeare_std = float(line.split(',')[1].strip())
-            elif 'Test LMC Mean' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
-                csv_test_lmc_shakespeare = float(line.split(',')[1].strip())
-            elif 'Test LMC Std' in line and 'Shakespeare' in ''.join(lines[max(0,i-5):i]):
-                csv_test_lmc_shakespeare_std = float(line.split(',')[1].strip())
-        
-        # Find the epoch-by-epoch data section
-        epoch_start_idx = None
-        for i, line in enumerate(lines):
-            if line.startswith('Epoch,'):
-                epoch_start_idx = i
+            if line.startswith('Epoch,Training Loss'):
+                header_line_idx = i
                 break
         
-        if epoch_start_idx is not None:
-            # Read epoch data with statistics
-            epoch_data = []
-            for line in lines[epoch_start_idx + 1:]:
-                if line.strip():  # Skip empty lines
-                    parts = line.strip().split(',')
-                    # Expected columns: Epoch, Train_Loss_Mean, Train_Loss_Std, Train_Loss_Min, Train_Loss_Max,
-                    #                   Val_Loss_Mean, Val_Loss_Std, Val_Loss_Min, Val_Loss_Max,
-                    #                   LMC_Mean, LMC_Std, LMC_Min, LMC_Max, ...
-                    if len(parts) >= 13:
-                        epoch_data.append({
-                            'epoch': int(parts[0]),
-                            'train_loss_mean': float(parts[1]),
-                            'train_loss_std': float(parts[2]),
-                            'val_loss_mean': float(parts[5]),
-                            'val_loss_std': float(parts[6]),
-                            'lmc_mean': float(parts[9]),
-                            'lmc_std': float(parts[10])
-                        })
+        if header_line_idx == -1:
+            print(f"Warning: Could not find epoch data header in {file_path}")
+            return None
             
-            if epoch_data:
-                training_data[lmc_weight] = epoch_data
+        # Read the data section using pandas
+        # We pass the lines starting from the header
+        from io import StringIO
+        data_str = ''.join(lines[header_line_idx:])
+        df = pd.read_csv(StringIO(data_str))
+        return df
+    except Exception as e:
+        print(f"Error parsing {file_path}: {e}")
+        return None
+
+def aggregate_metrics(folder_path):
+    """
+    Reads all run CSVs in the folder (ignoring AGGREGATE),
+    and calculates mean, std, and count for each metric per epoch.
+    """
+    # Find all csv files that look like z_loss_test_results_transformers-*.csv
+    # and do NOT end with AGGREGATE.csv
+    csv_files = glob.glob(os.path.join(folder_path, 'z_loss_test_results_transformers-*.csv'))
+    run_dfs = []
+    
+    for csv_file in csv_files:
+        if 'AGGREGATE' in csv_file:
+            continue
+            
+        df = parse_run_csv(csv_file)
+        if df is not None and not df.empty:
+            run_dfs.append(df)
+    
+    if not run_dfs:
+        print(f"No valid run CSVs found in {folder_path}")
+        return None
+        
+    # Concatenate all runs
+    all_runs = pd.concat(run_dfs)
+    
+    # Group by Epoch and calculate stats
+    # We want mean, std, and count (to calculate confidence interval)
+    aggregated = all_runs.groupby('Epoch').agg(['mean', 'std', 'count'])
+    
+    return aggregated
+
+def load_distribution_file(file_path):
+    """Loads a single distribution CSV file."""
+    try:
+        return pd.read_csv(file_path)
+    except Exception as e:
+        print(f"Error reading distribution file {file_path}: {e}")
+        return None
+
+# ==========================================
+# Plotting Functions
+# ==========================================
+
+def plot_all_metrics(sources):
+    """
+    Generates plots for each metric comparing all sources.
+    """
+    # Pre-load and aggregate data for all sources
+    source_data = {}
+    for label, folder_path in sources:
+        print(f"Processing metrics for: {label}")
+        agg_df = aggregate_metrics(folder_path)
+        if agg_df is not None:
+            source_data[label] = agg_df
+            
+    if not source_data:
+        print("No data found to plot metrics.")
+        return
+
+    # Identify all metrics (columns at level 0 of the multi-index)
+    # The columns are MultiIndex: (Metric, Stat)
+    first_df = next(iter(source_data.values()))
+    metrics = first_df.columns.levels[0]
+    
+    for metric in metrics:
+        plt.figure(figsize=(10, 6))
+        
+        for label, df in source_data.items():
+            if metric not in df:
+                continue
                 
-                # Check if test metrics are available in aggregate CSV
-                if all(v is not None for v in [csv_test_loss_wiki, csv_test_loss_wiki_std, csv_test_lmc_wiki, csv_test_lmc_wiki_std,
-                                                csv_test_loss_shakespeare, csv_test_loss_shakespeare_std, 
-                                                csv_test_lmc_shakespeare, csv_test_lmc_shakespeare_std]):
-                    # Use aggregate test metrics
-                    lmc_weights.append(lmc_weight)
-                    test_losses_wiki_mean.append(csv_test_loss_wiki)
-                    test_losses_wiki_std.append(csv_test_loss_wiki_std)
-                    test_lmc_wiki_mean.append(csv_test_lmc_wiki)
-                    test_lmc_wiki_std.append(csv_test_lmc_wiki_std)
-                    test_losses_shakespeare_mean.append(csv_test_loss_shakespeare)
-                    test_losses_shakespeare_std.append(csv_test_loss_shakespeare_std)
-                    test_lmc_shakespeare_mean.append(csv_test_lmc_shakespeare)
-                    test_lmc_shakespeare_std.append(csv_test_lmc_shakespeare_std)
-                    
-                    print(f"LMC Weight: {lmc_weight:.2f}")
-                    print(f"  WikiText-2 - Test Loss: {csv_test_loss_wiki:.4f}±{csv_test_loss_wiki_std:.4f}, "
-                          f"Test LMC: {csv_test_lmc_wiki:.4f}±{csv_test_lmc_wiki_std:.4f}")
-                    print(f"  Tiny-Shakespeare - Test Loss: {csv_test_loss_shakespeare:.4f}±{csv_test_loss_shakespeare_std:.4f}, "
-                          f"Test LMC: {csv_test_lmc_shakespeare:.4f}±{csv_test_lmc_shakespeare_std:.4f}")
-                else:
-                    # Fallback: calculate test metrics from individual run CSVs
-                    print(f"  No test metrics in aggregate CSV, calculating from individual runs...")
-                    run_test_wiki_loss = []
-                    run_test_wiki_lmc = []
-                    run_test_shakes_loss = []
-                    run_test_shakes_lmc = []
-                    
-                    # Look for individual run CSV files
-                    run_num = 1
-                    while True:
-                        run_csv = os.path.join(output_dir, folder, f"z_loss_test_results_transformers-{run_num}.csv")
-                        if not os.path.exists(run_csv):
-                            break
-                        
-                        with open(run_csv, 'r') as f:
-                            run_lines = f.readlines()
-                        
-                        for line in run_lines:
-                            if line.startswith('Test Loss (WikiText-2),'):
-                                run_test_wiki_loss.append(float(line.split(',')[1].strip()))
-                            elif line.startswith('Test LMC Complexity (WikiText-2),'):
-                                run_test_wiki_lmc.append(float(line.split(',')[1].strip()))
-                            elif line.startswith('Test Loss (Tiny-Shakespeare),'):
-                                run_test_shakes_loss.append(float(line.split(',')[1].strip()))
-                            elif line.startswith('Test LMC Complexity (Tiny-Shakespeare),'):
-                                run_test_shakes_lmc.append(float(line.split(',')[1].strip()))
-                        
-                        run_num += 1
-                    
-                    # Calculate statistics if we found data
-                    if len(run_test_wiki_loss) > 0:
-                        lmc_weights.append(lmc_weight)
-                        test_losses_wiki_mean.append(np.mean(run_test_wiki_loss))
-                        test_losses_wiki_std.append(np.std(run_test_wiki_loss))
-                        test_lmc_wiki_mean.append(np.mean(run_test_wiki_lmc))
-                        test_lmc_wiki_std.append(np.std(run_test_wiki_lmc))
-                        test_losses_shakespeare_mean.append(np.mean(run_test_shakes_loss))
-                        test_losses_shakespeare_std.append(np.std(run_test_shakes_loss))
-                        test_lmc_shakespeare_mean.append(np.mean(run_test_shakes_lmc))
-                        test_lmc_shakespeare_std.append(np.std(run_test_shakes_lmc))
-                        
-                        print(f"LMC Weight: {lmc_weight:.2f} (from {len(run_test_wiki_loss)} runs)")
-                        print(f"  WikiText-2 - Test Loss: {np.mean(run_test_wiki_loss):.4f}±{np.std(run_test_wiki_loss):.4f}, "
-                              f"Test LMC: {np.mean(run_test_wiki_lmc):.4f}±{np.std(run_test_wiki_lmc):.4f}")
-                        print(f"  Tiny-Shakespeare - Test Loss: {np.mean(run_test_shakes_loss):.4f}±{np.std(run_test_shakes_loss):.4f}, "
-                              f"Test LMC: {np.mean(run_test_shakes_lmc):.4f}±{np.std(run_test_shakes_lmc):.4f}")
-    else:
-        print(f"Aggregate CSV not found for {folder}")
+            stats = df[metric]
+            epochs = stats.index
+            mean = stats['mean']
+            std = stats['std']
+            count = stats['count']
+            
+            # Calculate 95% Confidence Interval
+            # CI = 1.96 * (std / sqrt(n))
+            # If count is 1, std is NaN, so fill with 0
+            std = std.fillna(0)
+            ci = 1.96 * (std / np.sqrt(count))
+            
+            # Use consistent colors
+            # Find index of label in original sources list to ensure consistent coloring
+            try:
+                color_idx = [s[0] for s in sources].index(label)
+            except ValueError:
+                color_idx = 0
+            color = plt.cm.tab10(color_idx % 10)
 
-if not lmc_weights:
-    print("No aggregate CSV files found!")
-    exit(1)
+            line, = plt.plot(epochs, mean, label=label, color=color)
+            plt.fill_between(epochs, mean - ci, mean + ci, color=color, alpha=0.2)
+            
+        plt.title(f'{metric} Comparison')
+        plt.xlabel('Epoch')
+        plt.ylabel(metric)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Sanitize filename
+        safe_metric_name = re.sub(r'[^\w\s-]', '', metric).strip().replace(' ', '_')
+        output_path = os.path.join(PLOTS_DIR, f'metric_{safe_metric_name}.png')
+        plt.savefig(output_path, dpi=300)
+        plt.close()
+        print(f"Saved plot: {output_path}")
 
-# ============================================================================
-# PLOT 1: Test Loss and Test LMC vs LMC Weight with 95% CI (WikiText-2 and Tiny-Shakespeare)
-# ============================================================================
+def get_epochs_for_folder(folder_path):
+    dist_dir = os.path.join(folder_path, 'distributions')
+    if not os.path.isdir(dist_dir):
+        return []
+    files = glob.glob(os.path.join(dist_dir, 'distribution_epoch_*_run_*.csv'))
+    epochs = set()
+    for f in files:
+        match = re.search(r'distribution_epoch_(\d+|final_test_[a-z]+)_run_', os.path.basename(f))
+        if match:
+            ep_str = match.group(1)
+            if ep_str.isdigit():
+                epochs.add(int(ep_str))
+    return sorted(list(epochs))
 
-fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-
-# Convert to numpy arrays
-lmc_weights_array = np.array(lmc_weights)
-test_losses_wiki_mean = np.array(test_losses_wiki_mean)
-test_losses_wiki_std = np.array(test_losses_wiki_std)
-test_lmc_wiki_mean = np.array(test_lmc_wiki_mean)
-test_lmc_wiki_std = np.array(test_lmc_wiki_std)
-test_losses_shakespeare_mean = np.array(test_losses_shakespeare_mean)
-test_losses_shakespeare_std = np.array(test_losses_shakespeare_std)
-test_lmc_shakespeare_mean = np.array(test_lmc_shakespeare_mean)
-test_lmc_shakespeare_std = np.array(test_lmc_shakespeare_std)
-
-# Calculate 95% CI (1.96 * std)
-ci_factor = 1.96
-
-# --- WikiText-2 Plots ---
-
-# Plot 1.1: WikiText-2 Test Loss
-ax1 = axes[0, 0]
-test_loss_wiki_ci = ci_factor * test_losses_wiki_std
-color = 'tab:blue'
-ax1.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
-ax1.set_ylabel('Test Loss (WikiText-2)', color=color, fontsize=12, fontweight='bold')
-ax1.plot(lmc_weights_array, test_losses_wiki_mean, marker='o', linestyle='-', linewidth=2.5, 
-         markersize=10, color=color, label='Test Loss (Mean)', zorder=3)
-ax1.fill_between(lmc_weights_array, test_losses_wiki_mean - test_loss_wiki_ci, 
-                 test_losses_wiki_mean + test_loss_wiki_ci,
-                 alpha=0.2, color=color, label='Test Loss (95% CI)', zorder=2)
-ax1.tick_params(axis='y', labelcolor=color)
-ax1.grid(True, alpha=0.3)
-ax1.legend(loc='best')
-ax1.set_title('WikiText-2: Test Loss vs LMC Weight', fontsize=13, fontweight='bold')
-
-# Plot 1.2: WikiText-2 Test LMC
-ax2 = axes[0, 1]
-test_lmc_wiki_ci = ci_factor * test_lmc_wiki_std
-color = 'tab:red'
-ax2.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
-ax2.set_ylabel('Test LMC (WikiText-2)', color=color, fontsize=12, fontweight='bold')
-ax2.plot(lmc_weights_array, test_lmc_wiki_mean, marker='s', linestyle='-', linewidth=2.5, 
-         markersize=10, color=color, label='Test LMC (Mean)', zorder=3)
-ax2.fill_between(lmc_weights_array, test_lmc_wiki_mean - test_lmc_wiki_ci, 
-                 test_lmc_wiki_mean + test_lmc_wiki_ci,
-                 alpha=0.2, color=color, label='Test LMC (95% CI)', zorder=2)
-ax2.tick_params(axis='y', labelcolor=color)
-ax2.grid(True, alpha=0.3)
-ax2.legend(loc='best')
-ax2.set_title('WikiText-2: Test LMC vs LMC Weight', fontsize=13, fontweight='bold')
-
-# --- Tiny-Shakespeare Plots ---
-
-# Plot 1.3: Tiny-Shakespeare Test Loss
-ax3 = axes[1, 0]
-test_loss_shakespeare_ci = ci_factor * test_losses_shakespeare_std
-color = 'tab:purple'
-ax3.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
-ax3.set_ylabel('Test Loss (Tiny-Shakespeare)', color=color, fontsize=12, fontweight='bold')
-ax3.plot(lmc_weights_array, test_losses_shakespeare_mean, marker='o', linestyle='-', linewidth=2.5, 
-         markersize=10, color=color, label='Test Loss (Mean)', zorder=3)
-ax3.fill_between(lmc_weights_array, test_losses_shakespeare_mean - test_loss_shakespeare_ci, 
-                 test_losses_shakespeare_mean + test_loss_shakespeare_ci,
-                 alpha=0.2, color=color, label='Test Loss (95% CI)', zorder=2)
-ax3.tick_params(axis='y', labelcolor=color)
-ax3.grid(True, alpha=0.3)
-ax3.legend(loc='best')
-ax3.set_title('Tiny-Shakespeare: Test Loss vs LMC Weight', fontsize=13, fontweight='bold')
-
-# Plot 1.4: Tiny-Shakespeare Test LMC
-ax4 = axes[1, 1]
-test_lmc_shakespeare_ci = ci_factor * test_lmc_shakespeare_std
-color = 'tab:green'
-ax4.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
-ax4.set_ylabel('Test LMC (Tiny-Shakespeare)', color=color, fontsize=12, fontweight='bold')
-ax4.plot(lmc_weights_array, test_lmc_shakespeare_mean, marker='s', linestyle='-', linewidth=2.5, 
-         markersize=10, color=color, label='Test LMC (Mean)', zorder=3)
-ax4.fill_between(lmc_weights_array, test_lmc_shakespeare_mean - test_lmc_shakespeare_ci, 
-                 test_lmc_shakespeare_mean + test_lmc_shakespeare_ci,
-                 alpha=0.2, color=color, label='Test LMC (95% CI)', zorder=2)
-ax4.tick_params(axis='y', labelcolor=color)
-ax4.grid(True, alpha=0.3)
-ax4.legend(loc='best')
-ax4.set_title('Tiny-Shakespeare: Test LMC vs LMC Weight', fontsize=13, fontweight='bold')
-
-fig.suptitle('Test Metrics vs LMC Weight (with 95% CI)', fontsize=15, fontweight='bold', y=0.995)
-fig.tight_layout()
-output_plot_path = os.path.join(SCRIPT_DIR, 'plot_test_loss_and_lmc_aggregate.png')
-plt.savefig(output_plot_path, dpi=300, bbox_inches='tight')
-print(f"\nTest metrics plot saved as '{output_plot_path}'")
-plt.show()
-
-# ============================================================================
-# PLOT 2: Training curves for all LMC weights with 95% CI
-# ============================================================================
-
-fig, axes = plt.subplots(1, 3, figsize=(20, 6))
-
-# Generate colors for each LMC weight
-colors_grad = plt.cm.viridis(np.linspace(0, 1, len(training_data)))
-
-# Find best performing configurations
-final_train_losses = {}
-final_val_losses = {}
-final_model_lmc = {}
-
-for lmc_weight, data in training_data.items():
-    final_train_losses[lmc_weight] = data[-1]['train_loss_mean']
-    final_val_losses[lmc_weight] = data[-1]['val_loss_mean']
-    final_model_lmc[lmc_weight] = data[-1]['lmc_mean']
-
-best_training = min(final_train_losses.items(), key=lambda x: x[1])[0]
-best_validation = min(final_val_losses.items(), key=lambda x: x[1])[0]
-best_lmc = min(final_model_lmc.items(), key=lambda x: x[1])[0]
-
-print(f"\nBest final Training Loss: LMC {best_training:.4f}")
-print(f"Best final Validation Loss: LMC {best_validation:.4f}")
-print(f"Best final Model LMC: LMC {best_lmc:.4f}")
-
-# Plot 1: Training Loss with 95% CI
-ax = axes[0]
-for i, (lmc_weight, data) in enumerate(sorted(training_data.items())):
-    epochs = np.array([d['epoch'] for d in data])
-    train_loss_mean = np.array([d['train_loss_mean'] for d in data])
-    train_loss_std = np.array([d['train_loss_std'] for d in data])
-    train_loss_ci = ci_factor * train_loss_std
+def plot_distributions_overlay(sources):
+    """
+    Plots overlay histograms for the first and last epochs of each source.
+    """
+    print("Plotting distributions...")
     
-    if lmc_weight == best_training:
-        ax.plot(epochs, train_loss_mean, marker='o', linestyle='-', linewidth=3.5, 
-                markersize=10, color='red', label=f'LMC {lmc_weight:.4f} ★', zorder=10)
-        ax.fill_between(epochs, train_loss_mean - train_loss_ci, train_loss_mean + train_loss_ci,
-                       alpha=0.25, color='red', zorder=9)
-    else:
-        ax.plot(epochs, train_loss_mean, marker='o', linestyle='-', linewidth=2, 
-                markersize=6, color=colors_grad[i], label=f'LMC {lmc_weight:.4f}', alpha=0.8, zorder=5-i*0.1)
-        ax.fill_between(epochs, train_loss_mean - train_loss_ci, train_loss_mean + train_loss_ci,
-                       alpha=0.1, color=colors_grad[i], zorder=4-i*0.1)
-
-ax.set_xlabel('Epoch', fontsize=12, fontweight='bold')
-ax.set_ylabel('Training Loss', fontsize=12, fontweight='bold')
-ax.set_title('Training Loss vs Epoch (with 95% CI)', fontsize=13, fontweight='bold')
-ax.legend(loc='best', fontsize=9, ncol=2)
-ax.grid(True, alpha=0.3)
-
-# Plot 2: Validation Loss with 95% CI
-ax = axes[1]
-for i, (lmc_weight, data) in enumerate(sorted(training_data.items())):
-    epochs = np.array([d['epoch'] for d in data])
-    val_loss_mean = np.array([d['val_loss_mean'] for d in data])
-    val_loss_std = np.array([d['val_loss_std'] for d in data])
-    val_loss_ci = ci_factor * val_loss_std
+    # Plot Start (First Epoch)
+    _plot_dynamic_epoch_distribution(sources, lambda epochs: epochs[0] if epochs else None, "Distribution - Start", "distribution_start")
     
-    if lmc_weight == best_validation:
-        ax.plot(epochs, val_loss_mean, marker='s', linestyle='-', linewidth=3.5, 
-                markersize=10, color='red', label=f'LMC {lmc_weight:.4f} ★', zorder=10)
-        ax.fill_between(epochs, val_loss_mean - val_loss_ci, val_loss_mean + val_loss_ci,
-                       alpha=0.25, color='red', zorder=9)
-    else:
-        ax.plot(epochs, val_loss_mean, marker='s', linestyle='-', linewidth=2, 
-                markersize=6, color=colors_grad[i], label=f'LMC {lmc_weight:.4f}', alpha=0.8, zorder=5-i*0.1)
-        ax.fill_between(epochs, val_loss_mean - val_loss_ci, val_loss_mean + val_loss_ci,
-                       alpha=0.1, color=colors_grad[i], zorder=4-i*0.1)
+    # Plot End (Last Epoch)
+    _plot_dynamic_epoch_distribution(sources, lambda epochs: epochs[-1] if epochs else None, "Distribution - End", "distribution_end")
 
-ax.set_xlabel('Epoch', fontsize=12, fontweight='bold')
-ax.set_ylabel('Validation Loss', fontsize=12, fontweight='bold')
-ax.set_title('Validation Loss vs Epoch (with 95% CI)', fontsize=13, fontweight='bold')
-ax.legend(loc='best', fontsize=9, ncol=2)
-ax.grid(True, alpha=0.3)
-
-# Plot 3: Model LMC with 95% CI
-ax = axes[2]
-for i, (lmc_weight, data) in enumerate(sorted(training_data.items())):
-    epochs = np.array([d['epoch'] for d in data])
-    lmc_mean = np.array([d['lmc_mean'] for d in data])
-    lmc_std = np.array([d['lmc_std'] for d in data])
-    lmc_ci = ci_factor * lmc_std
+def _plot_dynamic_epoch_distribution(sources, epoch_selector, title, filename_suffix):
+    plt.figure(figsize=(12, 7))
     
-    if lmc_weight == best_lmc:
-        ax.plot(epochs, lmc_mean, marker='^', linestyle='-', linewidth=3.5, 
-                markersize=10, color='red', label=f'LMC {lmc_weight:.4f} ★', zorder=10)
-        ax.fill_between(epochs, lmc_mean - lmc_ci, lmc_mean + lmc_ci,
-                       alpha=0.25, color='red', zorder=9)
-    else:
-        ax.plot(epochs, lmc_mean, marker='^', linestyle='-', linewidth=2, 
-                markersize=6, color=colors_grad[i], label=f'LMC {lmc_weight:.4f}', alpha=0.8, zorder=5-i*0.1)
-        ax.fill_between(epochs, lmc_mean - lmc_ci, lmc_mean + lmc_ci,
-                       alpha=0.1, color=colors_grad[i], zorder=4-i*0.1)
-
-ax.set_xlabel('Epoch', fontsize=12, fontweight='bold')
-ax.set_ylabel('Model LMC', fontsize=12, fontweight='bold')
-ax.set_title('Model LMC vs Epoch (with 95% CI)', fontsize=13, fontweight='bold')
-ax.legend(loc='best', fontsize=9, ncol=2)
-ax.grid(True, alpha=0.3)
-
-fig.suptitle('Training Curves with 95% Confidence Intervals', fontsize=15, fontweight='bold', y=1.00)
-plt.tight_layout()
-output_training_path = os.path.join(SCRIPT_DIR, 'plot_training_curves_aggregate.png')
-plt.savefig(output_training_path, dpi=300, bbox_inches='tight')
-print(f"Training curves plot saved as '{output_training_path}'")
-plt.show()
-
-# ============================================================================
-# PLOT 3: 3D Surface plots from aggregate data
-# ============================================================================
-
-print("\nGenerating 3D surface plots...")
-
-fig = plt.figure(figsize=(20, 6))
-
-# Prepare data for 3D surface
-training_data_3d = []
-for lmc_weight, data in training_data.items():
-    for entry in data:
-        training_data_3d.append({
-            'LMC Weight': lmc_weight,
-            'Epoch': entry['epoch'],
-            'Training Loss': entry['train_loss_mean'],
-            'Validation Loss': entry['val_loss_mean'],
-            'Model LMC': entry['lmc_mean']
-        })
-
-df_3d = pd.DataFrame(training_data_3d)
-
-# Get unique values for interpolation
-unique_lmc_weights = sorted(df_3d['LMC Weight'].unique())
-unique_epochs = sorted(df_3d['Epoch'].unique())
-
-# Function to create interpolated surface
-def create_surface_plot(ax, metric_name, title):
-    # Create Z matrix for the metric
-    Z = np.zeros((len(unique_lmc_weights), len(unique_epochs)))
+    # Use a color cycle
+    # Use standard tab10 colors which are designed to be distinct
+    colors = [plt.cm.tab10(i % 10) for i in range(len(sources))]
     
-    for i, lmc_weight in enumerate(unique_lmc_weights):
-        for j, epoch in enumerate(unique_epochs):
-            value = df_3d[(df_3d['LMC Weight'] == lmc_weight) & (df_3d['Epoch'] == epoch)][metric_name]
-            if not value.empty:
-                Z[i, j] = value.values[0]
-            else:
-                Z[i, j] = np.nan
+    for idx, (label, folder_path) in enumerate(sources):
+        epochs = get_epochs_for_folder(folder_path)
+        target_epoch = epoch_selector(epochs)
+        
+        if target_epoch is None:
+            print(f"No epochs found for {label}")
+            continue
+            
+        dist_dir = os.path.join(folder_path, 'distributions')
+        # Pattern for numeric epoch
+        pattern = os.path.join(dist_dir, f'distribution_epoch_{target_epoch:03d}_run_*.csv')
+        files = glob.glob(pattern)
+        
+        if not files:
+            print(f"No distribution files found for {label} epoch {target_epoch}")
+            continue
+            
+        color = colors[idx]
+        
+        # Plot each run
+        for i, fpath in enumerate(files):
+            df = load_distribution_file(fpath)
+            if df is not None:
+                # Plot line
+                # Only add label for the first run to avoid legend clutter
+                lbl = f"{label} (Ep {target_epoch})" if i == 0 else None
+                # Use a thicker line for individual runs
+                plt.plot(df['Bin_Center'], df['Probability'], color=color, alpha=1.0, linewidth=2.0, label=lbl)
+                plt.fill_between(df['Bin_Center'], df['Probability'], color=color, alpha=0.4)
+                
+    plt.title(title)
+    plt.xlabel('Value')
+    plt.ylabel('Probability Density')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
     
-    # Create meshgrid for original data
-    X, Y = np.meshgrid(unique_epochs, unique_lmc_weights)
+    output_path = os.path.join(PLOTS_DIR, f'{filename_suffix}_overlay.png')
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    print(f"Saved plot: {output_path}")
+
+def main():
+    print(f"Starting plot generation...")
+    print(f"Sources: {[s[0] for s in SOURCES]}")
     
-    # Create a fine grid for smooth visualization
-    epochs_fine = np.linspace(unique_epochs[0], unique_epochs[-1], len(unique_epochs) * 3)
-    lmc_weights_fine = np.linspace(unique_lmc_weights[0], unique_lmc_weights[-1], len(unique_lmc_weights) * 3)
-    X_fine, Y_fine = np.meshgrid(epochs_fine, lmc_weights_fine)
+    if not SOURCES:
+        print("No sources configured. Exiting.")
+        return
+
+    # 1. Plot Metrics
+    plot_all_metrics(SOURCES)
     
-    # Prepare points for interpolation
-    points = np.array([X[~np.isnan(Z)].flatten(), Y[~np.isnan(Z)].flatten()]).T
-    values = Z[~np.isnan(Z)].flatten()
+    # 2. Plot Distributions
+    plot_distributions_overlay(SOURCES)
     
-    # Interpolate on fine grid
-    points_fine = np.array([X_fine.flatten(), Y_fine.flatten()]).T
-    Z_fine = griddata(points, values, points_fine, method='cubic')
-    Z_fine = Z_fine.reshape(X_fine.shape)
-    
-    # Plot surface
-    surf = ax.plot_surface(X_fine, Y_fine, Z_fine, cmap='viridis', 
-                          alpha=0.9, edgecolor='none', shade=True, 
-                          antialiased=True, rstride=1, cstride=1)
-    
-    # Add contour at base
-    ax.contour(X_fine, Y_fine, Z_fine, zdir='z', offset=np.nanmin(Z_fine), 
-              cmap='viridis', alpha=0.3, linewidths=1)
-    
-    ax.set_xlabel('Epoch', fontsize=11, fontweight='bold')
-    ax.set_ylabel('LMC Weight', fontsize=11, fontweight='bold')
-    ax.set_zlabel(title, fontsize=11, fontweight='bold')
-    ax.set_title(title, fontsize=13, fontweight='bold')
-    ax.view_init(elev=25, azim=120)
-    ax.grid(True, alpha=0.3)
-    
-    fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
-    
-    return surf
+    print("Done.")
 
-# 3D Plot 1: Training Loss
-ax1 = fig.add_subplot(131, projection='3d')
-create_surface_plot(ax1, 'Training Loss', 'Training Loss')
-
-# 3D Plot 2: Validation Loss
-ax2 = fig.add_subplot(132, projection='3d')
-create_surface_plot(ax2, 'Validation Loss', 'Validation Loss')
-
-# 3D Plot 3: Model LMC
-ax3 = fig.add_subplot(133, projection='3d')
-create_surface_plot(ax3, 'Model LMC', 'Model LMC')
-
-fig.suptitle('3D Surface Plots: Metrics vs Epoch vs LMC Weight (Aggregate Data)', 
-            fontsize=15, fontweight='bold', y=0.98)
-plt.tight_layout()
-output_3d_path = os.path.join(SCRIPT_DIR, 'plot_3d_training_aggregate.png')
-plt.savefig(output_3d_path, dpi=300, bbox_inches='tight')
-print(f"3D plots saved as '{output_3d_path}'")
-plt.show()
-
-# ============================================================================
-# PLOT 4: Bar charts comparing test losses for each dataset
-# ============================================================================
-
-print("\nGenerating bar chart comparison plots...")
-
-fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-
-# Calculate 95% CI (1.96 * std)
-ci_factor = 1.96
-
-# Prepare data for bar charts
-x_positions = np.arange(len(lmc_weights_array))
-bar_width = 0.35
-
-# --- WikiText-2 Bar Chart ---
-ax1 = axes[0]
-wiki_ci = ci_factor * test_losses_wiki_std
-
-bars1 = ax1.bar(x_positions, test_losses_wiki_mean, bar_width, 
-                yerr=wiki_ci, capsize=5, alpha=0.8, color='steelblue',
-                edgecolor='black', linewidth=1.5, error_kw={'linewidth': 2, 'ecolor': 'darkred'})
-
-ax1.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
-ax1.set_ylabel('Test Loss', fontsize=12, fontweight='bold')
-ax1.set_title('WikiText-2: Test Loss by LMC Weight (with 95% CI)', fontsize=13, fontweight='bold')
-ax1.set_xticks(x_positions)
-ax1.set_xticklabels([f'{w:.2f}' for w in lmc_weights_array], rotation=45, ha='right')
-ax1.grid(True, alpha=0.3, axis='y')
-
-# Add value labels on bars
-for i, (bar, val, err) in enumerate(zip(bars1, test_losses_wiki_mean, wiki_ci)):
-    height = bar.get_height()
-    ax1.text(bar.get_x() + bar.get_width()/2., height + err + 0.01,
-             f'{val:.3f}±{err:.3f}',
-             ha='center', va='bottom', fontsize=9, fontweight='bold')
-
-# --- Tiny-Shakespeare Bar Chart ---
-ax2 = axes[1]
-shakespeare_ci = ci_factor * test_losses_shakespeare_std
-
-bars2 = ax2.bar(x_positions, test_losses_shakespeare_mean, bar_width,
-                yerr=shakespeare_ci, capsize=5, alpha=0.8, color='coral',
-                edgecolor='black', linewidth=1.5, error_kw={'linewidth': 2, 'ecolor': 'darkred'})
-
-ax2.set_xlabel('LMC Weight', fontsize=12, fontweight='bold')
-ax2.set_ylabel('Test Loss', fontsize=12, fontweight='bold')
-ax2.set_title('Tiny-Shakespeare: Test Loss by LMC Weight (with 95% CI)', fontsize=13, fontweight='bold')
-ax2.set_xticks(x_positions)
-ax2.set_xticklabels([f'{w:.2f}' for w in lmc_weights_array], rotation=45, ha='right')
-ax2.grid(True, alpha=0.3, axis='y')
-
-# Add value labels on bars
-for i, (bar, val, err) in enumerate(zip(bars2, test_losses_shakespeare_mean, shakespeare_ci)):
-    height = bar.get_height()
-    ax2.text(bar.get_x() + bar.get_width()/2., height + err + 0.01,
-             f'{val:.3f}±{err:.3f}',
-             ha='center', va='bottom', fontsize=9, fontweight='bold')
-
-fig.suptitle('Test Loss Comparison Across LMC Weights', fontsize=15, fontweight='bold', y=0.98)
-plt.tight_layout()
-output_bar_path = os.path.join(SCRIPT_DIR, 'plot_test_loss_bars.png')
-plt.savefig(output_bar_path, dpi=300, bbox_inches='tight')
-print(f"Bar chart comparison saved as '{output_bar_path}'")
-plt.show()
-
-print("="*70)
-print("SUMMARY STATISTICS")
-print("="*70)
-print(f"LMC Weight Range: {min(lmc_weights):.4f} to {max(lmc_weights):.4f}")
-print(f"\nWikiText-2:")
-print(f"  Test Loss Range: {np.min(test_losses_wiki_mean):.4f} to {np.max(test_losses_wiki_mean):.4f}")
-print(f"  Test Loss Std: {np.mean(test_losses_wiki_std):.4f} (mean)")
-print(f"  Test LMC Range: {np.min(test_lmc_wiki_mean):.4f} to {np.max(test_lmc_wiki_mean):.4f}")
-print(f"  Test LMC Std: {np.mean(test_lmc_wiki_std):.4f} (mean)")
-print(f"\nTiny-Shakespeare:")
-print(f"  Test Loss Range: {np.min(test_losses_shakespeare_mean):.4f} to {np.max(test_losses_shakespeare_mean):.4f}")
-print(f"  Test Loss Std: {np.mean(test_losses_shakespeare_std):.4f} (mean)")
-print(f"  Test LMC Range: {np.min(test_lmc_shakespeare_mean):.4f} to {np.max(test_lmc_shakespeare_mean):.4f}")
-print(f"  Test LMC Std: {np.mean(test_lmc_shakespeare_std):.4f} (mean)")
-print("="*70)
+if __name__ == "__main__":
+    main()
