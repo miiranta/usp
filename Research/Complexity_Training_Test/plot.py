@@ -1196,7 +1196,7 @@ def plot_train_val_test_loss_comparison(master_df):
     legend_elements.append(Line2D([0], [0], color='none', label=''))
 
     # Loss Type Section (Style)
-    # legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Loss\ Type}$'))
+    legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Loss\ Type}$'))
     for loss_type in loss_types:
         legend_elements.append(Line2D([0], [0], color='gray', linestyle=loss_styles[loss_type], lw=2, label=loss_type))
 
@@ -1230,7 +1230,8 @@ def plot_train_val_test_loss_faceted(master_df):
     # Facet by Loss Type
     g = sns.FacetGrid(df_melted, col="Loss Type", hue="Source", height=5, aspect=1.2, sharey=False)
     g.map(sns.lineplot, "Epoch", "Loss", errorbar=('se', 1.96))
-    g.add_legend()
+    g.add_legend(title=r'$\bf{Source}$')
+    g.set_titles("{col_name}")
     g.fig.suptitle('Loss Comparison by Type', fontsize=16)
     g.fig.subplots_adjust(top=0.85)
     
@@ -1257,7 +1258,8 @@ def plot_complexity_metrics_faceted(master_df):
     
     g = sns.FacetGrid(df_melted, col="Metric", hue="Source", height=5, aspect=1.2, sharey=False)
     g.map(sns.lineplot, "Epoch", "Value", errorbar=('se', 1.96))
-    g.add_legend()
+    g.add_legend(title=r'$\bf{Source}$')
+    g.set_titles("{col_name}")
     g.fig.suptitle('Complexity Metrics Comparison', fontsize=16)
     g.fig.subplots_adjust(top=0.85)
     
