@@ -25,10 +25,10 @@ plt.rcParams['axes.linewidth'] = 0.9
 # List of tuples: (label, folder_path)
 # Configure which folders to use for plotting here.
 SOURCES = [
-    #('Control', os.path.join(BASE_OUTPUT_DIR, 'output_0.0')),
-    ('Control', os.path.join(BASE_OUTPUT_DIR, 'output_0.0_test')),
-    #('Optimized', os.path.join(BASE_OUTPUT_DIR, 'output_1.0')),
-    ('Optimized', os.path.join(BASE_OUTPUT_DIR, 'output_1.0_test')),
+    ('Control', os.path.join(BASE_OUTPUT_DIR, 'output_0.0')),
+    #('Control', os.path.join(BASE_OUTPUT_DIR, 'output_0.0_test')),
+    ('Optimized', os.path.join(BASE_OUTPUT_DIR, 'output_1.0')),
+    #('Optimized', os.path.join(BASE_OUTPUT_DIR, 'output_1.0_test')),
 ]
 
 # Create plots directory if it doesn't exist
@@ -464,26 +464,38 @@ def plot_test_loss_barplot(master_df):
     df_melted['Dataset'] = df_melted['Dataset'].str.replace('Test Loss ', '')
     
     plt.figure(figsize=(10, 6))
+    
+    # Calculate stats for annotations
+    stats = df_melted.groupby(['Source', 'Dataset'])['Loss'].agg(['mean', 'sem']).reset_index()
+    stats['ci'] = stats['sem'] * 1.96
+    
     ax = sns.barplot(
         data=df_melted,
         x='Source',
         y='Loss',
         hue='Dataset',
         palette='pastel',
-        edgecolor='.2'
+        edgecolor='.2',
+        capsize=.1,
+        err_kws={'linewidth': 2, 'color': 'black'}
     )
     
     # Add numeric labels
     for p in ax.patches:
         height = p.get_height()
         if np.isfinite(height) and height != 0:
-            ax.annotate(f'{height:.4f}', 
+            # Find corresponding CI based on height (mean)
+            closest_idx = (stats['mean'] - height).abs().idxmin()
+            ci = stats.loc[closest_idx, 'ci']
+            
+            ax.annotate(f'{height:.4f}\n±{ci:.4f}', 
                         (p.get_x() + p.get_width() / 2., height / 2), 
                         ha='center', va='center', 
                         xytext=(0, 0), 
                         textcoords='offset points',
                         fontsize=10,
-                        color='black')
+                        color='black',
+                        fontweight='bold')
     
     plt.title('Final Test Loss Comparison', fontweight='normal', fontsize=16)
     plt.ylabel('Loss', fontsize=12)
@@ -617,6 +629,10 @@ def plot_global_best_metrics_barplot(master_df):
         
         plt.figure(figsize=(10, 6))
         
+        # Calculate stats for annotations
+        stats = best_per_run.groupby(['Source'])['Best Value'].agg(['mean', 'sem']).reset_index()
+        stats['ci'] = stats['sem'] * 1.96
+        
         # Use hue='Source' to ensure consistent coloring with other plots
         # dodge=False because x and hue are the same
         ax = sns.barplot(
@@ -627,20 +643,27 @@ def plot_global_best_metrics_barplot(master_df):
             palette='pastel',
             edgecolor='.2',
             errorbar=('se', 1.96), # Match lineplot error bars
-            dodge=False
+            dodge=False,
+            capsize=.1,
+            err_kws={'linewidth': 2, 'color': 'black'}
         )
         
         # Add numeric labels
         for p in ax.patches:
             height = p.get_height()
             if np.isfinite(height) and height != 0:
-                ax.annotate(f'{height:.4f}', 
+                # Find corresponding CI
+                closest_idx = (stats['mean'] - height).abs().idxmin()
+                ci = stats.loc[closest_idx, 'ci']
+                
+                ax.annotate(f'{height:.4f}\n±{ci:.4f}', 
                             (p.get_x() + p.get_width() / 2., height / 2), 
                             ha='center', va='center', 
                             xytext=(0, 0), 
                             textcoords='offset points',
                             fontsize=10,
-                            color='black')
+                            color='black',
+                            fontweight='bold')
         
         direction = "Max" if is_accuracy else "Min"
         plt.title(f'Best {metric} per Run ({direction})', fontweight='normal', fontsize=16)
@@ -670,6 +693,10 @@ def plot_final_metrics_barplot(master_df):
     for metric in metrics:
         plt.figure(figsize=(10, 6))
         
+        # Calculate stats for annotations
+        stats = final_epochs_df.groupby(['Source'])[metric].agg(['mean', 'sem']).reset_index()
+        stats['ci'] = stats['sem'] * 1.96
+        
         # Use hue='Source' to ensure consistent coloring with other plots
         # dodge=False because x and hue are the same
         ax = sns.barplot(
@@ -680,20 +707,27 @@ def plot_final_metrics_barplot(master_df):
             palette='pastel', # Use pastel as requested
             edgecolor='.2',
             errorbar=('se', 1.96), # Match lineplot error bars
-            dodge=False
+            dodge=False,
+            capsize=.1,
+            err_kws={'linewidth': 2, 'color': 'black'}
         )
         
         # Add numeric labels
         for p in ax.patches:
             height = p.get_height()
             if np.isfinite(height) and height != 0:
-                ax.annotate(f'{height:.4f}', 
+                # Find corresponding CI
+                closest_idx = (stats['mean'] - height).abs().idxmin()
+                ci = stats.loc[closest_idx, 'ci']
+                
+                ax.annotate(f'{height:.4f}\n±{ci:.4f}', 
                             (p.get_x() + p.get_width() / 2., height / 2), 
                             ha='center', va='center', 
                             xytext=(0, 0), 
                             textcoords='offset points',
                             fontsize=10,
-                            color='black')
+                            color='black',
+                            fontweight='bold')
         
         plt.title(f'Final {metric} per Run', fontweight='normal', fontsize=16)
         plt.ylabel(f'Final {metric}', fontsize=12)
@@ -823,9 +857,16 @@ def plot_adaptive_mechanism(master_df):
     # Plot LMC Weight on left axis (ax1)
     for source in sources:
         subset = master_df[master_df['Source'] == source]
-        subset_mean = subset.groupby('Epoch')['LMC Weight'].mean()
-        ax1.plot(subset_mean.index, subset_mean.values, 
+        
+        # Calculate mean and CI
+        grouped = subset.groupby('Epoch')['LMC Weight']
+        mean = grouped.mean()
+        sem = grouped.sem()
+        ci = sem * 1.96
+        
+        ax1.plot(mean.index, mean.values, 
                  color=color_weight, linestyle=source_styles[source], linewidth=2, label=f"{source}")
+        ax1.fill_between(mean.index, mean - ci, mean + ci, color=color_weight, alpha=0.2)
                  
     ax1.set_xlabel('Epoch', fontsize=12)
     ax1.set_ylabel('LMC Weight', color=color_weight, fontsize=12)
@@ -837,9 +878,16 @@ def plot_adaptive_mechanism(master_df):
     ax2 = ax1.twinx()
     for source in sources:
         subset = master_df[master_df['Source'] == source]
-        subset_mean = subset.groupby('Epoch')['Val Error Slope'].mean()
-        ax2.plot(subset_mean.index, subset_mean.values, 
+        
+        # Calculate mean and CI
+        grouped = subset.groupby('Epoch')['Val Error Slope']
+        mean = grouped.mean()
+        sem = grouped.sem()
+        ci = sem * 1.96
+        
+        ax2.plot(mean.index, mean.values, 
                  color=color_slope, linestyle=source_styles[source], linewidth=2, alpha=0.8)
+        ax2.fill_between(mean.index, mean - ci, mean + ci, color=color_slope, alpha=0.2)
                  
     ax2.set_ylabel('Val Error Slope', color=color_slope, fontsize=12)
     ax2.tick_params(axis='y', labelcolor=color_slope)
@@ -906,11 +954,18 @@ def plot_adaptive_mechanism_faceted(master_df):
         subset = master_df[master_df['Source'] == source]
         
         # Group by Epoch to get mean (if multiple runs)
-        subset_mean = subset.groupby('Epoch')[required].mean()
+        # subset_mean = subset.groupby('Epoch')[required].mean()
         
         # Plot LMC Weight (Left Axis)
-        ax1.plot(subset_mean.index, subset_mean['LMC Weight'], 
+        grouped_weight = subset.groupby('Epoch')['LMC Weight']
+        mean_weight = grouped_weight.mean()
+        sem_weight = grouped_weight.sem()
+        ci_weight = sem_weight * 1.96
+        
+        ax1.plot(mean_weight.index, mean_weight.values, 
                  color=color_weight, linewidth=2, label='LMC Weight')
+        ax1.fill_between(mean_weight.index, mean_weight - ci_weight, mean_weight + ci_weight, 
+                         color=color_weight, alpha=0.2)
         
         ax1.set_xlabel('Epoch', fontsize=12)
         ax1.set_ylabel('LMC Weight', color=color_weight, fontsize=12)
@@ -920,8 +975,16 @@ def plot_adaptive_mechanism_faceted(master_df):
         
         # Plot Slope (Right Axis)
         ax2 = ax1.twinx()
-        ax2.plot(subset_mean.index, subset_mean['Val Error Slope'], 
+        
+        grouped_slope = subset.groupby('Epoch')['Val Error Slope']
+        mean_slope = grouped_slope.mean()
+        sem_slope = grouped_slope.sem()
+        ci_slope = sem_slope * 1.96
+        
+        ax2.plot(mean_slope.index, mean_slope.values, 
                  color=color_slope, linewidth=2, linestyle='--', alpha=0.8, label='Val Error Slope')
+        ax2.fill_between(mean_slope.index, mean_slope - ci_slope, mean_slope + ci_slope,
+                         color=color_slope, alpha=0.2)
                  
         ax2.set_ylabel('Val Error Slope', color=color_slope, fontsize=12)
         ax2.tick_params(axis='y', labelcolor=color_slope)
