@@ -4,6 +4,7 @@ import pandas as pd
 import warnings
 from pysr import PySRRegressor
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import seaborn as sns
 sns.set_theme(style='whitegrid')
 from scipy.optimize import curve_fit
@@ -144,29 +145,26 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         os.makedirs(filter_complexity_folder)
 
     # Plot scatter with regression lines using seaborn
-    fig, ax = plt.subplots(figsize=(12, 9))
+    fig, ax = plt.subplots(figsize=(16, 12))
     sns.scatterplot(x=appended_benchmarks_df['filter'], y=appended_benchmarks_df['complexity'],
-                    alpha=0.6, label='Data', ax=ax)
-    
-    # Add model names below each data point
-    for idx, row in appended_benchmarks_df.iterrows():
-        if pd.notna(row['filter']) and pd.notna(row['complexity']):
-            ax.text(row['filter'], row['complexity'], row['model'], 
-                   fontsize=6, alpha=0.5, ha='center', va='top', color='gray')
+                    alpha=0.6, label='Data', ax=ax, s=120)
     
     # Regression lines
-    sns.lineplot(x=x_line, y=y_line, color='red', linewidth=2, linestyle='-',
+    sns.lineplot(x=x_line, y=y_line, color='red', linewidth=3.5, linestyle='-',
                  label=f'Best fit all data ({best_name})\n{best_equation}\nR² = {best_r2:.6f}', ax=ax)
-    sns.scatterplot(x=x_max, y=y_max, color='green', s=100, alpha=0.8, marker='D',
+    sns.scatterplot(x=x_max, y=y_max, color='green', s=200, alpha=0.8, marker='D',
                     label='Maximum values', zorder=5, ax=ax)
-    sns.lineplot(x=x_line_max, y=y_line_max, color='green', linewidth=2, linestyle='--',
+    sns.lineplot(x=x_line_max, y=y_line_max, color='green', linewidth=3.5, linestyle='--',
                  label=f'Best fit max ({best_name_max})\n{best_equation_max}\nR² = {best_r2_max:.6f}', ax=ax)
-    ax.set_xlabel('Filter')
-    ax.set_ylabel('Complexity')
-    ax.set_title('Filter vs Complexity')
-    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+    ax.set_xlabel('Filter', fontsize=18)
+    ax.set_ylabel('Complexity', fontsize=18)
+    ax.set_title('Filter vs Complexity', fontsize=24, fontweight='bold')
+    ax.set_yscale('log')
+    ax.tick_params(axis='both', which='major', labelsize=16)
+    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
+    ax.grid(True, which="both", ls="-", alpha=0.2)
     
-    fig.savefig(os.path.join(filter_complexity_folder, 'regression.png'), dpi=100, bbox_inches='tight')
+    fig.savefig(os.path.join(filter_complexity_folder, 'regression.png'), dpi=300, bbox_inches='tight')
     plt.close(fig)
 
     # Get average complexity for each filter (excluding filter = 0)
@@ -175,12 +173,13 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
     y_avg = avg_complexity_by_filter['complexity'].values
 
     # Plot bar graph for average complexity using seaborn
-    fig, ax = plt.subplots(figsize=(12, 9))
+    fig, ax = plt.subplots(figsize=(16, 12))
     avg_df = pd.DataFrame({'filter': x_avg, 'avg_complexity': y_avg})
     sns.barplot(data=avg_df, x='filter', y='avg_complexity', color='steelblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-    ax.set_xlabel('Filter')
-    ax.set_ylabel('Average Complexity')
-    ax.set_title('Average Complexity by Filter Value')
+    ax.set_xlabel('Filter', fontsize=18)
+    ax.set_ylabel('Average Complexity', fontsize=18)
+    ax.set_title('Average Complexity by Filter Value', fontsize=24, fontweight='bold')
+    ax.tick_params(axis='both', which='major', labelsize=16)
     ax.grid(axis='y', alpha=0.3)
     # Add value labels on top of bars (slightly above each bar to avoid overlap)
     if len(y_avg) > 0:
@@ -195,21 +194,22 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
     for p in ax.patches:
         height = p.get_height()
         x = p.get_x() + p.get_width() / 2
-        ax.text(x, height + offset, f"{height:.4f}", ha='center', va='bottom', fontsize=8, rotation=90)
+        ax.text(x, height + offset, f"{height:.4f}".rstrip('0').rstrip('.'), ha='center', va='bottom', fontsize=16, rotation=90)
     # Adjust y-axis limits to accommodate rotated text labels
     y_max_val = ax.get_ylim()[1]
-    ax.set_ylim(0, y_max_val * 1.15)
+    ax.set_ylim(0, y_max_val * 1.25)
     fig.tight_layout()
-    fig.savefig(os.path.join(filter_complexity_folder, 'average_complexity_bar.png'), bbox_inches='tight')
+    fig.savefig(os.path.join(filter_complexity_folder, 'average_complexity_bar.png'), bbox_inches='tight', dpi=300)
     plt.close(fig)
 
     # Plot bar graph for maximum complexity using seaborn
-    fig, ax = plt.subplots(figsize=(12, 9))
+    fig, ax = plt.subplots(figsize=(16, 12))
     max_df = pd.DataFrame({'filter': x_max, 'max_complexity': y_max})
     sns.barplot(data=max_df, x='filter', y='max_complexity', color='darkgreen', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-    ax.set_xlabel('Filter')
-    ax.set_ylabel('Maximum Complexity')
-    ax.set_title('Maximum Complexity by Filter Value')
+    ax.set_xlabel('Filter', fontsize=18)
+    ax.set_ylabel('Maximum Complexity', fontsize=18)
+    ax.set_title('Maximum Complexity by Filter Value', fontsize=24, fontweight='bold')
+    ax.tick_params(axis='both', which='major', labelsize=16)
     ax.grid(axis='y', alpha=0.3)
     # Add value labels on top of bars (slightly above each bar to avoid overlap)
     if len(y_max) > 0:
@@ -223,13 +223,36 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
     for p in ax.patches:
         height = p.get_height()
         x = p.get_x() + p.get_width() / 2
-        ax.text(x, height + offset_max, f"{height:.4f}", ha='center', va='bottom', fontsize=8, rotation=90)
+        ax.text(x, height + offset_max, f"{height:.4f}".rstrip('0').rstrip('.'), ha='center', va='bottom', fontsize=16, rotation=90)
     # Adjust y-axis limits to accommodate rotated text labels
     y_max_val = ax.get_ylim()[1]
-    ax.set_ylim(0, y_max_val * 1.15)
+    ax.set_ylim(0, y_max_val * 1.25)
     fig.tight_layout()
-    fig.savefig(os.path.join(filter_complexity_folder, 'maximum_complexity_bar.png'), bbox_inches='tight')
+    fig.savefig(os.path.join(filter_complexity_folder, 'maximum_complexity_bar.png'), bbox_inches='tight', dpi=300)
     plt.close(fig)
+
+    # Try different functions and find the best fit for average values
+    best_r2_avg = -np.inf
+    best_name_avg = None
+    best_params_avg = None
+    best_func_avg = None
+    best_equation_avg = None
+
+    for name, func_info in FUNCTIONS_TO_TEST.items():
+        try:
+            params, _ = curve_fit(func_info['func'], x_avg, y_avg, p0=func_info['initial_guess'], maxfev=10000)
+            y_pred = func_info['func'](x_avg, *params)
+            r2 = 1 - (np.sum((y_avg - y_pred)**2) / np.sum((y_avg - np.mean(y_avg))**2))
+            
+            if r2 > best_r2_avg:
+                best_r2_avg = r2
+                best_name_avg = name
+                best_params_avg = params
+                best_func_avg = func_info['func']
+                best_equation_avg = func_info['equation'](params)
+        except:
+            # Skip if curve fitting fails for this function
+            pass
 
     # Save regression information to text file
     with open(os.path.join(filter_complexity_folder, 'regression_info.txt'), 'w', encoding='utf-8') as f:
@@ -243,6 +266,13 @@ def plot_filter_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         f.write(f"R² score: {best_r2:.16f}\n")
         f.write(f"Parameters: {best_params}\n\n")
         
+        f.write("AVERAGE VALUES REGRESSION:\n")
+        f.write("-" * 70 + "\n")
+        f.write(f"Best fit function: {best_name_avg}\n")
+        f.write(f"Expression: {best_equation_avg}\n")
+        f.write(f"R² score: {best_r2_avg:.16f}\n")
+        f.write(f"Parameters: {best_params_avg}\n\n")
+
         f.write("MAXIMUM VALUES REGRESSION:\n")
         f.write("-" * 70 + "\n")
         f.write(f"Best fit function: {best_name_max}\n")
@@ -375,25 +405,22 @@ def plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER):
         os.makedirs(folder)
 
     # Plot scatter with regression lines using seaborn
-    fig, ax = plt.subplots(figsize=(12, 9))
-    sns.scatterplot(x=appended_benchmarks_df['filter'], y=appended_benchmarks_df['bin_count'], alpha=0.6, label='Data', ax=ax)
+    fig, ax = plt.subplots(figsize=(16, 12))
+    sns.scatterplot(x=appended_benchmarks_df['filter'], y=appended_benchmarks_df['bin_count'], alpha=0.6, label='Data', ax=ax, s=120)
     
-    # Add model names below each data point
-    for idx, row in appended_benchmarks_df.iterrows():
-        if pd.notna(row['filter']) and pd.notna(row['bin_count']):
-            ax.text(row['filter'], row['bin_count'], row['model'], 
-                   fontsize=6, alpha=0.5, ha='center', va='top', color='gray')
+    sns.lineplot(x=x_line, y=y_line, color='red', linewidth=3.5, linestyle='-', label=f'Best fit all data ({best_name})\n{best_equation}\nR² = {best_r2:.6f}', ax=ax)
+    sns.scatterplot(x=x_max, y=y_max, color='green', s=200, alpha=0.8, marker='D', label='Maximum values', zorder=5, ax=ax)
+    sns.lineplot(x=x_line_max, y=y_line_max, color='green', linewidth=3.5, linestyle='--', label=f'Best fit max ({best_name_max})\n{best_equation_max}\nR² = {best_r2_max:.6f}', ax=ax)
+    ax.set_xlabel('Filter', fontsize=18)
+    ax.set_ylabel('Number of Bins', fontsize=18)
+    ax.set_title('Filter vs Number of Bins', fontsize=24, fontweight='bold')
+    ax.set_yscale('log')
+    ax.tick_params(axis='both', which='major', labelsize=16)
     
-    sns.lineplot(x=x_line, y=y_line, color='red', linewidth=2, linestyle='-', label=f'Best fit all data ({best_name})\n{best_equation}\nR² = {best_r2:.6f}', ax=ax)
-    sns.scatterplot(x=x_max, y=y_max, color='green', s=100, alpha=0.8, marker='D', label='Maximum values', zorder=5, ax=ax)
-    sns.lineplot(x=x_line_max, y=y_line_max, color='green', linewidth=2, linestyle='--', label=f'Best fit max ({best_name_max})\n{best_equation_max}\nR² = {best_r2_max:.6f}', ax=ax)
-    ax.set_xlabel('Filter')
-    ax.set_ylabel('Number of Bins')
-    ax.set_title('Filter vs Number of Bins')
+    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
+    ax.grid(True, which="both", ls="-", alpha=0.2)
     
-    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
-    
-    fig.savefig(os.path.join(folder, 'regression.png'), dpi=100, bbox_inches='tight')
+    fig.savefig(os.path.join(folder, 'regression.png'), dpi=300, bbox_inches='tight')
     plt.close(fig)
 
     # Average bin_count by filter
@@ -401,61 +428,75 @@ def plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER):
     x_avg = avg_bins_by_filter['filter'].values
     y_avg = avg_bins_by_filter['bin_count'].values
 
-    fig, ax = plt.subplots(figsize=(12, 9))
+    fig, ax = plt.subplots(figsize=(16, 12))
     avg_df = pd.DataFrame({'filter': x_avg, 'avg_bins': y_avg})
     sns.barplot(data=avg_df, x='filter', y='avg_bins', color='steelblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-    ax.set_xlabel('Filter')
-    ax.set_ylabel('Average Number of Bins')
-    ax.set_title('Average Number of Bins by Filter Value')
+    ax.set_xlabel('Filter', fontsize=18)
+    ax.set_ylabel('Average Number of Bins', fontsize=18)
+    ax.set_title('Average Number of Bins by Filter Value', fontsize=24, fontweight='bold')
+    ax.set_yscale('log')
+    ax.tick_params(axis='both', which='major', labelsize=16)
     ax.grid(axis='y', alpha=0.3)
-    # Add value labels on top of bars (slightly above each bar to avoid overlap)
-    if len(y_avg) > 0:
-        y_range = y_avg.max() - y_avg.min()
-        if y_range == 0:
-            offset = 0.01 * (y_avg.max() if y_avg.max() != 0 else 1)
-        else:
-            offset = y_range * 0.02
-    else:
-        offset = 0.01
-    # Use bar patch positions for annotations so labels align with plotted bars
+    # Add value labels on top of bars
     for p in ax.patches:
         height = p.get_height()
         x = p.get_x() + p.get_width() / 2
-        ax.text(x, height + offset, f"{height:.4f}", ha='center', va='bottom', fontsize=8, rotation=90)
+        if height > 0:
+            ax.text(x, height * 1.05, f"{height:.4f}".rstrip('0').rstrip('.'), ha='center', va='bottom', fontsize=16, rotation=90)
+    
     # Adjust y-axis limits to accommodate rotated text labels
     y_max_val = ax.get_ylim()[1]
-    ax.set_ylim(0, y_max_val * 1.15)
+    ax.set_ylim(top=y_max_val * 10)
     fig.tight_layout()
-    fig.savefig(os.path.join(folder, 'average_bins_bar.png'), bbox_inches='tight')
+    fig.savefig(os.path.join(folder, 'average_bins_bar.png'), bbox_inches='tight', dpi=300)
     plt.close(fig)
 
     # Maximum bin_count bar
-    fig, ax = plt.subplots(figsize=(12, 9))
+    fig, ax = plt.subplots(figsize=(14, 10))
     max_df = pd.DataFrame({'filter': x_max, 'max_bins': y_max})
     sns.barplot(data=max_df, x='filter', y='max_bins', color='darkgreen', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-    ax.set_xlabel('Filter')
-    ax.set_ylabel('Maximum Number of Bins')
-    ax.set_title('Maximum Number of Bins by Filter Value')
+    ax.set_xlabel('Filter', fontsize=14)
+    ax.set_ylabel('Maximum Number of Bins', fontsize=14)
+    ax.set_title('Maximum Number of Bins by Filter Value', fontsize=16, fontweight='bold')
+    ax.set_yscale('log')
+    ax.tick_params(axis='both', which='major', labelsize=12)
     ax.grid(axis='y', alpha=0.3)
-    # Add value labels on top of bars (slightly above each bar to avoid overlap)
-    if len(y_max) > 0:
-        y_range_max = y_max.max() - y_max.min()
-        if y_range_max == 0:
-            offset_max = 0.01 * (y_max.max() if y_max.max() != 0 else 1)
-        else:
-            offset_max = y_range_max * 0.02
-    else:
-        offset_max = 0.01
+    # Add value labels on top of bars
     for p in ax.patches:
         height = p.get_height()
         x = p.get_x() + p.get_width() / 2
-        ax.text(x, height + offset_max, f"{height:.4f}", ha='center', va='bottom', fontsize=8, rotation=90)
+        if height > 0:
+            ax.text(x, height * 1.05, f"{height:.4f}".rstrip('0').rstrip('.'), ha='center', va='bottom', fontsize=14, rotation=90)
+    
     # Adjust y-axis limits to accommodate rotated text labels
     y_max_val = ax.get_ylim()[1]
-    ax.set_ylim(0, y_max_val * 1.15)
+    ax.set_ylim(top=y_max_val * 10)
     fig.tight_layout()
-    fig.savefig(os.path.join(folder, 'maximum_bins_bar.png'), bbox_inches='tight')
+    fig.savefig(os.path.join(folder, 'maximum_bins_bar.png'), bbox_inches='tight', dpi=300)
     plt.close(fig)
+
+    # Try different functions and find the best fit for average values
+    best_r2_avg = -np.inf
+    best_name_avg = None
+    best_params_avg = None
+    best_func_avg = None
+    best_equation_avg = None
+
+    for name, func_info in FUNCTIONS_TO_TEST.items():
+        try:
+            params, _ = curve_fit(func_info['func'], x_avg, y_avg, p0=func_info['initial_guess'], maxfev=10000)
+            y_pred = func_info['func'](x_avg, *params)
+            r2 = 1 - (np.sum((y_avg - y_pred)**2) / np.sum((y_avg - np.mean(y_avg))**2))
+            
+            if r2 > best_r2_avg:
+                best_r2_avg = r2
+                best_name_avg = name
+                best_params_avg = params
+                best_func_avg = func_info['func']
+                best_equation_avg = func_info['equation'](params)
+        except:
+            # Skip if curve fitting fails for this function
+            pass
 
     # Save regression info
     with open(os.path.join(folder, 'regression_info.txt'), 'w', encoding='utf-8') as f:
@@ -467,6 +508,14 @@ def plot_filter_vs_bin_count(appended_benchmarks_df, OUTPUT_FOLDER):
         f.write(f"Expression: {best_equation}\n")
         f.write(f"R² score: {best_r2:.16f}\n")
         f.write(f"Parameters: {best_params}\n\n")
+        
+        f.write("AVERAGE VALUES REGRESSION:\n")
+        f.write("-" * 70 + "\n")
+        f.write(f"Best fit function: {best_name_avg}\n")
+        f.write(f"Expression: {best_equation_avg}\n")
+        f.write(f"R² score: {best_r2_avg:.16f}\n")
+        f.write(f"Parameters: {best_params_avg}\n\n")
+
         f.write("MAXIMUM VALUES REGRESSION:\n")
         f.write("-" * 70 + "\n")
         f.write(f"Best fit function: {best_name_max}\n")
@@ -504,41 +553,55 @@ def plot_complexity_vs_types(appended_benchmarks_df, OUTPUT_FOLDER):
         os.makedirs(types_complexity_folder)
 
     # Plot bar graph for average complexity by types using seaborn
-    fig, ax = plt.subplots(figsize=(14, 10))
+    fig, ax = plt.subplots(figsize=(16, 12))
     sns.barplot(x='complexity', y='types_str', data=avg_complexity_by_types, color='steelblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-    ax.set_xlabel('Average Complexity')
-    ax.set_ylabel('Types')
-    ax.set_title('Average Complexity by Type Combination')
+    ax.set_xlabel('Average Complexity', fontsize=18)
+    ax.set_ylabel('Types', fontsize=18)
+    ax.set_title('Average Complexity by Type Combination', fontsize=24, fontweight='bold')
+    ax.tick_params(axis='both', which='major', labelsize=16)
     ax.grid(axis='x', alpha=0.3)
+    
     # Add value labels on bars using patch positions (horizontal bars)
+    # Adjust x-axis limit to make room for labels
     x_min, x_max_lim = ax.get_xlim()
-    x_range_lim = x_max_lim - x_min if (x_max_lim - x_min) != 0 else 1
+    ax.set_xlim(right=x_max_lim * 1.15)  # Increase x-limit by 15%
+    
+    x_range_lim = ax.get_xlim()[1] - x_min
     x_offset = x_range_lim * 0.01
+    
     for p in ax.patches:
         width = p.get_width()
         y = p.get_y() + p.get_height() / 2
-        ax.text(width + x_offset, y, f' {width:.4f}', va='center', fontsize=7)
+        ax.text(width + x_offset, y, f' {width:.4f}', va='center', fontsize=16)
+        
     fig.tight_layout()
-    fig.savefig(os.path.join(types_complexity_folder, 'average_complexity_bar.png'), dpi=150, bbox_inches='tight')
+    fig.savefig(os.path.join(types_complexity_folder, 'average_complexity_bar.png'), dpi=300, bbox_inches='tight')
     plt.close(fig)
 
     # Plot bar graph for maximum complexity by types using seaborn
-    fig, ax = plt.subplots(figsize=(14, 10))
+    fig, ax = plt.subplots(figsize=(16, 12))
     sns.barplot(x='complexity', y='types_str', data=max_complexity_by_types, color='darkgreen', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-    ax.set_xlabel('Maximum Complexity')
-    ax.set_ylabel('Types')
-    ax.set_title('Maximum Complexity by Type Combination')
+    ax.set_xlabel('Maximum Complexity', fontsize=18)
+    ax.set_ylabel('Types', fontsize=18)
+    ax.set_title('Maximum Complexity by Type Combination', fontsize=24, fontweight='bold')
+    ax.tick_params(axis='both', which='major', labelsize=16)
     ax.grid(axis='x', alpha=0.3)
+    
     # Add value labels on bars using patch positions (horizontal bars)
+    # Adjust x-axis limit to make room for labels
     x_min, x_max_lim = ax.get_xlim()
-    x_range_lim = x_max_lim - x_min if (x_max_lim - x_min) != 0 else 1
+    ax.set_xlim(right=x_max_lim * 1.15)  # Increase x-limit by 15%
+    
+    x_range_lim = ax.get_xlim()[1] - x_min
     x_offset = x_range_lim * 0.01
+    
     for p in ax.patches:
         width = p.get_width()
         y = p.get_y() + p.get_height() / 2
-        ax.text(width + x_offset, y, f' {width:.4f}', va='center', fontsize=7)
+        ax.text(width + x_offset, y, f' {width:.4f}', va='center', fontsize=16)
+        
     fig.tight_layout()
-    fig.savefig(os.path.join(types_complexity_folder, 'maximum_complexity_bar.png'), dpi=150, bbox_inches='tight')
+    fig.savefig(os.path.join(types_complexity_folder, 'maximum_complexity_bar.png'), dpi=300, bbox_inches='tight')
     plt.close(fig)
 
     # Save average complexity data to text file
@@ -643,22 +706,25 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
         os.makedirs(params_complexity_folder)
 
     # Plot scatter with regression line using seaborn
-    fig, ax = plt.subplots(figsize=(12, 9))
-    sns.scatterplot(x=x_data_params, y=y_data_params, alpha=0.6, label='Data', ax=ax)
+    fig, ax = plt.subplots(figsize=(16, 12))
+    sns.scatterplot(x=x_data_params, y=y_data_params, alpha=0.6, label='Data', ax=ax, s=120)
     
     # Add model names below each data point
     mask_params_valid = ~(appended_benchmarks_df['count'].isna() | appended_benchmarks_df['complexity'].isna())
     for idx, row in appended_benchmarks_df[mask_params_valid].iterrows():
         ax.text(row['count'], row['complexity'], row['model'], 
-               fontsize=6, alpha=0.5, ha='center', va='top', color='gray')
+               fontsize=10, alpha=0.5, ha='center', va='top', color='gray')
     
-    sns.lineplot(x=x_line_params, y=y_line_params, color='red', linewidth=2, linestyle='-', label=f'Best fit ({best_name_params})\n{best_equation_params}\nR² = {best_r2_params:.6f}', ax=ax)
-    ax.set_xlabel('Number of Parameters')
-    ax.set_ylabel('Complexity')
-    ax.set_title('Number of Parameters vs Complexity')
-    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+    sns.lineplot(x=x_line_params, y=y_line_params, color='red', linewidth=3.5, linestyle='-', label=f'Best fit ({best_name_params})\n{best_equation_params}\nR² = {best_r2_params:.6f}', ax=ax)
+    ax.set_xlabel('Number of Parameters', fontsize=18)
+    ax.set_ylabel('Complexity', fontsize=18)
+    ax.set_title('Number of Parameters vs Complexity', fontsize=24, fontweight='bold')
+    ax.set_yscale('log')
+    ax.tick_params(axis='both', which='major', labelsize=16)
+    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
+    ax.grid(True, which="both", ls="-", alpha=0.2)
     
-    fig.savefig(os.path.join(params_complexity_folder, 'regression.png'), dpi=100, bbox_inches='tight')
+    fig.savefig(os.path.join(params_complexity_folder, 'regression.png'), dpi=300, bbox_inches='tight')
     plt.close(fig)
 
     # Calculate number of bins using Freedman-Diaconis rule for parameter count
@@ -711,11 +777,20 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
             bin_models.append(models_in_bin)
 
     # Plot histogram: average complexity per parameter count interval using seaborn
-    fig, ax = plt.subplots(figsize=(22, 16))
+    fig, ax = plt.subplots(figsize=(24, 18))
     hist_df = pd.DataFrame({'bin_range': bin_labels, 'avg_complexity': avg_complexity_per_bin})
     bars = ax.bar(range(len(bin_labels)), avg_complexity_per_bin, color='steelblue', alpha=0.7, edgecolor='black', linewidth=1)
-    ax.set_ylabel('Average Complexity', fontsize=12)
-    ax.set_title(f'Average Complexity by Parameter Count', fontsize=13, pad=20)
+    ax.set_ylabel('Average Complexity', fontsize=18)
+    ax.set_title(f'Average Complexity by Parameter Count', fontsize=24, pad=20, fontweight='bold')
+    ax.set_yscale('log')
+    
+    # Force more ticks on y-axis
+    # Use 'all' subs (1-9) for major ticks to ensure visibility when range is small
+    ax.yaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=[1.0, 2.0, 5.0], numticks=15))
+    ax.yaxis.set_minor_locator(ticker.NullLocator()) # Disable minor if major has all subs
+    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.2g'))
+    ax.tick_params(axis='y', which='major', labelsize=16)
+    
     ax.grid(axis='y', alpha=0.3)
     
     # Set x-axis ticks at transitions (between bars) instead of centers
@@ -733,10 +808,10 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
             transition_labels.append('')
     
     ax.set_xticks(transition_positions)
-    ax.set_xticklabels(transition_labels, rotation=90, ha='center', fontsize=8, fontweight='bold')
+    ax.set_xticklabels(transition_labels, rotation=90, ha='center', fontsize=14, fontweight='bold')
     ax.set_xlim(-0.5, n_bins - 0.5)
-    ax.tick_params(axis='x', which='major', length=5)
-    ax.set_xlabel('Number of Parameters', fontsize=12, labelpad=10)
+    ax.tick_params(axis='x', which='major', length=5, labelsize=14)
+    ax.set_xlabel('Number of Parameters', fontsize=18, labelpad=10)
     
     # Get max height for ylim adjustment
     max_height = max(avg_complexity_per_bin) if avg_complexity_per_bin else 1
@@ -750,38 +825,33 @@ def plot_complexity_vs_num_params(appended_benchmarks_df, OUTPUT_FOLDER):
         bar_width = bar.get_width()
         
         if len(unique_models) > 0:
-            # Position text ABOVE the bar (starting above the top with more spacing)
-            text_y_position = bar_height + 0.002
-            
-            # Show all model names, each on its own line (matplotlib will wrap automatically within bbox)
+            # Show all model names, each on its own line
             models_text = '\n'.join(unique_models)
             
-            # Calculate approximate width in inches for wrapping
-            # Each bar width in data coordinates needs to be converted
-            fig_width_inches = 22
-            data_width = n_bins
-            bar_width_inches = (bar_width / data_width) * fig_width_inches * 0.9  # 90% of bar width for padding
-            
-            ax.text(bar.get_x() + bar_width / 2, text_y_position, 
-                   models_text,
-                   ha='center', va='bottom', fontsize=4.5, color='black', 
-                   fontweight='normal', rotation=0,
-                   wrap=True,
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
+            # Use annotate to position text with a constant offset in points
+            # This ensures the gap is visually constant regardless of log scale or bar height
+            ax.annotate(models_text,
+                       xy=(bar.get_x() + bar_width / 2, bar_height),
+                       xytext=(0, 5),  # 5 points vertical offset
+                       textcoords='offset points',
+                       ha='center', va='bottom',  # Centered horizontally, bottom aligned (starts at anchor and goes up)
+                       fontsize=12, color='black',
+                       fontweight='normal', rotation=90,
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
 
     # Adjust y-axis limits to add space at top for model names
     current_ylim = ax.get_ylim()
-    ax.set_ylim(current_ylim[0], current_ylim[1] * 1.15)  # Add 15% space for model names
+    ax.set_ylim(current_ylim[0], current_ylim[1] * 1.5)  # Add 50% space for model names
     
     # Add overall statistics text
     overall_avg = np.average(avg_complexity_per_bin, weights=bin_counts)
     stats_text = f'Overall Avg: {overall_avg:.4f}\nTotal samples: {sum(bin_counts)}\nNumber of bins: {len(bin_labels)}'
-    ax.text(0.98, 0.97, stats_text, transform=ax.transAxes, verticalalignment='top', horizontalalignment='right',
-        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
+    ax.text(0.02, 0.97, stats_text, transform=ax.transAxes, verticalalignment='top', horizontalalignment='left',
+        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=14)
 
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.15, top=0.98)  # Margin for labels and top space
-    fig.savefig(os.path.join(params_complexity_folder, 'average_complexity_histogram.png'), bbox_inches='tight', dpi=150)
+    fig.savefig(os.path.join(params_complexity_folder, 'average_complexity_histogram.png'), bbox_inches='tight', dpi=300)
     plt.close(fig)
 
     # Save regression information to text file
@@ -929,22 +999,25 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
         os.makedirs(bins_complexity_folder)
 
     # Plot scatter with regression line using seaborn
-    fig, ax = plt.subplots(figsize=(12, 9))
-    sns.scatterplot(x=x_data_bins, y=y_data_bins, alpha=0.6, label='Data', ax=ax)
+    fig, ax = plt.subplots(figsize=(16, 12))
+    sns.scatterplot(x=x_data_bins, y=y_data_bins, alpha=0.6, label='Data', ax=ax, s=120)
     
     # Add model names below each data point
     mask_bins_valid = ~(appended_benchmarks_df['bin_count'].isna() | appended_benchmarks_df['complexity'].isna())
     for idx, row in appended_benchmarks_df[mask_bins_valid].iterrows():
         ax.text(row['bin_count'], row['complexity'], row['model'], 
-               fontsize=6, alpha=0.5, ha='center', va='top', color='gray')
+               fontsize=10, alpha=0.5, ha='center', va='top', color='gray')
     
-    sns.lineplot(x=x_line_bins, y=y_line_bins, color='red', linewidth=2, linestyle='-', label=f'Best fit ({best_name_bins})\n{best_equation_bins}\nR² = {best_r2_bins:.6f}', ax=ax)
-    ax.set_xlabel('Number of Bins')
-    ax.set_ylabel('Complexity')
-    ax.set_title('Number of Bins vs Complexity')
-    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+    sns.lineplot(x=x_line_bins, y=y_line_bins, color='red', linewidth=3.5, linestyle='-', label=f'Best fit ({best_name_bins})\n{best_equation_bins}\nR² = {best_r2_bins:.6f}', ax=ax)
+    ax.set_xlabel('Number of Bins', fontsize=18)
+    ax.set_ylabel('Complexity', fontsize=18)
+    ax.set_title('Number of Bins vs Complexity', fontsize=24, fontweight='bold')
+    ax.set_yscale('log')
+    ax.tick_params(axis='both', which='major', labelsize=16)
+    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
+    ax.grid(True, which="both", ls="-", alpha=0.2)
     
-    fig.savefig(os.path.join(bins_complexity_folder, 'regression.png'), dpi=100, bbox_inches='tight')
+    fig.savefig(os.path.join(bins_complexity_folder, 'regression.png'), dpi=300, bbox_inches='tight')
     plt.close(fig)
 
     # Calculate number of bins using Freedman-Diaconis rule for bin count
@@ -998,11 +1071,20 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
             bin_models_bins.append(models_in_bin)
 
     # Plot histogram: average complexity per bin count interval using seaborn
-    fig, ax = plt.subplots(figsize=(22, 16))
+    fig, ax = plt.subplots(figsize=(24, 18))
     hist_df = pd.DataFrame({'bin_range': bin_labels_bins, 'avg_complexity': avg_complexity_per_bin_bins})
     bars = ax.bar(range(len(bin_labels_bins)), avg_complexity_per_bin_bins, color='steelblue', alpha=0.7, edgecolor='black', linewidth=1)
-    ax.set_ylabel('Average Complexity', fontsize=12)
-    ax.set_title(f'Average Complexity by Bin Count', fontsize=13, pad=20)
+    ax.set_ylabel('Average Complexity', fontsize=18)
+    ax.set_title(f'Average Complexity by Bin Count', fontsize=24, pad=20, fontweight='bold')
+    ax.set_yscale('log')
+    
+    # Force more ticks on y-axis
+    # Use 'all' subs (1-9) for major ticks to ensure visibility when range is small
+    ax.yaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=[1.0, 2.0, 5.0], numticks=15))
+    ax.yaxis.set_minor_locator(ticker.NullLocator()) # Disable minor if major has all subs
+    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.2g'))
+    ax.tick_params(axis='y', which='major', labelsize=16)
+    
     ax.grid(axis='y', alpha=0.3)
     
     # Set x-axis ticks at transitions (between bars) instead of centers
@@ -1020,10 +1102,10 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
             transition_labels.append('')
     
     ax.set_xticks(transition_positions)
-    ax.set_xticklabels(transition_labels, rotation=90, ha='center', fontsize=8, fontweight='bold')
+    ax.set_xticklabels(transition_labels, rotation=90, ha='center', fontsize=14, fontweight='bold')
     ax.set_xlim(-0.5, n_bins - 0.5)
-    ax.tick_params(axis='x', which='major', length=5)
-    ax.set_xlabel('Number of Bins', fontsize=12, labelpad=10)
+    ax.tick_params(axis='x', which='major', length=5, labelsize=14)
+    ax.set_xlabel('Number of Bins', fontsize=18, labelpad=10)
     
     # Get max height for ylim adjustment
     max_height = max(avg_complexity_per_bin_bins) if avg_complexity_per_bin_bins else 1
@@ -1037,38 +1119,33 @@ def plot_complexity_vs_num_bins(appended_benchmarks_df, OUTPUT_FOLDER):
         bar_width = bar.get_width()
         
         if len(unique_models) > 0:
-            # Position text ABOVE the bar (starting above the top with more spacing)
-            text_y_position = bar_height + 0.002
-            
-            # Show all model names, each on its own line (matplotlib will wrap automatically within bbox)
+            # Show all model names, each on its own line
             models_text = '\n'.join(unique_models)
             
-            # Calculate approximate width in inches for wrapping
-            # Each bar width in data coordinates needs to be converted
-            fig_width_inches = 22
-            data_width = n_bins
-            bar_width_inches = (bar_width / data_width) * fig_width_inches * 0.9  # 90% of bar width for padding
-            
-            ax.text(bar.get_x() + bar_width / 2, text_y_position, 
-                   models_text,
-                   ha='center', va='bottom', fontsize=4.5, color='black', 
-                   fontweight='normal', rotation=0,
-                   wrap=True,
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
+            # Use annotate to position text with a constant offset in points
+            # This ensures the gap is visually constant regardless of log scale or bar height
+            ax.annotate(models_text,
+                       xy=(bar.get_x() + bar_width / 2, bar_height),
+                       xytext=(0, 5),  # 5 points vertical offset
+                       textcoords='offset points',
+                       ha='center', va='bottom',  # Centered horizontally, bottom aligned (starts at anchor and goes up)
+                       fontsize=12, color='black',
+                       fontweight='normal', rotation=90,
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray', linewidth=0.5))
 
     # Adjust y-axis limits to add space at top for model names
     current_ylim = ax.get_ylim()
-    ax.set_ylim(current_ylim[0], current_ylim[1] * 1.15)  # Add 15% space for model names
+    ax.set_ylim(current_ylim[0], current_ylim[1] * 1.5)  # Add 50% space for model names
     
     # Add overall statistics text
     overall_avg_bins = np.average(avg_complexity_per_bin_bins, weights=bin_counts_bins)
     stats_text = f'Overall Avg: {overall_avg_bins:.4f}\nTotal samples: {sum(bin_counts_bins)}\nNumber of bins: {len(bin_labels_bins)}'
-    ax.text(0.98, 0.97, stats_text, transform=ax.transAxes, verticalalignment='top', horizontalalignment='right',
-        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=10)
+    ax.text(0.02, 0.97, stats_text, transform=ax.transAxes, verticalalignment='top', horizontalalignment='left',
+        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8), fontsize=14)
 
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.15, top=0.98)  # Margin for labels and top space
-    fig.savefig(os.path.join(bins_complexity_folder, 'average_complexity_histogram.png'), bbox_inches='tight', dpi=150)
+    fig.savefig(os.path.join(bins_complexity_folder, 'average_complexity_histogram.png'), bbox_inches='tight', dpi=300)
     plt.close(fig)
 
     # Save regression information to text file
@@ -1250,24 +1327,25 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
             os.makedirs(bench_folder)
         
         # Plot scatter with both regression lines
-        fig, ax = plt.subplots(figsize=(12, 10))
-        ax.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
+        fig, ax = plt.subplots(figsize=(16, 12))
+        ax.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data', s=120)
         
         # Add model names below each data point
         for idx, (x, y) in enumerate(zip(x_data_bench, y_data_bench)):
             model_name = appended_benchmarks_df.loc[mask_bench, 'model'].iloc[idx]
-            ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+            ax.text(x, y, f'  {model_name}', fontsize=10, alpha=0.5, color='gray', ha='center', va='top')
         
-        ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Free regression ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
-        ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation}\nR² = {r2_linear:.6f}')
-        ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
-        ax.set_ylabel('Complexity')
-        ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity')
-        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+        ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=3.5, label=f'Free regression ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
+        ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=3.5, label=f'Linear regression\n{linear_equation}\nR² = {r2_linear:.6f}')
+        ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '), fontsize=18)
+        ax.set_ylabel('Complexity', fontsize=18)
+        ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity', fontsize=24, fontweight='bold')
+        ax.tick_params(axis='both', which='major', labelsize=16)
+        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
         ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.savefig(os.path.join(bench_folder, 'regression.png'))
+        plt.savefig(os.path.join(bench_folder, 'regression.png'), dpi=300)
         plt.close()
         
         # Calculate Pearson correlation coefficient
@@ -1427,24 +1505,25 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                 os.makedirs(all_folder)
             
             # Plot scatter with both regression lines
-            fig, ax = plt.subplots(figsize=(12, 10))
-            ax.scatter(all_x_data, all_y_data, alpha=0.6, label='Data')
+            fig, ax = plt.subplots(figsize=(16, 12))
+            ax.scatter(all_x_data, all_y_data, alpha=0.6, label='Data', s=120)
             
             # Add model names below each data point
             for idx, (x, y) in enumerate(zip(all_x_data, all_y_data)):
                 model_name = all_model_names[idx]
-                ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+                ax.text(x, y, f'  {model_name}', fontsize=10, alpha=0.5, color='gray', ha='center', va='top')
             
-            ax.plot(x_line_all, y_line_all, 'r-', linewidth=2, label=f'Free regression ({best_name_all})\n{best_equation_all}\nR² = {best_r2_all:.6f}')
-            ax.plot(x_line_all, y_line_linear, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation_all}\nR² = {r2_linear_all:.6f}')
-            ax.set_xlabel('Normalized Benchmark Score (All Benchmarks, Min-Max [0,1])')
-            ax.set_ylabel('Complexity')
-            ax.set_title('All Benchmarks vs Complexity (Normalized)')
-            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+            ax.plot(x_line_all, y_line_all, 'r-', linewidth=3.5, label=f'Free regression ({best_name_all})\n{best_equation_all}\nR² = {best_r2_all:.6f}')
+            ax.plot(x_line_all, y_line_linear, 'b--', linewidth=3.5, label=f'Linear regression\n{linear_equation_all}\nR² = {r2_linear_all:.6f}')
+            ax.set_xlabel('Normalized Benchmark Score (All Benchmarks, Min-Max [0,1])', fontsize=18)
+            ax.set_ylabel('Complexity', fontsize=18)
+            ax.set_title('All Benchmarks vs Complexity (Normalized)', fontsize=24, fontweight='bold')
+            ax.tick_params(axis='both', which='major', labelsize=16)
+            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
             ax.grid(True, alpha=0.3)
             
             plt.tight_layout()
-            plt.savefig(os.path.join(all_folder, 'regression.png'))
+            plt.savefig(os.path.join(all_folder, 'regression.png'), dpi=300)
             plt.close()
             
             # Calculate Pearson correlation coefficient
@@ -1535,8 +1614,6 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
 
     # Create comparison plot: R² scores for all benchmarks
     if len(all_benchmark_results) > 0:
-        fig = plt.figure(figsize=(14, 8))
-        
         # Separate "ALL" from other benchmarks
         bench_items = [(name, results) for name, results in all_benchmark_results.items() if name != 'ALL']
         all_item = [(name, results) for name, results in all_benchmark_results.items() if name == 'ALL']
@@ -1550,20 +1627,26 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         bench_names_short = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in combined_items]
         r2_scores = [results['r2_score'] for _, results in combined_items]
         
-        fig, ax = plt.subplots(figsize=(14, 8))
+        fig, ax = plt.subplots(figsize=(16, 12))
         sns.barplot(x=r2_scores, y=bench_names_short, color='steelblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-        ax.set_yticklabels(bench_names_short, fontsize=9)
-        ax.set_xlabel('R² Score')
-        ax.set_ylabel('Benchmark')
-        ax.set_title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Complexity')
+        ax.set_yticklabels(bench_names_short, fontsize=20)
+        ax.set_xlabel('R² Score', fontsize=18)
+        ax.set_ylabel('Benchmark', fontsize=18)
+        ax.set_title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Complexity', fontsize=24, fontweight='bold')
         ax.grid(axis='x', alpha=0.3)
+        
+        # Adjust x-axis limit to make room for labels
+        x_min, x_max_lim = ax.get_xlim()
+        ax.set_xlim(right=x_max_lim * 1.15)
+        
         # Add value labels on bars
         for i, (bar, score) in enumerate(zip(ax.patches, r2_scores)):
             width = bar.get_width()
-            y = bar.get_y() + bar.get_height() / 2
-            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=8, ha='left')
+            y = bar.get_y() + bar.get_height() / 2 + 0.02
+            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=16, ha='left')
+            
         fig.tight_layout()
-        fig.savefig(os.path.join(benchmarks_complexity_folder, 'r2_comparison.png'), dpi=150, bbox_inches='tight')
+        fig.savefig(os.path.join(benchmarks_complexity_folder, 'r2_comparison.png'), dpi=300, bbox_inches='tight')
         plt.close(fig)
         
         # Create comparison plot: R² scores for LINEAR regression
@@ -1575,20 +1658,26 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         
         bench_names_short_r2lin = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in r2_linear_combined_items]
         
-        fig, ax = plt.subplots(figsize=(14, 8))
+        fig, ax = plt.subplots(figsize=(16, 12))
         r2_linear_scores = [results['r2_linear'] for _, results in r2_linear_combined_items]
         sns.barplot(x=r2_linear_scores, y=bench_names_short_r2lin, color='cornflowerblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-        ax.set_yticklabels(bench_names_short_r2lin, fontsize=9)
-        ax.set_xlabel('R² Score')
-        ax.set_ylabel('Benchmark')
-        ax.set_title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Complexity')
+        ax.set_yticklabels(bench_names_short_r2lin, fontsize=20)
+        ax.set_xlabel('R² Score', fontsize=18)
+        ax.set_ylabel('Benchmark', fontsize=18)
+        ax.set_title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Complexity', fontsize=24, fontweight='bold')
         ax.grid(axis='x', alpha=0.3)
+        
+        # Adjust x-axis limit to make room for labels
+        x_min, x_max_lim = ax.get_xlim()
+        ax.set_xlim(right=x_max_lim * 1.15)
+        
         for i, (bar, score) in enumerate(zip(ax.patches, r2_linear_scores)):
             width = bar.get_width()
-            y = bar.get_y() + bar.get_height() / 2
-            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=8, ha='left')
+            y = bar.get_y() + bar.get_height() / 2 + 0.02
+            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=16, ha='left')
+            
         fig.tight_layout()
-        fig.savefig(os.path.join(benchmarks_complexity_folder, 'r2_linear_comparison.png'), dpi=150, bbox_inches='tight')
+        fig.savefig(os.path.join(benchmarks_complexity_folder, 'r2_linear_comparison.png'), dpi=300, bbox_inches='tight')
         plt.close(fig)
         
         # Create comparison plot: Correlation coefficients for all benchmarks
@@ -1600,30 +1689,47 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         
         bench_names_short_corr = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in corr_combined_items]
         
-        fig, ax = plt.subplots(figsize=(14, 10))
+        fig, ax = plt.subplots(figsize=(16, 12))
         correlations = [results['correlation'] for _, results in corr_combined_items]
         colors = ['green' if c > 0 else 'red' for c in correlations]
         sns.barplot(x=correlations, y=bench_names_short_corr, palette=colors, alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-        ax.set_yticklabels(bench_names_short_corr, fontsize=9)
-        ax.set_xlabel('Pearson Correlation Coefficient', fontsize=11)
-        ax.set_ylabel('Benchmark', fontsize=11)
-        ax.set_title('Correlation: Benchmark Score vs Complexity', fontsize=12, pad=15)
+        ax.set_yticklabels(bench_names_short_corr, fontsize=16)
+        ax.set_xlabel('Pearson Correlation Coefficient', fontsize=18)
+        ax.set_ylabel('Benchmark', fontsize=18)
+        ax.set_title('Correlation: Benchmark Score vs Complexity', fontsize=24, fontweight='bold', pad=20)
         ax.grid(axis='x', alpha=0.3)
         ax.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
+        
+        # Adjust x-axis limit to make room for labels (both sides since correlation can be negative)
+        x_min, x_max_lim = ax.get_xlim()
+        x_range = x_max_lim - x_min
+        
+        # Only expand the side where bars are extending
+        if max(correlations) > 0:
+            right_lim = x_max_lim + x_range * 0.15
+        else:
+            right_lim = x_max_lim
+            
+        if min(correlations) < 0:
+            left_lim = x_min - x_range * 0.15
+        else:
+            left_lim = x_min
+            
+        ax.set_xlim(left=left_lim, right=right_lim)
         
         # Add correlation values as text outside bars
         for i, (bar, corr) in enumerate(zip(ax.patches, correlations)):
             width = bar.get_width()
-            y = bar.get_y() + bar.get_height() / 2
+            y = bar.get_y() + bar.get_height() / 2 + 0.02
             # Place text outside the bar end
             x_offset = 0.005 if width > 0 else -0.005
             x_pos = width + x_offset
             ha_align = 'left' if width > 0 else 'right'
-            ax.text(x_pos, y, f'{width:.4f}', va='center', ha=ha_align, fontsize=9, fontweight='bold')
+            ax.text(x_pos, y, f'{width:.4f}', va='center', fontsize=16, ha=ha_align, fontweight='bold')
         
         fig.tight_layout()
-        fig.subplots_adjust(right=0.95, left=0.1)
-        fig.savefig(os.path.join(benchmarks_complexity_folder, 'correlation_comparison.png'), dpi=150, bbox_inches='tight')
+        # fig.subplots_adjust(right=0.95, left=0.1)
+        fig.savefig(os.path.join(benchmarks_complexity_folder, 'correlation_comparison.png'), dpi=300, bbox_inches='tight')
         plt.close(fig)
 
     print(f"\nCompleted benchmark analysis. Processed {len(all_benchmark_results)} benchmarks.")
@@ -1768,24 +1874,25 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
                 filter_clean_name = f"filter_{float(filter_val)}"
                 
                 # Plot scatter with both regression lines
-                fig, ax = plt.subplots(figsize=(12, 10))
-                ax.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
+                fig, ax = plt.subplots(figsize=(16, 12))
+                ax.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data', s=120)
                 
                 # Add model names below each data point
                 for idx, (x, y) in enumerate(zip(x_data_combo, y_data_combo)):
                     model_name = appended_benchmarks_df.loc[mask_combo, 'model'].iloc[idx]
-                    ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+                    ax.text(x, y, f'  {model_name}', fontsize=10, alpha=0.5, color='gray', ha='center', va='top')
                 
-                ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Free regression ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
-                ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=2, label=f'Linear regression\nR² = {r2_linear_combo:.6f}\nN = {len(x_data_combo)}')
-                ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
-                ax.set_ylabel('Complexity')
-                ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity\nType: {type_str}, Filter: {float(filter_val)} sigma')
-                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+                ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=3.5, label=f'Free regression ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
+                ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=3.5, label=f'Linear regression\nR² = {r2_linear_combo:.6f}\nN = {len(x_data_combo)}')
+                ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '), fontsize=18)
+                ax.set_ylabel('Complexity', fontsize=18)
+                ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity\nType: {type_str}, Filter: {float(filter_val)} sigma', fontsize=24, fontweight='bold')
+                ax.tick_params(axis='both', which='major', labelsize=16)
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
                 ax.grid(True, alpha=0.3)
                 
                 plt.tight_layout()
-                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'))
+                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'), dpi=300)
                 plt.close()
                 
                 # Save statistics to text file
@@ -1875,7 +1982,7 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
             # Sort by absolute pearson correlation (ascending so highest abs appears on top in barh)
             top_results_sorted_viz = top_results.sort_values('abs_correlation', ascending=True)
             
-            fig = plt.figure(figsize=(14, max(8, top_n * 0.4)))
+            fig = plt.figure(figsize=(14, max(10, top_n * 0.5)))
             
             # Create labels
             labels = [f"{row['type'][:25]}, Filter={int(row['filter'])}" 
@@ -1885,21 +1992,38 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
             colors = ['green' if c > 0 else 'red' for c in correlations]
             
             plt.barh(range(len(labels)), correlations, color=colors, alpha=0.7, edgecolor='black')
-            plt.yticks(range(len(labels)), labels, fontsize=9)
-            plt.xlabel('Pearson Correlation Coefficient')
-            plt.ylabel('Type - Filter Combination')
-            plt.title(f'Top {top_n} Combinations by Absolute Pearson Correlation\n{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity')
+            plt.yticks(range(len(labels)), labels, fontsize=16)
+            plt.xlabel('Pearson Correlation Coefficient', fontsize=18)
+            plt.ylabel('Type - Filter Combination', fontsize=18)
+            plt.title(f'Top {top_n} Combinations by Absolute Pearson Correlation\n{bench_name.replace("BENCH-", "").replace("_", " ")} vs Complexity', fontsize=24, fontweight='bold')
             plt.grid(axis='x', alpha=0.3)
             plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
             
+            # Adjust x-axis limit to make room for labels
+            x_min, x_max_lim = plt.xlim()
+            x_range = x_max_lim - x_min
+            
+            # Only expand the side where bars are extending
+            if max(correlations) > 0:
+                right_lim = x_max_lim + x_range * 0.15
+            else:
+                right_lim = x_max_lim
+                
+            if min(correlations) < 0:
+                left_lim = x_min - x_range * 0.15
+            else:
+                left_lim = x_min
+                
+            plt.xlim(left=left_lim, right=right_lim)
+            
             # Add value labels on bars
             for i, corr in enumerate(correlations):
-                x_offset = 0.003 if corr > 0 else -0.003
+                x_offset = 0.005 if corr > 0 else -0.005
                 ha_align = 'left' if corr > 0 else 'right'
-                plt.text(corr + x_offset, i, f'{corr:.4f}', va='center', fontsize=8, ha=ha_align)
+                plt.text(corr + x_offset, i + 0.02, f'{corr:.4f}', va='center', fontsize=16, ha=ha_align, fontweight='bold')
             
             plt.tight_layout()
-            plt.savefig(os.path.join(bench_main_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
+            plt.savefig(os.path.join(bench_main_folder, 'top_20_correlations.png'), dpi=300, bbox_inches='tight')
             plt.close()
         
         print(f"  Created CSV files and plot for {bench_name} ({len(bench_results_sorted)} combinations, top {top_n} saved)")
@@ -1979,18 +2103,35 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         colors = ['green' if c > 0 else 'red' for c in correlations]
         
         plt.barh(range(len(labels)), correlations, color=colors, alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(labels)), labels, fontsize=8)
-        plt.xlabel('Pearson Correlation Coefficient')
-        plt.ylabel('Benchmark - Type - Filter Combination')
-        plt.title('Top 20 Combinations by Absolute Pearson Correlation\n(Benchmark vs Complexity)')
+        plt.yticks(range(len(labels)), labels, fontsize=16)
+        plt.xlabel('Pearson Correlation Coefficient', fontsize=18)
+        plt.ylabel('Benchmark - Type - Filter Combination', fontsize=18)
+        plt.title('Top 20 Combinations by Absolute Pearson Correlation\n(Benchmark vs Complexity)', fontsize=24, fontweight='bold')
         plt.grid(axis='x', alpha=0.3)
         plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
         
+        # Adjust x-axis limit to make room for labels
+        x_min, x_max_lim = plt.xlim()
+        x_range = x_max_lim - x_min
+        
+        # Only expand the side where bars are extending
+        if max(correlations) > 0:
+            right_lim = x_max_lim + x_range * 0.15
+        else:
+            right_lim = x_max_lim
+            
+        if min(correlations) < 0:
+            left_lim = x_min - x_range * 0.15
+        else:
+            left_lim = x_min
+            
+        plt.xlim(left=left_lim, right=right_lim)
+        
         # Add value labels on bars
         for i, corr in enumerate(correlations):
-            x_offset = 0.003 if corr > 0 else -0.003
+            x_offset = 0.005 if corr > 0 else -0.005
             ha_align = 'left' if corr > 0 else 'right'
-            plt.text(corr + x_offset, i, f'{corr:.4f}', va='center', fontsize=7, ha=ha_align)
+            plt.text(corr + x_offset, i + 0.02, f'{corr:.4f}', va='center', fontsize=16, ha=ha_align, fontweight='bold')
         
         plt.tight_layout()
         plt.savefig(os.path.join(detailed_benchmarks_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
@@ -2116,24 +2257,25 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
             os.makedirs(bench_folder)
         
         # Plot scatter with both regression lines
-        fig, ax = plt.subplots(figsize=(12, 10))
-        ax.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
+        fig, ax = plt.subplots(figsize=(16, 12))
+        ax.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data', s=120)
         
         # Add model names below each data point
         for idx, (x, y) in enumerate(zip(x_data_bench, y_data_bench)):
             model_name = appended_benchmarks_df.loc[mask_bench, 'model'].iloc[idx]
-            ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+            ax.text(x, y, f'  {model_name}', fontsize=10, alpha=0.5, color='gray', ha='center', va='top')
         
-        ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Free regression ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
-        ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation}\nR² = {r2_linear:.6f}')
-        ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
-        ax.set_ylabel('Parameter Count')
-        ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count')
-        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+        ax.plot(x_line_bench, y_line_bench, 'r-', linewidth=3.5, label=f'Free regression ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
+        ax.plot(x_line_bench, y_line_linear, 'b--', linewidth=3.5, label=f'Linear regression\n{linear_equation}\nR² = {r2_linear:.6f}')
+        ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '), fontsize=18)
+        ax.set_ylabel('Parameter Count', fontsize=18)
+        ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count', fontsize=24, fontweight='bold')
+        ax.tick_params(axis='both', which='major', labelsize=16)
+        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
         ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.savefig(os.path.join(bench_folder, 'regression.png'))
+        plt.savefig(os.path.join(bench_folder, 'regression.png'), dpi=300)
         plt.close()
         
         # Calculate Pearson correlation coefficient
@@ -2301,24 +2443,25 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 os.makedirs(all_folder_param)
             
             # Plot scatter with both regression lines
-            fig, ax = plt.subplots(figsize=(12, 10))
-            ax.scatter(all_x_data_param, all_y_data_param, alpha=0.6, label='Data')
+            fig, ax = plt.subplots(figsize=(16, 12))
+            ax.scatter(all_x_data_param, all_y_data_param, alpha=0.6, label='Data', s=120)
             
             # Add model names below each data point
             for idx, (x, y) in enumerate(zip(all_x_data_param, all_y_data_param)):
                 model_name = all_model_names_param[idx]
-                ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+                ax.text(x, y, f'  {model_name}', fontsize=10, alpha=0.5, color='gray', ha='center', va='top')
             
-            ax.plot(x_line_all_param, y_line_all_param, 'r-', linewidth=2, label=f'Free regression ({best_name_all_param})\n{best_equation_all_param}\nR² = {best_r2_all_param:.6f}')
-            ax.plot(x_line_all_param, y_line_linear_param, 'b--', linewidth=2, label=f'Linear regression\n{linear_equation_all_param}\nR² = {r2_linear_all_param:.6f}')
-            ax.set_xlabel('Normalized Benchmark Score (All Benchmarks, Min-Max [0,1])')
-            ax.set_ylabel('Parameter Count')
-            ax.set_title('All Benchmarks vs Parameter Count (Normalized)')
-            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+            ax.plot(x_line_all_param, y_line_all_param, 'r-', linewidth=3.5, label=f'Free regression ({best_name_all_param})\n{best_equation_all_param}\nR² = {best_r2_all_param:.6f}')
+            ax.plot(x_line_all_param, y_line_linear_param, 'b--', linewidth=3.5, label=f'Linear regression\n{linear_equation_all_param}\nR² = {r2_linear_all_param:.6f}')
+            ax.set_xlabel('Normalized Benchmark Score (All Benchmarks, Min-Max [0,1])', fontsize=18)
+            ax.set_ylabel('Parameter Count', fontsize=18)
+            ax.set_title('All Benchmarks vs Parameter Count (Normalized)', fontsize=24, fontweight='bold')
+            ax.tick_params(axis='both', which='major', labelsize=16)
+            ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
             ax.grid(True, alpha=0.3)
             
             plt.tight_layout()
-            plt.savefig(os.path.join(all_folder_param, 'regression.png'))
+            plt.savefig(os.path.join(all_folder_param, 'regression.png'), dpi=300)
             plt.close()
             
             # Calculate Pearson correlation coefficient
@@ -2409,7 +2552,7 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
 
     # Create comparison plot: R² scores for all benchmarks
     if len(all_param_benchmark_results) > 0:
-        fig = plt.figure(figsize=(14, 8))
+        fig = plt.figure(figsize=(16, 12))
         
         # Separate "ALL" from other benchmarks
         bench_items_param = [(name, results) for name, results in all_param_benchmark_results.items() if name != 'ALL']
@@ -2424,20 +2567,26 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         bench_names_short = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in combined_items_param]
         r2_scores = [results['r2_score'] for _, results in combined_items_param]
         
-        fig, ax = plt.subplots(figsize=(14, 8))
+        fig, ax = plt.subplots(figsize=(16, 12))
         sns.barplot(x=r2_scores, y=bench_names_short, color='steelblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-        ax.set_yticklabels(bench_names_short, fontsize=9)
-        ax.set_xlabel('R² Score')
-        ax.set_ylabel('Benchmark')
-        ax.set_title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Parameter Count')
+        ax.set_yticklabels(bench_names_short, fontsize=20)
+        ax.set_xlabel('R² Score', fontsize=18)
+        ax.set_ylabel('Benchmark', fontsize=18)
+        ax.set_title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Parameter Count', fontsize=24, fontweight='bold')
         ax.grid(axis='x', alpha=0.3)
+        
+        # Adjust x-axis limit to make room for labels
+        x_min, x_max_lim = ax.get_xlim()
+        ax.set_xlim(right=x_max_lim * 1.15)
+        
         # Add value labels on bars
         for i, (bar, score) in enumerate(zip(ax.patches, r2_scores)):
             width = bar.get_width()
-            y = bar.get_y() + bar.get_height() / 2
-            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=8, ha='left')
+            y = bar.get_y() + bar.get_height() / 2 + 0.02
+            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=16, ha='left')
+            
         fig.tight_layout()
-        fig.savefig(os.path.join(param_benchmarks_folder, 'r2_comparison.png'), dpi=150, bbox_inches='tight')
+        fig.savefig(os.path.join(param_benchmarks_folder, 'r2_comparison.png'), dpi=300, bbox_inches='tight')
         plt.close(fig)
         
         # Create comparison plot: R² scores for LINEAR regression
@@ -2449,20 +2598,26 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         
         bench_names_short_r2lin_param = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in r2_linear_param_combined_items]
         
-        fig, ax = plt.subplots(figsize=(14, 8))
+        fig, ax = plt.subplots(figsize=(16, 12))
         r2_linear_scores = [results['r2_linear'] for _, results in r2_linear_param_combined_items]
         sns.barplot(x=r2_linear_scores, y=bench_names_short_r2lin_param, color='cornflowerblue', alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-        ax.set_yticklabels(bench_names_short_r2lin_param, fontsize=9)
-        ax.set_xlabel('R² Score')
-        ax.set_ylabel('Benchmark')
-        ax.set_title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Parameter Count')
+        ax.set_yticklabels(bench_names_short_r2lin_param, fontsize=20)
+        ax.set_xlabel('R² Score', fontsize=18)
+        ax.set_ylabel('Benchmark', fontsize=18)
+        ax.set_title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Parameter Count', fontsize=24, fontweight='bold')
         ax.grid(axis='x', alpha=0.3)
+        
+        # Adjust x-axis limit to make room for labels
+        x_min, x_max_lim = ax.get_xlim()
+        ax.set_xlim(right=x_max_lim * 1.15)
+        
         for i, (bar, score) in enumerate(zip(ax.patches, r2_linear_scores)):
             width = bar.get_width()
-            y = bar.get_y() + bar.get_height() / 2
-            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=8, ha='left')
+            y = bar.get_y() + bar.get_height() / 2 + 0.02
+            ax.text(width + 0.002, y, f'{width:.4f}', va='center', fontsize=16, ha='left')
+            
         fig.tight_layout()
-        fig.savefig(os.path.join(param_benchmarks_folder, 'r2_linear_comparison.png'), dpi=150, bbox_inches='tight')
+        fig.savefig(os.path.join(param_benchmarks_folder, 'r2_linear_comparison.png'), dpi=300, bbox_inches='tight')
         plt.close(fig)
         
         # Create comparison plot: Correlation coefficients for all benchmarks
@@ -2474,29 +2629,46 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         
         bench_names_short_corr_param = [name.replace('BENCH-', '').replace('_', ' ') for name, _ in corr_param_combined_items]
         
-        fig, ax = plt.subplots(figsize=(14, 10))
+        fig, ax = plt.subplots(figsize=(16, 12))
         correlations = [results['correlation'] for _, results in corr_param_combined_items]
         colors = ['green' if c > 0 else 'red' for c in correlations]
         sns.barplot(x=correlations, y=bench_names_short_corr_param, palette=colors, alpha=0.7, edgecolor='black', ax=ax, errorbar=None)
-        ax.set_yticklabels(bench_names_short_corr_param, fontsize=9)
-        ax.set_xlabel('Pearson Correlation Coefficient', fontsize=11)
-        ax.set_ylabel('Benchmark', fontsize=11)
-        ax.set_title('Correlation: Benchmark Score vs Parameter Count', fontsize=12, pad=15)
+        ax.set_yticklabels(bench_names_short_corr_param, fontsize=16)
+        ax.set_xlabel('Pearson Correlation Coefficient', fontsize=18)
+        ax.set_ylabel('Benchmark', fontsize=18)
+        ax.set_title('Correlation: Benchmark Score vs Parameter Count', fontsize=24, fontweight='bold', pad=20)
         ax.grid(axis='x', alpha=0.3)
         ax.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
+        
+        # Adjust x-axis limit to make room for labels
+        x_min, x_max_lim = ax.get_xlim()
+        x_range = x_max_lim - x_min
+        
+        # Only expand the side where bars are extending
+        if max(correlations) > 0:
+            right_lim = x_max_lim + x_range * 0.15
+        else:
+            right_lim = x_max_lim
+            
+        if min(correlations) < 0:
+            left_lim = x_min - x_range * 0.15
+        else:
+            left_lim = x_min
+            
+        ax.set_xlim(left=left_lim, right=right_lim)
         
         # Add correlation values as text outside bars
         for i, (bar, corr) in enumerate(zip(ax.patches, correlations)):
             width = bar.get_width()
-            y = bar.get_y() + bar.get_height() / 2
+            y = bar.get_y() + bar.get_height() / 2 + 0.02
             # Place text outside the bar end
             x_offset = 0.005 if width > 0 else -0.005
             x_pos = width + x_offset
             ha_align = 'left' if width > 0 else 'right'
-            ax.text(x_pos, y, f'{width:.4f}', va='center', ha=ha_align, fontsize=9, fontweight='bold')
+            ax.text(x_pos, y, f'{width:.4f}', va='center', fontsize=16, ha=ha_align, fontweight='bold')
         
         fig.tight_layout()
-        fig.subplots_adjust(right=0.95, left=0.1)
+        # fig.subplots_adjust(right=0.95, left=0.1)
         fig.savefig(os.path.join(param_benchmarks_folder, 'correlation_comparison.png'), dpi=150, bbox_inches='tight')
         plt.close(fig)
 
@@ -2642,24 +2814,25 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 filter_clean_name = f"filter_{float(filter_val)}"
                 
                 # Plot scatter with both regression lines
-                fig, ax = plt.subplots(figsize=(12, 10))
-                ax.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
+                fig, ax = plt.subplots(figsize=(16, 12))
+                ax.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data', s=120)
                 
                 # Add model names below each data point
                 for idx, (x, y) in enumerate(zip(x_data_combo, y_data_combo)):
                     model_name = appended_benchmarks_df.loc[mask_combo, 'model'].iloc[idx]
-                    ax.text(x, y, f'  {model_name}', fontsize=6, alpha=0.5, color='gray', ha='center', va='top')
+                    ax.text(x, y, f'  {model_name}', fontsize=10, alpha=0.5, color='gray', ha='center', va='top')
                 
-                ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Free regression ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
-                ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=2, label=f'Linear regression\nR² = {r2_linear_combo:.6f}\nN = {len(x_data_combo)}')
-                ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
-                ax.set_ylabel('Parameter Count')
-                ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count\nType: {type_str}, Filter: {float(filter_val)} sigma')
-                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5, fontsize=8)
+                ax.plot(x_line_combo, y_line_combo, 'r-', linewidth=3.5, label=f'Free regression ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
+                ax.plot(x_line_combo, y_line_linear_combo, 'b--', linewidth=3.5, label=f'Linear regression\nR² = {r2_linear_combo:.6f}\nN = {len(x_data_combo)}')
+                ax.set_xlabel(bench_name.replace('BENCH-', '').replace('_', ' '), fontsize=18)
+                ax.set_ylabel('Parameter Count', fontsize=18)
+                ax.set_title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count\nType: {type_str}, Filter: {float(filter_val)} sigma', fontsize=24, fontweight='bold')
+                ax.tick_params(axis='both', which='major', labelsize=16)
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
                 ax.grid(True, alpha=0.3)
                 
                 plt.tight_layout()
-                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'))
+                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'), dpi=300)
                 plt.close()
                 
                 # Save statistics to text file
@@ -2759,18 +2932,35 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
             colors = ['green' if c > 0 else 'red' for c in correlations]
             
             plt.barh(range(len(labels)), correlations, color=colors, alpha=0.7, edgecolor='black')
-            plt.yticks(range(len(labels)), labels, fontsize=9)
-            plt.xlabel('Pearson Correlation Coefficient')
-            plt.ylabel('Type - Filter Combination')
-            plt.title(f'Top {top_n} Combinations by Absolute Pearson Correlation\n{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count')
+            plt.yticks(range(len(labels)), labels, fontsize=16)
+            plt.xlabel('Pearson Correlation Coefficient', fontsize=18)
+            plt.ylabel('Type - Filter Combination', fontsize=18)
+            plt.title(f'Top {top_n} Combinations by Absolute Pearson Correlation\n{bench_name.replace("BENCH-", "").replace("_", " ")} vs Parameter Count', fontsize=24, fontweight='bold')
             plt.grid(axis='x', alpha=0.3)
             plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
             
+            # Adjust x-axis limit to make room for labels
+            x_min, x_max_lim = plt.xlim()
+            x_range = x_max_lim - x_min
+            
+            # Only expand the side where bars are extending
+            if max(correlations) > 0:
+                right_lim = x_max_lim + x_range * 0.15
+            else:
+                right_lim = x_max_lim
+                
+            if min(correlations) < 0:
+                left_lim = x_min - x_range * 0.15
+            else:
+                left_lim = x_min
+                
+            plt.xlim(left=left_lim, right=right_lim)
+            
             # Add value labels on bars
             for i, corr in enumerate(correlations):
-                x_offset = 0.003 if corr > 0 else -0.003
+                x_offset = 0.005 if corr > 0 else -0.005
                 ha_align = 'left' if corr > 0 else 'right'
-                plt.text(corr + x_offset, i, f'{corr:.4f}', va='center', fontsize=8, ha=ha_align)
+                plt.text(corr + x_offset, i + 0.02, f'{corr:.4f}', va='center', fontsize=16, ha=ha_align, fontweight='bold')
             
             plt.tight_layout()
             plt.savefig(os.path.join(bench_main_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
@@ -2838,7 +3028,7 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
 
     # Create visualization: Top 20 correlations
     if len(param_results_df) > 0:
-        fig = plt.figure(figsize=(16, 10))
+        fig = plt.figure(figsize=(16, 12))
         top_20_plot = param_results_df_sorted.head(20).copy()
         
         # Sort by absolute value (ascending so highest abs appears on top in barh)
@@ -2852,21 +3042,38 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         colors = ['green' if c > 0 else 'red' for c in correlations]
         
         plt.barh(range(len(labels)), correlations, color=colors, alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(labels)), labels, fontsize=8)
-        plt.xlabel('Pearson Correlation Coefficient')
-        plt.ylabel('Benchmark - Type - Filter Combination')
-        plt.title('Top 20 Combinations by Absolute Pearson Correlation\n(Benchmark vs Parameter Count)')
+        plt.yticks(range(len(labels)), labels, fontsize=16)
+        plt.xlabel('Pearson Correlation Coefficient', fontsize=18)
+        plt.ylabel('Benchmark - Type - Filter Combination', fontsize=18)
+        plt.title('Top 20 Combinations by Absolute Pearson Correlation\n(Benchmark vs Parameter Count)', fontsize=24, fontweight='bold')
         plt.grid(axis='x', alpha=0.3)
         plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
         
+        # Adjust x-axis limit to make room for labels
+        x_min, x_max_lim = plt.xlim()
+        x_range = x_max_lim - x_min
+        
+        # Only expand the side where bars are extending
+        if max(correlations) > 0:
+            right_lim = x_max_lim + x_range * 0.15
+        else:
+            right_lim = x_max_lim
+            
+        if min(correlations) < 0:
+            left_lim = x_min - x_range * 0.15
+        else:
+            left_lim = x_min
+            
+        plt.xlim(left=left_lim, right=right_lim)
+        
         # Add value labels on bars
         for i, corr in enumerate(correlations):
-            x_offset = 0.003 if corr > 0 else -0.003
+            x_offset = 0.005 if corr > 0 else -0.005
             ha_align = 'left' if corr > 0 else 'right'
-            plt.text(corr + x_offset, i, f'{corr:.4f}', va='center', fontsize=7, ha=ha_align)
+            plt.text(corr + x_offset, i + 0.02, f'{corr:.4f}', va='center', fontsize=16, ha=ha_align, fontweight='bold')
         
         plt.tight_layout()
-        plt.savefig(os.path.join(detailed_param_benchmarks_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
+        plt.savefig(os.path.join(detailed_param_benchmarks_folder, 'top_20_correlations.png'), dpi=300, bbox_inches='tight')
         plt.close()
 
     print("\n" + "="*70)
@@ -3162,7 +3369,7 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
             if group == 'combined':
                 # Plot with multiple complexity curves (original behavior)
                 # Create the plot
-                fig, ax = plt.subplots(figsize=(14, 10))
+                fig, ax = plt.subplots(figsize=(16, 12))
                 
                 # Use a colormap for gradual color changes
                 cmap = plt.cm.viridis
@@ -3188,7 +3395,7 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                             
                             # Plot this curve
                             label = f'Complexity = {complexity_val:.2f}'
-                            ax.plot(count_range, y_values, color=colors[i], linewidth=1.5, 
+                            ax.plot(count_range, y_values, color=colors[i], linewidth=3.5, 
                                    label=label, alpha=0.8)
                             
                         except Exception as e:
@@ -3196,23 +3403,24 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                             continue
                 
                 # Configure the plot
-                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=12, fontweight='bold')
-                ax.set_ylabel('Benchmark Score', fontsize=12, fontweight='bold')
+                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=18, fontweight='bold')
+                ax.set_ylabel('Benchmark Score', fontsize=18, fontweight='bold')
                 ax.set_xscale('log')
                 ax.set_title(f'Filter {filter_val}, {benchmark} [Combined]\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
-                            fontsize=11, pad=15)
+                            fontsize=24, pad=20, fontweight='bold')
                 ax.grid(True, alpha=0.3, linestyle='--')
+                ax.tick_params(axis='both', which='major', labelsize=16)
                 
                 # Add legend with smaller font and multiple columns
-                ax.legend(loc='best', bbox_to_anchor=(1, 0.5), fontsize=8, 
-                         ncol=1, frameon=True, fancybox=True, shadow=True, framealpha=0.5)
+                ax.legend(loc='best', bbox_to_anchor=(1, 0.5), fontsize=14, 
+                         ncol=1, frameon=True, fancybox=True, shadow=True, framealpha=0.9)
                 
                 # Create the plot filename
                 plot_filename = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}.png"
                 plot_path = os.path.join(current_plot_folder, plot_filename)
                 
                 plt.tight_layout()
-                plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+                plt.savefig(plot_path, dpi=300, bbox_inches='tight')
                 plt.close()
                 
                 print(f"  Saved plot to: {group}/plots/{plot_filename}")
@@ -3223,7 +3431,7 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                 
                 count_range_linear = np.linspace(1, 1000, 500)  # 1 to 1000, linear-spaced
                 
-                fig, ax = plt.subplots(figsize=(14, 10))
+                fig, ax = plt.subplots(figsize=(16, 12))
                 
                 # Use the same colormap for consistency
                 cmap = plt.cm.viridis
@@ -3249,7 +3457,7 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                             
                             # Plot this curve
                             label = f'Complexity = {complexity_val:.2f}'
-                            ax.plot(count_range_linear, y_values, color=colors[i], linewidth=1.5, 
+                            ax.plot(count_range_linear, y_values, color=colors[i], linewidth=3.5, 
                                    label=label, alpha=0.8)
                             
                         except Exception as e:
@@ -3257,30 +3465,31 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                             continue
                 
                 # Configure the plot
-                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=12, fontweight='bold')
-                ax.set_ylabel('Benchmark Score', fontsize=12, fontweight='bold')
+                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=18, fontweight='bold')
+                ax.set_ylabel('Benchmark Score', fontsize=18, fontweight='bold')
                 # Linear scale - no set_xscale('log')
                 ax.set_title(f'Filter {filter_val}, {benchmark} [Combined] (Linear Scale: 1-1000)\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
-                            fontsize=11, pad=15)
+                            fontsize=24, pad=20, fontweight='bold')
                 ax.grid(True, alpha=0.3, linestyle='--')
+                ax.tick_params(axis='both', which='major', labelsize=16)
                 
                 # Add legend with smaller font and multiple columns
-                ax.legend(loc='best', bbox_to_anchor=(1, 0.5), fontsize=8, 
-                         ncol=1, frameon=True, fancybox=True, shadow=True, framealpha=0.5)
+                ax.legend(loc='best', bbox_to_anchor=(1, 0.5), fontsize=14, 
+                         ncol=1, frameon=True, fancybox=True, shadow=True, framealpha=0.9)
                 
                 # Create the plot filename for linear version
                 plot_filename_linear = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}_linear.png"
                 plot_path_linear = os.path.join(current_plot_folder, plot_filename_linear)
                 
                 plt.tight_layout()
-                plt.savefig(plot_path_linear, dpi=150, bbox_inches='tight')
+                plt.savefig(plot_path_linear, dpi=300, bbox_inches='tight')
                 plt.close()
                 
                 print(f"  Saved linear plot to: {group}/plots/{plot_filename_linear}")
                 
             elif group == 'only_count':
                 # Plot with count only (log scale)
-                fig, ax = plt.subplots(figsize=(14, 10))
+                fig, ax = plt.subplots(figsize=(16, 12))
                 
                 with warnings.catch_warnings():
                     warnings.filterwarnings('ignore')
@@ -3299,34 +3508,35 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                         y_values = np.nan_to_num(y_values, nan=0, posinf=1e6, neginf=-1e6)
                         
                         # Plot the curve
-                        ax.plot(count_range, y_values, color='steelblue', linewidth=2, 
+                        ax.plot(count_range, y_values, color='steelblue', linewidth=3.5, 
                                label='Prediction', alpha=0.8)
                         
                     except Exception as e:
                         print(f"  Warning: Could not evaluate equation: {e}")
                 
                 # Configure the plot
-                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=12, fontweight='bold')
-                ax.set_ylabel('Benchmark Score', fontsize=12, fontweight='bold')
+                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=18, fontweight='bold')
+                ax.set_ylabel('Benchmark Score', fontsize=18, fontweight='bold')
                 ax.set_xscale('log')
                 ax.set_title(f'Filter {filter_val}, {benchmark} [Count Only]\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
-                            fontsize=11, pad=15)
+                            fontsize=24, pad=20, fontweight='bold')
                 ax.grid(True, alpha=0.3, linestyle='--')
-                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.8)
+                ax.tick_params(axis='both', which='major', labelsize=16)
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
                 
                 # Create the plot filename
                 plot_filename = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}.png"
                 plot_path = os.path.join(current_plot_folder, plot_filename)
                 
                 plt.tight_layout()
-                plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+                plt.savefig(plot_path, dpi=300, bbox_inches='tight')
                 plt.close()
                 
                 print(f"  Saved plot to: {group}/plots/{plot_filename}")
                 
                 # Linear scale version
                 count_range_linear = np.linspace(1, 1000, 500)
-                fig, ax = plt.subplots(figsize=(14, 10))
+                fig, ax = plt.subplots(figsize=(16, 12))
                 
                 with warnings.catch_warnings():
                     warnings.filterwarnings('ignore')
@@ -3338,23 +3548,24 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                         elif isinstance(y_values, np.ndarray) and len(y_values) == 1:
                             y_values = np.full_like(count_range_linear, y_values[0])
                         y_values = np.nan_to_num(y_values, nan=0, posinf=1e6, neginf=-1e6)
-                        ax.plot(count_range_linear, y_values, color='steelblue', linewidth=2, 
+                        ax.plot(count_range_linear, y_values, color='steelblue', linewidth=3.5, 
                                label='Prediction', alpha=0.8)
                     except Exception as e:
                         print(f"  Warning: Could not evaluate equation (linear): {e}")
                 
-                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=12, fontweight='bold')
-                ax.set_ylabel('Benchmark Score', fontsize=12, fontweight='bold')
+                ax.set_xlabel('Count (x0) - Parameter Count', fontsize=18, fontweight='bold')
+                ax.set_ylabel('Benchmark Score', fontsize=18, fontweight='bold')
                 ax.set_title(f'Filter {filter_val}, {benchmark} [Count Only] (Linear Scale: 1-1000)\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
-                            fontsize=11, pad=15)
+                            fontsize=24, pad=20, fontweight='bold')
                 ax.grid(True, alpha=0.3, linestyle='--')
-                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.5)
+                ax.tick_params(axis='both', which='major', labelsize=16)
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
                 
                 plot_filename_linear = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}_linear.png"
                 plot_path_linear = os.path.join(current_plot_folder, plot_filename_linear)
                 
                 plt.tight_layout()
-                plt.savefig(plot_path_linear, dpi=150, bbox_inches='tight')
+                plt.savefig(plot_path_linear, dpi=300, bbox_inches='tight')
                 plt.close()
                 
                 print(f"  Saved linear plot to: {group}/plots/{plot_filename_linear}")
@@ -3363,7 +3574,7 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                 # Plot with complexity only
                 complexity_range = np.linspace(0.01, 1.0, 500)  # Complexity from 0.01 to 1.0
                 
-                fig, ax = plt.subplots(figsize=(14, 10))
+                fig, ax = plt.subplots(figsize=(16, 12))
                 
                 with warnings.catch_warnings():
                     warnings.filterwarnings('ignore')
@@ -3382,26 +3593,27 @@ def analyze_equation_exploration(OUTPUT_FOLDER):
                         y_values = np.nan_to_num(y_values, nan=0, posinf=1e6, neginf=-1e6)
                         
                         # Plot the curve
-                        ax.plot(complexity_range, y_values, color='darkgreen', linewidth=2, 
+                        ax.plot(complexity_range, y_values, color='darkgreen', linewidth=3.5, 
                                label='Prediction', alpha=0.8)
                         
                     except Exception as e:
                         print(f"  Warning: Could not evaluate equation: {e}")
                 
                 # Configure the plot
-                ax.set_xlabel('Complexity (x0)', fontsize=12, fontweight='bold')
-                ax.set_ylabel('Benchmark Score', fontsize=12, fontweight='bold')
+                ax.set_xlabel('Complexity (x0)', fontsize=18, fontweight='bold')
+                ax.set_ylabel('Benchmark Score', fontsize=18, fontweight='bold')
                 ax.set_title(f'Filter {filter_val}, {benchmark} [Complexity Only]\n{equation_str}\nR² = {r2_score:.6f}, N = {n_points}',
-                            fontsize=11, pad=15)
+                            fontsize=24, pad=20, fontweight='bold')
                 ax.grid(True, alpha=0.3, linestyle='--')
-                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.8)
+                ax.tick_params(axis='both', which='major', labelsize=16)
+                ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
                 
                 # Create the plot filename
                 plot_filename = f"filter_{filter_val}_{benchmark.replace(' ', '_').lower()}.png"
                 plot_path = os.path.join(current_plot_folder, plot_filename)
                 
                 plt.tight_layout()
-                plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+                plt.savefig(plot_path, dpi=300, bbox_inches='tight')
                 plt.close()
                 
                 print(f"  Saved plot to: {group}/plots/{plot_filename}")
@@ -3498,7 +3710,7 @@ def create_equation_rankings(OUTPUT_FOLDER):
         error_data = top_df[error_columns].values
         
         # Create the heatmap (increased height to accommodate two-line labels)
-        fig, ax = plt.subplots(figsize=(14, max(10, top_n * 0.6)))
+        fig, ax = plt.subplots(figsize=(16, max(12, top_n * 0.8)))
 
         # Use seaborn heatmap for better styling and annotations
         sns.heatmap(
@@ -3509,23 +3721,24 @@ def create_equation_rankings(OUTPUT_FOLDER):
             fmt='.4f',
             cbar_kws={'label': 'Error Value'},
             linewidths=0.5,
-            linecolor='white'
+            linecolor='white',
+            annot_kws={"size": 14}
         )
 
         # Set ticks and labels
         ax.set_xticks(np.arange(len(error_columns)) + 0.5)
-        ax.set_xticklabels([col.upper() for col in error_columns], fontsize=11, fontweight='bold')
+        ax.set_xticklabels([col.upper() for col in error_columns], fontsize=16, fontweight='bold')
         ax.set_yticks(np.arange(len(labels)) + 0.5)
-        ax.set_yticklabels(labels, fontsize=8, linespacing=1.2)
+        ax.set_yticklabels(labels, fontsize=12, linespacing=1.2)
         
         # Set title
         ax.set_title(f'Top {top_n} Functions by Average Error - Group: {group.replace("_", " ").title()}\n'
                     f'(Lower values are better)', 
-                    fontsize=12, fontweight='bold', pad=15)
+                    fontsize=24, fontweight='bold', pad=20)
         
         # Set labels
-        ax.set_xlabel('Error Measures', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Filter-Benchmark (Average Error)', fontsize=11, fontweight='bold')
+        ax.set_xlabel('Error Measures', fontsize=18, fontweight='bold')
+        ax.set_ylabel('Filter-Benchmark (Average Error)', fontsize=18, fontweight='bold')
         
         # Add grid
         ax.set_xticks(np.arange(len(error_columns)) - 0.5, minor=True)
@@ -3582,11 +3795,11 @@ def create_equation_rankings(OUTPUT_FOLDER):
         
         bars = ax.bar(x_pos, best_df['avg_error'], color=colors[:len(best_df)], alpha=0.7, edgecolor='black')
         
-        ax.set_xlabel('Group', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Average Error (Lower is Better)', fontsize=12, fontweight='bold')
-        ax.set_title('Best Function per Group - Average Error Comparison', fontsize=13, fontweight='bold', pad=15)
+        ax.set_xlabel('Group', fontsize=16, fontweight='bold')
+        ax.set_ylabel('Average Error (Lower is Better)', fontsize=16, fontweight='bold')
+        ax.set_title('Best Function per Group - Average Error Comparison', fontsize=18, fontweight='bold', pad=15)
         ax.set_xticks(x_pos)
-        ax.set_xticklabels([g.replace('_', ' ').title() for g in best_df['group']], fontsize=10)
+        ax.set_xticklabels([g.replace('_', ' ').title() for g in best_df['group']], fontsize=14)
         ax.grid(axis='y', alpha=0.3, linestyle='--')
         
         # Add value labels on bars
@@ -3594,7 +3807,7 @@ def create_equation_rankings(OUTPUT_FOLDER):
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2., height,
                    f'{val:.4f}',
-                   ha='center', va='bottom', fontsize=9, fontweight='bold')
+                   ha='center', va='bottom', fontsize=12, fontweight='bold')
         
         plt.tight_layout()
         plt.savefig(os.path.join(rankings_folder, 'best_per_group.png'), dpi=150, bbox_inches='tight')
@@ -3719,15 +3932,18 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
             os.makedirs(bench_folder)
         
         # Plot scatter with regression line
-        fig = plt.figure(figsize=(12, 9))
-        plt.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data')
-        plt.plot(x_line_bench, y_line_bench, 'r-', linewidth=2, label=f'Best fit ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
-        plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
-        plt.ylabel('Magical Variable (Complexity × Param Count)')
-        plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Magical Variable')
-        plt.legend(loc='best', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True, fontsize=8)
+        fig = plt.figure(figsize=(16, 12))
+        plt.scatter(x_data_bench, y_data_bench, alpha=0.6, label='Data', s=120)
+        plt.plot(x_line_bench, y_line_bench, 'r-', linewidth=3.5, label=f'Best fit ({best_name_bench})\n{best_equation_bench}\nR² = {best_r2_bench:.6f}')
+        plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '), fontsize=18)
+        plt.ylabel('Magical Variable (Complexity × Param Count)', fontsize=18)
+        plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Magical Variable', fontsize=24, fontweight='bold')
+        plt.legend(loc='best', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True, fontsize=14)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(axis='both', which='major', labelsize=16)
         
-        plt.savefig(os.path.join(bench_folder, 'regression.png'))
+        plt.tight_layout()
+        plt.savefig(os.path.join(bench_folder, 'regression.png'), dpi=300)
         plt.close()
         
         # Calculate Pearson correlation coefficient
@@ -3809,7 +4025,7 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
 
     # Create comparison plot: R² scores for all benchmarks
     if len(all_magical_benchmark_results) > 0:
-        fig = plt.figure(figsize=(14, 8))
+        fig = plt.figure(figsize=(16, 12))
         bench_names_short = [name.replace('BENCH-', '').replace('_', ' ') for name in all_magical_benchmark_results.keys()]
         r2_scores = [results['r2_score'] for results in all_magical_benchmark_results.values()]
         
@@ -3819,41 +4035,58 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         r2_scores = [r2_scores[i] for i in sorted_indices]
         
         plt.barh(range(len(bench_names_short)), r2_scores, color='steelblue', alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
-        plt.xlabel('R² Score')
-        plt.ylabel('Benchmark')
-        plt.title('Regression Quality: R² Scores for Each Benchmark vs Magical Variable')
+        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=20)
+        plt.xlabel('R² Score', fontsize=18)
+        plt.ylabel('Benchmark', fontsize=18)
+        plt.title('Regression Quality: R² Scores for Each Benchmark vs Magical Variable', fontsize=24, fontweight='bold')
         plt.grid(axis='x', alpha=0.3)
         
         # Add value labels on bars
         for i, (name, score) in enumerate(zip(bench_names_short, r2_scores)):
-            plt.text(score, i, f' {score:.4f}', va='center', fontsize=8)
+            plt.text(score, i, f' {score:.4f}', va='center', fontsize=16)
         
         plt.tight_layout()
-        plt.savefig(os.path.join(magical_benchmarks_folder, 'r2_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.savefig(os.path.join(magical_benchmarks_folder, 'r2_comparison.png'), dpi=300, bbox_inches='tight')
         plt.close()
         
         # Create comparison plot: Correlation coefficients for all benchmarks
-        fig = plt.figure(figsize=(14, 8))
+        fig = plt.figure(figsize=(16, 12))
         correlations = [all_magical_benchmark_results[list(all_magical_benchmark_results.keys())[i]]['correlation'] 
                     for i in sorted_indices]
         
         colors = ['green' if c > 0 else 'red' for c in correlations]
         plt.barh(range(len(bench_names_short)), correlations, color=colors, alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=9)
-        plt.xlabel('Pearson Correlation Coefficient')
-        plt.ylabel('Benchmark')
-        plt.title('Correlation: Benchmark Score vs Magical Variable')
+        plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=20)
+        plt.xlabel('Pearson Correlation Coefficient', fontsize=18)
+        plt.ylabel('Benchmark', fontsize=18)
+        plt.title('Correlation: Benchmark Score vs Magical Variable', fontsize=24, fontweight='bold')
         plt.grid(axis='x', alpha=0.3)
         plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
         
+        # Adjust x-axis limit to make room for labels
+        x_min, x_max_lim = plt.xlim()
+        x_range = x_max_lim - x_min
+        
+        # Only expand the side where bars are extending
+        if max(correlations) > 0:
+            right_lim = x_max_lim + x_range * 0.15
+        else:
+            right_lim = x_max_lim
+            
+        if min(correlations) < 0:
+            left_lim = x_min - x_range * 0.15
+        else:
+            left_lim = x_min
+            
+        plt.xlim(left=left_lim, right=right_lim)
+        
         # Add value labels on bars
         for i, (name, corr) in enumerate(zip(bench_names_short, correlations)):
-            plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=8, 
-                    ha='left' if corr > 0 else 'right')
+            plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=16, 
+                    ha='left' if corr > 0 else 'right', fontweight='bold')
         
         plt.tight_layout()
-        plt.savefig(os.path.join(magical_benchmarks_folder, 'correlation_comparison.png'), dpi=150, bbox_inches='tight')
+        plt.savefig(os.path.join(magical_benchmarks_folder, 'correlation_comparison.png'), dpi=300, bbox_inches='tight')
         plt.close()
 
     print(f"\nCompleted magical variable analysis. Processed {len(all_magical_benchmark_results)} benchmarks.")
@@ -3990,15 +4223,18 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
                 filter_clean_name = f"filter_{float(filter_val)}"
                 
                 # Plot scatter with regression line
-                fig = plt.figure(figsize=(12, 9))
-                plt.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data')
-                plt.plot(x_line_combo, y_line_combo, 'r-', linewidth=2, label=f'Best fit ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
-                plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '))
-                plt.ylabel('Magical Variable (Complexity × Param Count)')
-                plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Magical Variable\nType: {type_str}, Filter: {float(filter_val)} sigma')
-                plt.legend(loc='best', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True, fontsize=8)
+                fig = plt.figure(figsize=(16, 12))
+                plt.scatter(x_data_combo, y_data_combo, alpha=0.6, label='Data', s=120)
+                plt.plot(x_line_combo, y_line_combo, 'r-', linewidth=3.5, label=f'Best fit ({best_name_combo})\n{best_equation_combo}\nR² = {best_r2_combo:.6f}')
+                plt.xlabel(bench_name.replace('BENCH-', '').replace('_', ' '), fontsize=18)
+                plt.ylabel('Magical Variable (Complexity × Param Count)', fontsize=18)
+                plt.title(f'{bench_name.replace("BENCH-", "").replace("_", " ")} vs Magical Variable\nType: {type_str}, Filter: {float(filter_val)} sigma', fontsize=24, fontweight='bold')
+                plt.legend(loc='best', bbox_to_anchor=(0.48, -0.18), ncol=1, frameon=True, fancybox=True, shadow=True, fontsize=14)
+                plt.grid(True, alpha=0.3)
+                plt.tick_params(axis='both', which='major', labelsize=16)
                 
-                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'))
+                plt.tight_layout()
+                plt.savefig(os.path.join(type_folder, f'{filter_clean_name}_regression.png'), dpi=300)
                 plt.close()
                 
                 # Save statistics to text file
@@ -4083,7 +4319,7 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         
         # Create top 20 visualization for this benchmark
         if len(top_results) > 0:
-            fig = plt.figure(figsize=(14, max(8, top_n * 0.4)))
+            fig = plt.figure(figsize=(16, max(12, top_n * 0.8)))
             
             # Create labels
             labels = [f"{row['type'][:25]}, Filter={int(row['filter'])}" 
@@ -4093,20 +4329,40 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
             colors = ['green' if c > 0 else 'red' for c in correlations]
             
             plt.barh(range(len(labels)), correlations, color=colors, alpha=0.7, edgecolor='black')
-            plt.yticks(range(len(labels)), labels, fontsize=9)
-            plt.xlabel('Pearson Correlation Coefficient')
-            plt.ylabel('Type - Filter Combination')
-            plt.title(f'Top {top_n} Combinations by Absolute Pearson Correlation\n{bench_name.replace("BENCH-", "").replace("_", " ")} vs Magical Variable')
+            plt.yticks(range(len(labels)), labels, fontsize=16)
+            plt.xlabel('Pearson Correlation Coefficient', fontsize=18)
+            plt.ylabel('Type - Filter Combination', fontsize=18)
+            plt.title(f'Top {top_n} Combinations by Absolute Pearson Correlation\n{bench_name.replace("BENCH-", "").replace("_", " ")} vs Magical Variable', fontsize=24, fontweight='bold')
             plt.grid(axis='x', alpha=0.3)
             plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
             
+            # Adjust x-axis limit to make room for labels
+            x_min, x_max_lim = plt.xlim()
+            x_range = x_max_lim - x_min
+            
+            # Only expand the side where bars are extending
+            if max(correlations) > 0:
+                right_lim = x_max_lim + x_range * 0.15
+            else:
+                right_lim = x_max_lim
+                
+            if min(correlations) < 0:
+                left_lim = x_min - x_range * 0.15
+            else:
+                left_lim = x_min
+                
+            plt.xlim(left=left_lim, right=right_lim)
+            
             # Add value labels on bars
             for i, corr in enumerate(correlations):
-                plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=8, 
-                        ha='left' if corr > 0 else 'right')
+                x_offset = 0.005 if corr > 0 else -0.005
+                x_pos = corr + x_offset
+                ha_align = 'left' if corr > 0 else 'right'
+                plt.text(x_pos, i + 0.02, f'{corr:.4f}', va='center', fontsize=16, 
+                        ha=ha_align, fontweight='bold')
             
             plt.tight_layout()
-            plt.savefig(os.path.join(bench_main_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
+            plt.savefig(os.path.join(bench_main_folder, 'top_20_correlations.png'), dpi=300, bbox_inches='tight')
             plt.close()
         
         print(f"  Created CSV files and plot for {bench_name} ({len(bench_results_sorted)} combinations, top {top_n} saved)")
@@ -4171,7 +4427,7 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
 
     # Create visualization: Top 20 correlations
     if len(magical_results_df) > 0:
-        fig = plt.figure(figsize=(16, 10))
+        fig = plt.figure(figsize=(16, 12))
         top_20_plot = magical_results_df_sorted.head(20).copy()
         
         # Create labels
@@ -4182,20 +4438,40 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         colors = ['green' if c > 0 else 'red' for c in correlations]
         
         plt.barh(range(len(labels)), correlations, color=colors, alpha=0.7, edgecolor='black')
-        plt.yticks(range(len(labels)), labels, fontsize=8)
-        plt.xlabel('Pearson Correlation Coefficient')
-        plt.ylabel('Benchmark - Type - Filter Combination')
-        plt.title('Top 20 Combinations by Absolute Pearson Correlation\n(Benchmark vs Magical Variable: Complexity × Param Count)')
+        plt.yticks(range(len(labels)), labels, fontsize=16)
+        plt.xlabel('Pearson Correlation Coefficient', fontsize=18)
+        plt.ylabel('Benchmark - Type - Filter Combination', fontsize=18)
+        plt.title('Top 20 Combinations by Absolute Pearson Correlation\n(Benchmark vs Magical Variable: Complexity × Param Count)', fontsize=24, fontweight='bold')
         plt.grid(axis='x', alpha=0.3)
         plt.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
         
+        # Adjust x-axis limit to make room for labels
+        x_min, x_max_lim = plt.xlim()
+        x_range = x_max_lim - x_min
+        
+        # Only expand the side where bars are extending
+        if max(correlations) > 0:
+            right_lim = x_max_lim + x_range * 0.15
+        else:
+            right_lim = x_max_lim
+            
+        if min(correlations) < 0:
+            left_lim = x_min - x_range * 0.15
+        else:
+            left_lim = x_min
+            
+        plt.xlim(left=left_lim, right=right_lim)
+        
         # Add value labels on bars
         for i, corr in enumerate(correlations):
-            plt.text(corr, i, f' {corr:.4f}', va='center', fontsize=7, 
-                    ha='left' if corr > 0 else 'right')
+            x_offset = 0.005 if corr > 0 else -0.005
+            x_pos = corr + x_offset
+            ha_align = 'left' if corr > 0 else 'right'
+            plt.text(x_pos, i + 0.02, f'{corr:.4f}', va='center', fontsize=16, 
+                    ha=ha_align, fontweight='bold')
         
         plt.tight_layout()
-        plt.savefig(os.path.join(detailed_magical_benchmarks_folder, 'top_20_correlations.png'), dpi=150, bbox_inches='tight')
+        plt.savefig(os.path.join(detailed_magical_benchmarks_folder, 'top_20_correlations.png'), dpi=300, bbox_inches='tight')
         plt.close()
 
     print("\n" + "="*70)
