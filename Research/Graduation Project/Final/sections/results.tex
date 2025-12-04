@@ -122,7 +122,7 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1.0\linewidth, height=0.8\textheight, keepaspectratio]{img/noembed-weights/param_average_complexity_histogram.png}
+        \includegraphics[width=1.0\linewidth, height=0.45\textheight, keepaspectratio]{img/noembed-weights/param_average_complexity_histogram.png}
         \caption{Average complexity vs number of parameters.}
     \end{figure}
 
@@ -142,7 +142,7 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1.0\linewidth, height=0.8\textheight, keepaspectratio]{img/noembed-weights/bin_average_complexity_histogram.png}
+        \includegraphics[width=1.0\linewidth, height=0.45\textheight, keepaspectratio]{img/noembed-weights/bin_average_complexity_histogram.png}
         \caption{Average complexity vs number of histogram bins.}   
     \end{figure}
 
@@ -157,16 +157,19 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1.0\linewidth, height=0.4\textheight, keepaspectratio]{img/noembed-weights/control_correlation_comparison.png}
-        \caption{Pearson correlation for parameter count vs benchmark performance.}
-        \label{fig:control_correlation_comparison}
-    \end{figure}
-
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=1.0\linewidth, height=0.4\textheight, keepaspectratio]{img/noembed-weights/control_r2_linear_comparison.png}
-        \caption{$R^2$ values for parameter count vs benchmark performance.}
-        \label{fig:control_r2_linear_comparison}
+        \begin{minipage}[t]{0.48\linewidth}
+            \centering
+            \includegraphics[width=1.0\linewidth, height=0.4\textheight, keepaspectratio]{img/noembed-weights/control_correlation_comparison.png}
+            \caption{Pearson correlation for parameter count vs benchmark performance.}
+            \label{fig:control_correlation_comparison}
+        \end{minipage}
+        \hfill
+        \begin{minipage}[t]{0.48\linewidth}
+            \centering
+            \includegraphics[width=1.0\linewidth, height=0.4\textheight, keepaspectratio]{img/noembed-weights/control_r2_linear_comparison.png}
+            \caption{$R^2$ values for parameter count vs benchmark performance.}
+            \label{fig:control_r2_linear_comparison}
+        \end{minipage}
     \end{figure}
 
     As expected, all the benchmarks show a positive correlation with parameter count, validating the control set. It is also noticeable that the linear regression $R^2$ values are relatively low indicating a non-linear relationship between parameter count and benchmark performance.
@@ -177,16 +180,19 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1.0\linewidth, height=0.4\textheight, keepaspectratio]{img/noembed-weights/complexity_correlation_comparison.png}
-        \caption{Pearson correlation for Complexity vs benchmark performance.}   
-        \label{fig:complexity_correlation_comparison}
-    \end{figure}
-
-    \begin{figure}[H]
-        \centering
-        \includegraphics[width=1.0\linewidth, height=0.4\textheight, keepaspectratio]{img/noembed-weights/complexity_r2_linear_comparison.png}
-        \caption{$R^2$ values for complexity vs benchmark performance.}
-        \label{fig:complexity_r2_linear_comparison}
+        \begin{minipage}[t]{0.48\linewidth}
+            \centering
+            \includegraphics[width=1.0\linewidth, height=0.4\textheight, keepaspectratio]{img/noembed-weights/complexity_correlation_comparison.png}
+            \caption{Pearson correlation for Complexity vs benchmark performance.}   
+            \label{fig:complexity_correlation_comparison}
+        \end{minipage}
+        \hfill
+        \begin{minipage}[t]{0.48\linewidth}
+            \centering
+            \includegraphics[width=1.0\linewidth, height=0.4\textheight, keepaspectratio]{img/noembed-weights/complexity_r2_linear_comparison.png}
+            \caption{$R^2$ values for complexity vs benchmark performance.}
+            \label{fig:complexity_r2_linear_comparison}
+        \end{minipage}
     \end{figure}
 
     It is also immediately clear that results are inconsistent across benchmarks. While \textbf{LMArena} and \textbf{MMLU} show a positive correlation between complexity and performance, \textbf{MMLU-Pro} and \textbf{OpenLLM} show a negative correlation.
@@ -197,9 +203,9 @@
 
     While individual benchmarks show inconsistent correlations and score consistently worse than control and the aggregation of all benchmarks is also worse than control, having a 0.3066 general correlation is still pretty good. This suggests that there may be a general trend of increasing benchmark performance with increasing LMC complexity when considering a diverse set of benchmarks. Since benchmarks are an imperfect measure of model performance, it is possible that individual benchmark inconsistencies are smoothed out.
 
-    We also found the statistical significance of the correlations found using t-tests \cite{Fisher1921}:
+    We also found the statistical significance of the correlations found using t-tests \cite{Fisher1921} shown in table \ref{tab:statistical_significance}.
     
-    \begin{table}[H]
+    \begin{table}[ht]
         \centering
         \begin{tabular}{|c|c|c|c|c|c|}
             \hline
@@ -230,7 +236,7 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1.0\linewidth, height=0.8\textheight, keepaspectratio]{img/noembed-weights/comp_lmarena_regression.png}
+        \includegraphics[width=1.0\linewidth, height=0.35\textheight, keepaspectratio]{img/noembed-weights/comp_lmarena_regression.png}
         \caption{LMC complexity vs LMArena benchmark.}
         \label{fig:comp_lmarena_regression}
     \end{figure}
@@ -241,7 +247,7 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1.0\linewidth, height=0.8\textheight, keepaspectratio]{img/noembed-weights/comp_mmlu_regression.png}
+        \includegraphics[width=1.0\linewidth, height=0.35\textheight, keepaspectratio]{img/noembed-weights/comp_mmlu_regression.png}
         \caption{LMC complexity vs MMLU benchmark.}
         \label{fig:comp_mmlu_regression}
     \end{figure}
@@ -252,7 +258,7 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1.0\linewidth, height=0.8\textheight, keepaspectratio]{img/noembed-weights/comp_mmlupro_regression.png}
+        \includegraphics[width=1.0\linewidth, height=0.35\textheight, keepaspectratio]{img/noembed-weights/comp_mmlupro_regression.png}
         \caption{LMC complexity vs MMLU-Pro benchmark.}
     \end{figure}
 
@@ -262,7 +268,7 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1.0\linewidth, height=0.8\textheight, keepaspectratio]{img/noembed-weights/comp_openllm_regression.png}
+        \includegraphics[width=1.0\linewidth, height=0.35\textheight, keepaspectratio]{img/noembed-weights/comp_openllm_regression.png}
         \caption{LMC complexity vs OpenLLM benchmark.}
     \end{figure}
 
@@ -281,7 +287,7 @@
 
     \begin{figure}[H] 
         \centering
-        \includegraphics[width=1.0\linewidth, height=0.8\textheight, keepaspectratio]{img/noembed-weights/comp_all_regression.png}
+        \includegraphics[width=1.0\linewidth, height=0.35\textheight, keepaspectratio]{img/noembed-weights/comp_all_regression.png}
         \caption{LMC complexity vs all benchmarks aggregated.}
     \end{figure}
 
@@ -300,12 +306,13 @@
 
     In all cases, we can see that the free regressions do not appear to be able to capture the behavior of the data points well due to their outliers. The linear regressions are also influenced by the same factor, leading to low $R^2$ values. This is a further indicator that LMC complexity appears not to be a reliable predictor of benchmark performance.
 
-    As a bonus, for the sake of completeness, we made a bar plot ranking the top 20 configurations (model + weight-type combination) sorted by highest correlation between LMC complexity and benchmark performance (all benchmarks aggregated):
+    As a bonus, for the sake of completeness, we made a bar plot ranking the top 20 configurations (model + weight-type combination) sorted by highest correlation between LMC complexity and benchmark performance (all benchmarks aggregated) shown in figure \ref{fig:top_20_correlations}.
 
-    \begin{figure}[H] 
+    \begin{figure}[ht] 
         \centering
         \includegraphics[width=1.0\linewidth, height=0.8\textheight, keepaspectratio]{img/all-weights/top_20_correlations.png}
         \caption{Top 20 configurations by Pearson correlation.}
+        \label{fig:top_20_correlations}
     \end{figure}
 
     We can see that the top 20 correlations are mixed between negative and positive biggest absolute values. The top 5 is all positive.
