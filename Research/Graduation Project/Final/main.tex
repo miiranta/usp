@@ -21,7 +21,7 @@ english
 \setcounter{tocdepth}{4}
 
 % Info
-\title{Comparing the LMC Complexity of Neural Networks with their Inference Capability}
+\title{Comparing the LMC Complexity of Neural Networks with their Generalization Capability}
 \author{Lucas Miranda Mendonça Rezende}
 \local{Ribeirão Preto--SP}
 \data{2025}
@@ -43,7 +43,7 @@ english
 
 % Abstract
 \begin{resumo}[Abstract]
-    Current scaling laws suggest that model performance improves with increased parameters, dataset size, and compute, but these improvements follow power laws requiring exponential resources for constant gains. Understanding the learning process through alternative metrics could enable architectural improvements and optimization during training. This work investigates whether LMC statistical complexity, a measure combining Shannon entropy and disequilibrium of weight distributions, correlates with neural network inference capability. We analyzed 35 open-weight transformer-based language models from Meta, Google, Microsoft, and OpenAI, ranging from 117 million to 150 billion parameters, computing LMC complexity across different weight-type combinations (bias, norm, embedding, other) and filtering settings. Model performance was evaluated using four benchmarks: MMLU, MMLU-Pro, OpenLLM, and LMArena. Results revealed that, despite statistical significance in aggregated analyses and specific benchmarks like MMLU, a general correlation between LMC complexity and benchmark performance cannot be confirmed. The observed positive trends were often driven by outliers or showed inconsistent patterns, suggesting that LMC complexity might not be a reliable predictor of inference capability in the studied context.
+    Current scaling laws suggest that model performance improves with increased parameters, dataset size, and compute, but these improvements follow power laws requiring exponential resources for constant gains. Understanding the learning process through alternative metrics could enable architectural improvements and optimization during training. This work investigates whether LMC statistical complexity, a measure combining Shannon entropy and disequilibrium of weight distributions, correlates with neural network generalization capability. We analyzed 35 open-weight transformer-based language models from Meta, Google, Microsoft, and OpenAI, ranging from 117 million to 150 billion parameters, computing LMC complexity across different weight-type combinations (bias, norm, embedding, other) and filtering settings. Model performance was evaluated using four benchmarks: MMLU, MMLU-Pro, OpenLLM, and LMArena. Results revealed that, despite statistical significance in aggregated analyses and specific benchmarks like MMLU, a general correlation between LMC complexity and benchmark performance cannot be confirmed. The observed positive trends were often driven by outliers or showed inconsistent patterns, suggesting that LMC complexity might not be a reliable predictor of generalization capability in the studied context.
 \end{resumo}
 
 \pdfbookmark[0]{\contentsname}{toc}

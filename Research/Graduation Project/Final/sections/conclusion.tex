@@ -1,6 +1,6 @@
 \chapter{Conclusion}
 
-In this work, we investigated the relationship between the LMC statistical complexity of neural network weights and their inference performance across various benchmarks. Our analysis revealed that, even with a statistically significant result, \textbf{it is not yet possible to say there is a general correlation between LMC complexity and benchmark performance}. 
+In this work, we investigated the relationship between the LMC statistical complexity of neural network weights and their generalization performance across various benchmarks. Our analysis revealed that, even with a statistically significant result, \textbf{it is not yet possible to say there is a general correlation between LMC complexity and benchmark performance}. 
 
 Some facts support the validity of the initial hypothesis:
 \begin{enumerate}
@@ -19,9 +19,9 @@ On the other hand, other facts that go against our initial hypothesis:
     \item In section \ref{sec:complexity_vs_benchmark_performance_results}, some benchmarks showed positive correlation, others showed a negative correlation, while control only showed positive correlations.
 \end{enumerate}
 
-Until the reasons why the opposite facts happen is clarified, it is hard to not consider that the results might be outcomes of outliers. The fact that these exist might indicate that LMC Complexity is not a reliable predictor of neural network inference capability in the first place.
+Until the reasons why the opposite facts happen is clarified, it is hard to not consider that the results might be outcomes of outliers. The fact that these exist might indicate that LMC Complexity is not a reliable predictor of neural network generalization capability in the first place.
 
-In order to validate or falsify the initial hypothesis, a new study with a new approach would be necessary. A new methodology independent of benchmark results should be better given the difficulty in obtaining sufficient data for statistical significance and the imperfect nature of their performance assessments. As already mentioned in section \ref{sec:inference_capability}, a good option is to use test loss in a new model trained from scratch as a performance metric.
+In order to validate or falsify the initial hypothesis, a new study with a new approach would be necessary. A new methodology independent of benchmark results should be better given the difficulty in obtaining sufficient data for statistical significance and the imperfect nature of their performance assessments. As already mentioned in section \ref{sec:generalization_capability}, a good option is to use test loss in a new model trained from scratch as a performance metric.
 
 Maybe the LMC complexity to performance correlation is true, but different models are not comparable since we have a specific range of values for each architecture. You would need to compare the model with itself, which would be impossible using benchmarks since for one benchmark we have only one reading per model. Hence, again, finding a way of testing using test loss would be more reliable.
 

@@ -213,10 +213,10 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
 
         With the probabilities \( p_i \) computed from the histogram, we can now calculate the LMC complexity \( C_{LMC} \) using the formulas provided in the beginning of section \ref{sec:lmc_complexity}. This involves calculating the Disequilibrium \( D \) and the Shannon entropy \( H \) using the probabilities, and then multiplying them to obtain the final complexity measure \( C_{LMC} \).
 
-\section{Inference Capability}
-\label{sec:inference_capability}
+\section{Generalization Capability}
+\label{sec:generalization_capability}
 
-    Often called model performance, inference capability refers to how well a trained neural network performs on unseen data. This is typically measured using various metrics depending on the specific task the model is designed for. 
+    Often called model performance, generalization capability refers to how well a trained neural network performs on unseen data. This is typically measured using various metrics depending on the specific task the model is designed for. 
     
     In the previously cited research paper by OpenAI \cite{Kaplan2020}, performance was associated with test cross-entropy loss. This metric quantifies the difference between the predicted probability distribution output by the model and the true distribution of the target labels. Lower cross-entropy loss values indicate better model performance, as they reflect a closer alignment between predictions and actual outcomes.
 
@@ -323,7 +323,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
             \label{fig:benchmark_availability}
         \end{figure}
 
-\section{Comparing LMC Complexity and Inference Capability}
+\section{Comparing LMC Complexity and Generalization Capability}
 
     \subsection{Building the testing dataset}
     \label{sec:building_testing_dataset}
@@ -442,7 +442,7 @@ The final selection of models used in this study is listed in Table \ref{tab:sel
     \subsection{Complexity vs Benchmark performance}
     \label{sec:complexity_vs_benchmark_performance}
 
-        Finally, we will analyze the relationship between LMC complexity and benchmark performance. This analysis aims to determine whether higher LMC complexity is associated with better model performance across different benchmarks, in order to validate or refute the hypothesis that complexity correlates with inference capability.
+        Finally, we will analyze the relationship between LMC complexity and benchmark performance. This analysis aims to determine whether higher LMC complexity is associated with better model performance across different benchmarks, in order to validate or refute the hypothesis that complexity correlates with generalization capability.
         
         For each benchmark available in \( R_{best} \), we will create scatter plots with benchmark scores on the x-axis and complexity on the y-axis.
 
