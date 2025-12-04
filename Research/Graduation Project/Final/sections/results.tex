@@ -45,9 +45,9 @@
         \label{fig:regression_bins_per_filtering}
     \end{figure}
 
-    The average bins show a weak fit ($R^2 = 0.045$), indicating high variability. In contrast, the maximum bins demonstrate an exceptional fit ($R^2 = 0.999$). This is expected, as the maximum bins are only one data point per filtering setting, making it easier to fit a curve through them. The fact that both curves follow an \textbf{exponential trend}, however, is noteworthy.
-
-    The maximum bins (green dashed line) explodes faster than the average bins (red line) as the filtering becomes less aggressive, meaning that a worst-case scenario grows more rapidly than the average case. Mathematically, while maximum bins grow at a rate of $e ^{0.250x}$, average bins only grow $e ^{0.236x}$.
+    The regression for average bins exhibits a weak fit ($R^2 = 0.045$), indicative of high variability. Conversely, the maximum bins demonstrate an exceptional fit ($R^2 = 0.999$). This disparity is expected, as the maximum bins metric consists of a single data point per filtering setting, which simplifies curve fitting. A more equitable comparison of $R^2$ values would be achieved by performing regression on the mean value for each filtering setting rather than the entire dataset. Such an approach yields an $R^2$ of 0.999, while retaining the same function parameters observed in the regression over the full dataset.
+    
+    The maximum bins (green dashed line) grows a little bit faster than the average bins (red line) as the filtering becomes less aggressive. Mathematically, while maximum bins grow at a rate of $e ^{0.250x}$, average bins only grow $e ^{0.236x}$. The fact that both curves follow an \textbf{exponential trend}, however, is noteworthy.
 
     We can also analyze the filtering setting using our second criterion: complexity values. We obtained the following plots for average and maximum LMC complexity values per filtering setting across all models and weight-type combinations:
 
@@ -77,9 +77,9 @@
         \caption{Average and maximum number of complexity per filtering setting.}
     \end{figure}
 
-    As expected, both average (red line) and maximum (green dashed line) complexity values follow a \textbf{logarithmic trend} ($R^2 = 0.014$ and $R^2 = 0.578$ respectively). The maximum fit is much better than the average fit due to the same reasons as explained in figure \ref{fig:regression_bins_per_filtering}. The maximum fit here is, however, much worse than the maximum fit in figure \ref{fig:regression_bins_per_filtering}, probably due to the unusual spike at 0.125 $\sigma$.
-
-    Both curves show a downward trend as the filtering becomes more aggressive that accelerates the more we approach 0 $\sigma$, where all the values are removed. This acceleration is faster in the maximum complexity fit. 
+    As anticipated, both the average (red line) and maximum (green dashed line) complexity values exhibit a \textbf{logarithmic trend} ($R^2 = 0.014$ and $R^2 = 0.578$, respectively). The maximum fit demonstrates a significantly higher $R^2$ value compared to the average fit, for the same reasons detailed in Figure \ref{fig:regression_bins_per_filtering}. Applying the previously described adjustment performing regression on the mean values per filtering setting results in an $R^2$ of 0.977, while preserving the function parameters derived from the full dataset regression.
+    
+    The maximum fit in this instance is notably inferior to that observed in Figure \ref{fig:regression_bins_per_filtering}, likely attributable to the anomalous spike at 0.125 $\sigma$. Both curves show a downward trend as the filtering becomes more aggressive that accelerates the more we approach 0 $\sigma$, where all the values are removed. This acceleration is faster in the maximum complexity fit, as expected.
     
     We also observe a very slight downward concavity in both curves approaching the unfiltered setting (40 $\sigma$) since the $x$ terms are slightly negative. For now, we are considering this an artifact of the regression that happens as a consequence of 40 $\sigma$ being an approximation of the unfiltered data even though it is very close.
 
