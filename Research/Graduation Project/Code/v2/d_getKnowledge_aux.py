@@ -1517,7 +1517,7 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
             ax.plot(x_line_all, y_line_linear, 'b--', linewidth=3.5, label=f'Linear regression\n{linear_equation_all}\nR² = {r2_linear_all:.6f}')
             ax.set_xlabel('Normalized Benchmark Score (All Benchmarks, Min-Max [0,1])', fontsize=18)
             ax.set_ylabel('Complexity', fontsize=18)
-            ax.set_title('All Benchmarks vs Complexity (Normalized)', fontsize=24, fontweight='bold')
+            ax.set_title('All Benchmarks vs Complexity', fontsize=24, fontweight='bold')
             ax.tick_params(axis='both', which='major', labelsize=16)
             ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
             ax.grid(True, alpha=0.3)
@@ -1632,7 +1632,7 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         ax.set_yticklabels(bench_names_short, fontsize=20)
         ax.set_xlabel('R² Score', fontsize=18)
         ax.set_ylabel('Benchmark', fontsize=18)
-        ax.set_title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Complexity', fontsize=24, fontweight='bold')
+        ax.set_title('Regression Quality: R² Scores (Free Regression)', fontsize=24, fontweight='bold')
         ax.grid(axis='x', alpha=0.3)
         
         # Adjust x-axis limit to make room for labels
@@ -1664,7 +1664,7 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
         ax.set_yticklabels(bench_names_short_r2lin, fontsize=20)
         ax.set_xlabel('R² Score', fontsize=18)
         ax.set_ylabel('Benchmark', fontsize=18)
-        ax.set_title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Complexity', fontsize=24, fontweight='bold')
+        ax.set_title('Regression Quality: R² Scores (Linear Regression)', fontsize=24, fontweight='bold')
         ax.grid(axis='x', alpha=0.3)
         
         # Adjust x-axis limit to make room for labels
@@ -2088,7 +2088,7 @@ def analyze_benchmarks_vs_complexity(appended_benchmarks_df, OUTPUT_FOLDER):
 
     # Create visualization: Top 20 correlations
     if len(results_df) > 0:
-        fig = plt.figure(figsize=(16, 10))
+        fig = plt.figure(figsize=(16, 15))
         top_20_plot = results_df_sorted.head(20).copy()
         
         # Sort by absolute value (descending so highest appears on top)
@@ -2455,7 +2455,7 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
             ax.plot(x_line_all_param, y_line_linear_param, 'b--', linewidth=3.5, label=f'Linear regression\n{linear_equation_all_param}\nR² = {r2_linear_all_param:.6f}')
             ax.set_xlabel('Normalized Benchmark Score (All Benchmarks, Min-Max [0,1])', fontsize=18)
             ax.set_ylabel('Parameter Count', fontsize=18)
-            ax.set_title('All Benchmarks vs Parameter Count (Normalized)', fontsize=24, fontweight='bold')
+            ax.set_title('All Benchmarks vs Parameter Count', fontsize=24, fontweight='bold')
             ax.tick_params(axis='both', which='major', labelsize=16)
             ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, framealpha=0.9, fontsize=14)
             ax.grid(True, alpha=0.3)
@@ -2572,7 +2572,7 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         ax.set_yticklabels(bench_names_short, fontsize=20)
         ax.set_xlabel('R² Score', fontsize=18)
         ax.set_ylabel('Benchmark', fontsize=18)
-        ax.set_title('Regression Quality: R² Scores (Free Regression) for Each Benchmark vs Parameter Count', fontsize=24, fontweight='bold')
+        ax.set_title('Regression Quality: R² Scores (Free Regression)', fontsize=24, fontweight='bold')
         ax.grid(axis='x', alpha=0.3)
         
         # Adjust x-axis limit to make room for labels
@@ -2604,7 +2604,7 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         ax.set_yticklabels(bench_names_short_r2lin_param, fontsize=20)
         ax.set_xlabel('R² Score', fontsize=18)
         ax.set_ylabel('Benchmark', fontsize=18)
-        ax.set_title('Regression Quality: R² Scores (Linear Regression) for Each Benchmark vs Parameter Count', fontsize=24, fontweight='bold')
+        ax.set_title('Regression Quality: R² Scores (Linear Regression)', fontsize=24, fontweight='bold')
         ax.grid(axis='x', alpha=0.3)
         
         # Adjust x-axis limit to make room for labels
@@ -3028,7 +3028,7 @@ def analyze_param_count_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
 
     # Create visualization: Top 20 correlations
     if len(param_results_df) > 0:
-        fig = plt.figure(figsize=(16, 12))
+        fig = plt.figure(figsize=(16, 15))
         top_20_plot = param_results_df_sorted.head(20).copy()
         
         # Sort by absolute value (ascending so highest abs appears on top in barh)
@@ -4038,7 +4038,7 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
         plt.yticks(range(len(bench_names_short)), bench_names_short, fontsize=20)
         plt.xlabel('R² Score', fontsize=18)
         plt.ylabel('Benchmark', fontsize=18)
-        plt.title('Regression Quality: R² Scores for Each Benchmark vs Magical Variable', fontsize=24, fontweight='bold')
+        plt.title('Regression Quality: R² Scores', fontsize=24, fontweight='bold')
         plt.grid(axis='x', alpha=0.3)
         
         # Add value labels on bars
@@ -4427,7 +4427,7 @@ def analyze_magical_var_vs_benchmarks(appended_benchmarks_df, OUTPUT_FOLDER):
 
     # Create visualization: Top 20 correlations
     if len(magical_results_df) > 0:
-        fig = plt.figure(figsize=(16, 12))
+        fig = plt.figure(figsize=(16, 15))
         top_20_plot = magical_results_df_sorted.head(20).copy()
         
         # Create labels
