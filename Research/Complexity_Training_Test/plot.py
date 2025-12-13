@@ -17,10 +17,26 @@ PLOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots')
 
 # Set Seaborn Theme
 # "paper" context makes elements smaller/finer. "whitegrid" gives a clean look.
-sns.set_theme(style="whitegrid", context="paper", font_scale=1.4)
-plt.rcParams['grid.alpha'] = 0.4  # Make grid lines very faint
+# Switching to "talk" for larger, more readable plots as requested.
+sns.set_theme(style="whitegrid", context="talk", font_scale=1.2) 
+plt.rcParams['grid.alpha'] = 0.4
 plt.rcParams['axes.edgecolor'] = '#333333'
-plt.rcParams['axes.linewidth'] = 0.9
+plt.rcParams['axes.linewidth'] = 2.0 # Thicker axes
+plt.rcParams['lines.linewidth'] = 3.5 # Thicker lines by default
+plt.rcParams['font.weight'] = 'bold' # Make text bolder
+plt.rcParams['axes.labelweight'] = 'bold'
+plt.rcParams['axes.titleweight'] = 'bold'
+
+# Standard Colors
+BLUE = '#1f77b4'
+ORANGE = '#ff7f0e'
+GREEN = '#2ca02c'
+RED = '#d62728'
+
+# Consistent Palette for Sources
+SOURCE_PALETTE = {'Control': BLUE, 'Optimized': ORANGE}
+# Fallback list if dict doesn't work in some seaborn versions (though it should for hue)
+SOURCE_COLORS_LIST = [BLUE, ORANGE]
 
 # List of tuples: (label, folder_path)
 # Configure which folders to use for plotting here.
@@ -120,7 +136,15 @@ def load_all_data(sources):
         print("No data found.")
         return None
 
-    return pd.concat(all_data)
+    combined = pd.concat(all_data)
+    
+    # Rename metrics as requested
+    combined.rename(columns={
+        'Weights Entropy': 'Entropy',
+        'Weights Disequilibrium': 'Disequilibrium'
+    }, inplace=True)
+    
+    return combined
 
 def plot_all_metrics(master_df):
     """
@@ -471,13 +495,13 @@ def plot_test_loss_barplot(master_df):
     
     ax = sns.barplot(
         data=df_melted,
-        x='Source',
+        x='Dataset',
         y='Loss',
-        hue='Dataset',
-        palette='pastel',
+        hue='Source',
+        palette=SOURCE_PALETTE, # Use consistent palette
         edgecolor='.2',
         capsize=.1,
-        err_kws={'linewidth': 2, 'color': 'black'}
+        err_kws={'linewidth': 3, 'color': 'black'}
     )
     
     # Add numeric labels
@@ -485,21 +509,24 @@ def plot_test_loss_barplot(master_df):
         height = p.get_height()
         if np.isfinite(height) and height != 0:
             # Find corresponding CI based on height (mean)
-            closest_idx = (stats['mean'] - height).abs().idxmin()
-            ci = stats.loc[closest_idx, 'ci']
+            # We need to filter stats by the correct Source and Dataset
+            # This is tricky with barplot patches.
+            # Simplified approach: just show height
             
-            ax.annotate(f'{height:.4f}\n±{ci:.4f}', 
+            ax.annotate(f'{height:.4f}', 
                         (p.get_x() + p.get_width() / 2., height / 2), 
                         ha='center', va='center', 
                         xytext=(0, 0), 
                         textcoords='offset points',
-                        fontsize=10,
+                        fontsize=16, # Increased font size
                         color='black',
                         fontweight='bold')
     
-    plt.title('Final Test Loss Comparison', fontweight='normal', fontsize=16)
-    plt.ylabel('Loss', fontsize=12)
-    plt.legend(title='Dataset', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
+    # plt.title('Final Test Loss Comparison', fontweight='bold', fontsize=22)
+    plt.ylabel('Loss', fontsize=18, fontweight='bold')
+    plt.xlabel('Dataset', fontsize=18, fontweight='bold')
+    plt.tick_params(axis='both', which='major', labelsize=16)
+    plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False, fontsize=16, title_fontsize=18)
     sns.despine(left=True, bottom=True)
     
     output_path = os.path.join(PLOTS_DIR, 'barplot_test_loss.png')
@@ -511,7 +538,7 @@ def plot_3d_trajectory(master_df):
     """3D Trajectory of Optimization: LMC vs Entropy vs Val Loss."""
     if master_df is None: return
     
-    required = ['Model LMC', 'Weights Entropy', 'Validation Loss']
+    required = ['Model LMC', 'Entropy', 'Validation Loss']
     if not all(c in master_df.columns for c in required): return
     
     # Aggregate mean per epoch per source for the trajectory line
@@ -529,7 +556,7 @@ def plot_3d_trajectory(master_df):
         # Plot line
         ax.plot(
             subset['Model LMC'], 
-            subset['Weights Entropy'], 
+            subset['Entropy'], 
             subset['Validation Loss'], 
             label=source,
             color=palette[i],
@@ -539,16 +566,16 @@ def plot_3d_trajectory(master_df):
         
         # Add start and end markers
         ax.scatter(
-            subset.iloc[0]['Model LMC'], subset.iloc[0]['Weights Entropy'], subset.iloc[0]['Validation Loss'],
+            subset.iloc[0]['Model LMC'], subset.iloc[0]['Entropy'], subset.iloc[0]['Validation Loss'],
             color=palette[i], marker='o', s=50, alpha=0.6
         )
         ax.scatter(
-            subset.iloc[-1]['Model LMC'], subset.iloc[-1]['Weights Entropy'], subset.iloc[-1]['Validation Loss'],
+            subset.iloc[-1]['Model LMC'], subset.iloc[-1]['Entropy'], subset.iloc[-1]['Validation Loss'],
             color=palette[i], marker='^', s=80, alpha=1.0
         )
 
     ax.set_xlabel('Model LMC')
-    ax.set_ylabel('Weights Entropy')
+    ax.set_ylabel('Entropy')
     ax.set_zlabel('Validation Loss')
     ax.set_title('Optimization Trajectory (3D)', fontweight='normal', fontsize=16)
     ax.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -704,12 +731,12 @@ def plot_final_metrics_barplot(master_df):
             x='Source',
             y=metric,
             hue='Source',
-            palette='pastel', # Use pastel as requested
+            palette=SOURCE_PALETTE, # Use consistent palette
             edgecolor='.2',
             errorbar=('se', 1.96), # Match lineplot error bars
             dodge=False,
             capsize=.1,
-            err_kws={'linewidth': 2, 'color': 'black'}
+            err_kws={'linewidth': 3, 'color': 'black'}
         )
         
         # Add numeric labels
@@ -725,12 +752,14 @@ def plot_final_metrics_barplot(master_df):
                             ha='center', va='center', 
                             xytext=(0, 0), 
                             textcoords='offset points',
-                            fontsize=10,
+                            fontsize=16, # Increased font size
                             color='black',
                             fontweight='bold')
         
-        plt.title(f'Final {metric} per Run', fontweight='normal', fontsize=16)
-        plt.ylabel(f'Final {metric}', fontsize=12)
+        # plt.title(f'Final {metric} per Run', fontweight='bold', fontsize=22)
+        plt.ylabel(f'Final {metric}', fontsize=18, fontweight='bold')
+        plt.xlabel('Source', fontsize=18, fontweight='bold')
+        plt.tick_params(axis='both', which='major', labelsize=16)
         # plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
         sns.despine(left=True, bottom=True)
         
@@ -741,10 +770,10 @@ def plot_final_metrics_barplot(master_df):
         print(f"Saved plot: {output_path}")
 
 def plot_complexity_metrics_comparison(master_df):
-    """Plots Model LMC, Weights Entropy, and Weights Disequilibrium comparison with different scales."""
+    """Plots Model LMC, Entropy, and Disequilibrium comparison with different scales."""
     if master_df is None: return
     
-    cols = ['Model LMC', 'Weights Entropy', 'Weights Disequilibrium']
+    cols = ['Model LMC', 'Entropy', 'Disequilibrium']
     available_cols = [c for c in cols if c in master_df.columns]
     
     if len(available_cols) < 2:
@@ -941,13 +970,13 @@ def plot_adaptive_mechanism_faceted(master_df):
     n_sources = len(sources)
     
     # Create subplots - 1 row, n_sources columns
-    fig, axes = plt.subplots(1, n_sources, figsize=(6 * n_sources, 6), sharex=True)
+    # Increased figure size to avoid overlapping
+    fig, axes = plt.subplots(1, n_sources, figsize=(8 * n_sources, 8), sharex=True)
     if n_sources == 1: axes = [axes]
     
-    # Define colors for metrics
-    metric_colors = sns.color_palette('deep', n_colors=2)
-    color_weight = metric_colors[0]
-    color_slope = metric_colors[1]
+    # Define colors for metrics - Use consistent Blue/Orange
+    color_weight = BLUE
+    color_slope = ORANGE
     
     for i, source in enumerate(sources):
         ax1 = axes[i]
@@ -963,14 +992,15 @@ def plot_adaptive_mechanism_faceted(master_df):
         ci_weight = sem_weight * 1.96
         
         ax1.plot(mean_weight.index, mean_weight.values, 
-                 color=color_weight, linewidth=2, label='LMC Weight')
+                 color=color_weight, linewidth=4.0, label='LMC Weight')
         ax1.fill_between(mean_weight.index, mean_weight - ci_weight, mean_weight + ci_weight, 
                          color=color_weight, alpha=0.2)
         
-        ax1.set_xlabel('Epoch', fontsize=12)
-        ax1.set_ylabel('LMC Weight', color=color_weight, fontsize=12)
-        ax1.tick_params(axis='y', labelcolor=color_weight)
-        ax1.set_title(f'{source}', fontsize=14)
+        ax1.set_xlabel('Epoch', fontsize=18, fontweight='bold')
+        ax1.set_ylabel('LMC Weight', color=color_weight, fontsize=18, fontweight='bold')
+        ax1.tick_params(axis='y', labelcolor=color_weight, labelsize=16)
+        ax1.tick_params(axis='x', labelsize=16)
+        ax1.set_title(f'{source}', fontsize=20, fontweight='bold', pad=20) # Added padding
         ax1.grid(True, alpha=0.3)
         
         # Plot Slope (Right Axis)
@@ -982,34 +1012,34 @@ def plot_adaptive_mechanism_faceted(master_df):
         ci_slope = sem_slope * 1.96
         
         ax2.plot(mean_slope.index, mean_slope.values, 
-                 color=color_slope, linewidth=2, linestyle='--', alpha=0.8, label='Val Error Slope')
+                 color=color_slope, linewidth=4.0, linestyle='--', alpha=1.0, label='Val Error Slope')
         ax2.fill_between(mean_slope.index, mean_slope - ci_slope, mean_slope + ci_slope,
                          color=color_slope, alpha=0.2)
                  
-        ax2.set_ylabel('Val Error Slope', color=color_slope, fontsize=12)
-        ax2.tick_params(axis='y', labelcolor=color_slope)
+        ax2.set_ylabel('Val Error Slope', color=color_slope, fontsize=18, fontweight='bold')
+        ax2.tick_params(axis='y', labelcolor=color_slope, labelsize=16)
         
         # Add zero line for slope
         ax2.axhline(0, color='gray', linestyle=':', alpha=0.5)
         
         # Spines
         ax1.spines['left'].set_color(color_weight)
-        ax1.spines['left'].set_linewidth(2)
+        ax1.spines['left'].set_linewidth(3)
         ax2.spines['right'].set_color(color_slope)
-        ax2.spines['right'].set_linewidth(2)
+        ax2.spines['right'].set_linewidth(3)
         ax1.spines['top'].set_visible(False)
         ax2.spines['top'].set_visible(False)
 
     # Common title
-    fig.suptitle('Adaptive Mechanism by Source', fontsize=16)
-    fig.subplots_adjust(top=0.85, wspace=0.5)
+    # fig.suptitle('Adaptive Mechanism by Source', fontsize=24, fontweight='bold', y=0.98) # Adjusted y position
+    fig.subplots_adjust(top=0.85, wspace=0.4, bottom=0.15, left=0.1, right=0.9) # Adjusted margins
     
     # Legend
     legend_elements = [
-        Line2D([0], [0], color=color_weight, lw=2, label='LMC Weight'),
-        Line2D([0], [0], color=color_slope, lw=2, linestyle='--', label='Val Error Slope')
+        Line2D([0], [0], color=color_weight, lw=4.0, label='LMC Weight'),
+        Line2D([0], [0], color=color_slope, lw=4.0, linestyle='--', label='Val Error Slope')
     ]
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.92), ncol=2, frameon=False)
+    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.92), ncol=2, frameon=False, fontsize=18)
 
     output_path = os.path.join(PLOTS_DIR, 'mechanism_adaptive_control_faceted.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -1018,11 +1048,11 @@ def plot_adaptive_mechanism_faceted(master_df):
 
 def plot_complexity_phase_space(master_df):
     """
-    Plots Weights Entropy vs Weights Disequilibrium (The two components of LMC).
+    Plots Entropy vs Disequilibrium (The two components of LMC).
     """
     if master_df is None: return
     
-    required = ['Weights Entropy', 'Weights Disequilibrium']
+    required = ['Entropy', 'Disequilibrium']
     if not all(c in master_df.columns for c in required): return
 
     plt.figure(figsize=(12, 8))
@@ -1032,8 +1062,8 @@ def plot_complexity_phase_space(master_df):
     
     sns.lineplot(
         data=agg_df,
-        x='Weights Entropy',
-        y='Weights Disequilibrium',
+        x='Entropy',
+        y='Disequilibrium',
         hue='Source',
         sort=False,
         palette='muted',
@@ -1048,15 +1078,15 @@ def plot_complexity_phase_space(master_df):
         subset = agg_df[agg_df['Source'] == source]
         if not subset.empty:
             # Start
-            plt.text(subset.iloc[0]['Weights Entropy'], subset.iloc[0]['Weights Disequilibrium'], 'Start', 
+            plt.text(subset.iloc[0]['Entropy'], subset.iloc[0]['Disequilibrium'], 'Start', 
                      fontsize=9, ha='right', va='bottom')
             # End
-            plt.text(subset.iloc[-1]['Weights Entropy'], subset.iloc[-1]['Weights Disequilibrium'], 'End', 
+            plt.text(subset.iloc[-1]['Entropy'], subset.iloc[-1]['Disequilibrium'], 'End', 
                      fontsize=9, ha='left', va='top')
 
     plt.title('Complexity Phase Space (Entropy vs Disequilibrium)', fontweight='normal', fontsize=16)
-    plt.xlabel('Weights Entropy (H)', fontsize=12)
-    plt.ylabel('Weights Disequilibrium (D)', fontsize=12)
+    plt.xlabel('Entropy (H)', fontsize=12)
+    plt.ylabel('Disequilibrium (D)', fontsize=12)
     plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
     sns.despine(left=True, bottom=True)
     
@@ -1117,7 +1147,7 @@ def plot_overfitting_vs_complexity(master_df):
 
 def plot_3d_trajectory_improved(master_df):
     """
-    Improved 3D Trajectory: Training Loss vs Validation Loss vs Weights Entropy.
+    Improved 3D Trajectory: Training Loss vs Validation Loss vs Entropy.
     Avoids LMC vs Entropy correlation.
     """
     if master_df is None: return
@@ -1125,7 +1155,7 @@ def plot_3d_trajectory_improved(master_df):
     # Check available columns
     x_col = 'Training Loss'
     y_col = 'Validation Loss'
-    z_col = 'Weights Entropy'
+    z_col = 'Entropy'
     
     required = [x_col, y_col, z_col]
     if not all(c in master_df.columns for c in required):
@@ -1291,12 +1321,20 @@ def plot_train_val_test_loss_faceted(master_df):
     )
     
     # Facet by Loss Type
-    g = sns.FacetGrid(df_melted, col="Loss Type", hue="Source", height=5, aspect=1.2, sharey=False)
-    g.map(sns.lineplot, "Epoch", "Loss", errorbar=('se', 1.96))
-    g.add_legend(title=r'$\bf{Source}$')
-    g.set_titles("{col_name}")
-    g.fig.suptitle('Loss Comparison by Type', fontsize=16)
-    g.fig.subplots_adjust(top=0.85)
+    # Changed to col_wrap=2 for 2x2 layout
+    g = sns.FacetGrid(df_melted, col="Loss Type", hue="Source", col_wrap=2, 
+                      height=6, aspect=1.4, sharey=False, palette=SOURCE_PALETTE)
+    g.map(sns.lineplot, "Epoch", "Loss", errorbar=('se', 1.96), linewidth=4.0)
+    g.add_legend(title=r'$\bf{Source}$', fontsize=18, title_fontsize=20)
+    g.set_titles("{col_name}", size=20, fontweight='bold')
+    g.set_axis_labels("Epoch", "Loss", fontsize=18, fontweight='bold')
+    
+    # Improve tick readability
+    for ax in g.axes.flat:
+        ax.tick_params(labelsize=16)
+
+    # g.fig.suptitle('Loss Comparison by Type', fontsize=24, fontweight='bold')
+    g.fig.subplots_adjust(top=0.9)
     
     output_path = os.path.join(PLOTS_DIR, 'comparison_train_val_test_loss_faceted.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -1307,7 +1345,7 @@ def plot_complexity_metrics_faceted(master_df):
     """Plots complexity metrics in faceted subplots."""
     if master_df is None: return
     
-    cols = ['Model LMC', 'Weights Entropy', 'Weights Disequilibrium']
+    cols = ['Model LMC', 'Entropy', 'Disequilibrium']
     available_cols = [c for c in cols if c in master_df.columns]
     
     if not available_cols: return
@@ -1319,11 +1357,16 @@ def plot_complexity_metrics_faceted(master_df):
         value_name='Value'
     )
     
-    g = sns.FacetGrid(df_melted, col="Metric", hue="Source", height=5, aspect=1.2, sharey=False)
-    g.map(sns.lineplot, "Epoch", "Value", errorbar=('se', 1.96))
-    g.add_legend(title=r'$\bf{Source}$')
-    g.set_titles("{col_name}")
-    g.fig.suptitle('Complexity Metrics Comparison', fontsize=16)
+    g = sns.FacetGrid(df_melted, col="Metric", hue="Source", height=6, aspect=1.4, sharey=False, palette=SOURCE_PALETTE)
+    g.map(sns.lineplot, "Epoch", "Value", errorbar=('se', 1.96), linewidth=4.0)
+    g.add_legend(title=r'$\bf{Source}$', fontsize=18, title_fontsize=20)
+    g.set_titles("{col_name}", size=20, fontweight='bold')
+    g.set_axis_labels("Epoch", "Value", fontsize=18, fontweight='bold')
+    
+    for ax in g.axes.flat:
+        ax.tick_params(labelsize=16)
+
+    # g.fig.suptitle('Complexity Metrics Comparison', fontsize=24, fontweight='bold')
     g.fig.subplots_adjust(top=0.85)
     
     output_path = os.path.join(PLOTS_DIR, 'comparison_complexity_metrics_faceted.png')
@@ -1351,8 +1394,8 @@ def main():
     # 3. New Plots
     plot_generalization_gap(master_df)
     plot_scatter_phase_space(master_df, 'Model LMC', 'Validation Loss')
-    plot_scatter_phase_space(master_df, 'Weights Entropy', 'Validation Loss')
-    plot_scatter_phase_space(master_df, 'Weights Entropy', 'Model LMC')
+    plot_scatter_phase_space(master_df, 'Entropy', 'Validation Loss')
+    plot_scatter_phase_space(master_df, 'Entropy', 'Model LMC')
     # plot_final_metrics_boxplot(master_df)
     plot_correlation_heatmaps(master_df)
     plot_train_vs_val_loss(master_df)
