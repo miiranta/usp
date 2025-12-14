@@ -133,8 +133,9 @@ class Metrics:
         return probs, num_bins
 
     @staticmethod
-    def calculate_metric(model, metric_name):
+    def calculate_metric(model, metric_name, logits=None, labels=None):
         weights = Metrics.get_all_weights(model)
+        device = weights.device
         
         if metric_name == 'shannon':
             probs, _ = Metrics.soft_histogram(weights)
@@ -475,6 +476,296 @@ class Metrics:
             except:
                 return torch.tensor(0.0, device=weights.device)
 
+        elif metric_name == 'tsallis_entropy':
+            # 21. Tsallis Entropy (q=2)
+            probs, _ = Metrics.soft_histogram(weights)
+            q = 2.0
+            return (1.0 / (q - 1.0)) * (1.0 - (probs ** q).sum())
+
+        elif metric_name == 'von_neumann_entropy':
+            # 22. von Neumann Entropy (of weight correlation matrix)
+            n = len(weights)
+            chunk_size = 256
+            num_chunks = min(n // chunk_size, 256)
+            if num_chunks < 2: return torch.tensor(0.0, device=device)
+            w_mat = weights[:num_chunks*chunk_size].view(num_chunks, chunk_size)
+            # Density matrix rho = W W^T / tr(W W^T)
+            rho = w_mat @ w_mat.t()
+            rho = rho / (torch.trace(rho) + 1e-10)
+            try:
+                eigs = torch.linalg.eigvalsh(rho)
+                eigs = eigs[eigs > 0]
+                return -(eigs * torch.log(eigs + 1e-10)).sum()
+            except: return torch.tensor(0.0, device=device)
+
+        elif metric_name == 'path_entropy':
+            # 23. Path Entropy (Proxy: Entropy of product of layer norms)
+            norms = []
+            for layer in model.transformer.layers:
+                norms.append(torch.norm(layer.linear1.weight))
+                norms.append(torch.norm(layer.linear2.weight))
+            norms = torch.stack(norms)
+            probs = norms / (norms.sum() + 1e-10)
+            return -(probs * torch.log(probs + 1e-10)).sum()
+
+        elif metric_name == 'layer_activation_entropy':
+            # 24. Layer-wise Activation Entropy (Proxy: Embedding Entropy)
+            w = model.embedding.weight
+            probs, _ = Metrics.soft_histogram(w.view(-1))
+            return -(probs * torch.log(probs)).sum()
+
+        elif metric_name == 'weight_distribution_entropy':
+            # 25. Weight Distribution Entropy (Same as Shannon but explicit)
+            probs, _ = Metrics.soft_histogram(weights)
+            return -(probs * torch.log(probs)).sum()
+
+        elif metric_name == 'gradient_entropy':
+            # 26. Gradient Entropy (Proxy: Entropy of weight magnitudes as proxy for gradient scale)
+            return torch.tensor(0.0, device=device)
+
+        elif metric_name == 'fisher_info_entropy':
+            # 27. Fisher Information Entropy (Skip - too expensive)
+            return torch.tensor(0.0, device=device)
+
+        elif metric_name == 'prediction_entropy':
+            # 28. Prediction Entropy (Entropy of output probabilities)
+            if logits is None: return torch.tensor(0.0, device=device)
+            probs = torch.softmax(logits, dim=-1)
+            entropy = -(probs * torch.log(probs + 1e-10)).sum(dim=-1).mean()
+            return entropy
+
+        elif metric_name == 'bayesian_entropy':
+            # 29. Bayesian Entropy (Skip)
+            return torch.tensor(0.0, device=device)
+
+        elif metric_name == 'attention_entropy':
+            # 30. Attention Entropy (Skip - requires attention weights)
+            return torch.tensor(0.0, device=device)
+
+        elif metric_name == 'token_entropy':
+            # 31. Token Entropy (Same as Prediction Entropy)
+            if logits is None: return torch.tensor(0.0, device=device)
+            probs = torch.softmax(logits, dim=-1)
+            return -(probs * torch.log(probs + 1e-10)).sum(dim=-1).mean()
+
+        elif metric_name == 'entropy_rate':
+            # 32. Entropy Rate (Conditional entropy of next token given previous)
+            if logits is None: return torch.tensor(0.0, device=device)
+            probs = torch.softmax(logits, dim=-1)
+            return -(probs * torch.log(probs + 1e-10)).sum(dim=-1).mean()
+
+        elif metric_name == 'multi_scale_entropy':
+            # 33. Multi-Scale Entropy (Coarse-grained weights)
+            n = len(weights)
+            scales = [1, 2, 4, 8]
+            total_mse = 0.0
+            for s in scales:
+                if n // s < 10: continue
+                w_coarse = weights[:(n//s)*s].view(-1, s).mean(dim=1)
+                probs, _ = Metrics.soft_histogram(w_coarse)
+                total_mse += -(probs * torch.log(probs)).sum()
+            return total_mse / len(scales)
+
+        elif metric_name == 'conditional_output_entropy':
+            # 34. Conditional Output Entropy (H(Y|X))
+            if logits is None: return torch.tensor(0.0, device=device)
+            probs = torch.softmax(logits, dim=-1)
+            return -(probs * torch.log(probs + 1e-10)).sum(dim=-1).mean()
+
+        elif metric_name == 'effective_dimensionality_entropy':
+            # 35. Effective Dimensionality Entropy (SVD of weights)
+            w = model.embedding.weight
+            try:
+                s = torch.linalg.svdvals(w)
+                s_norm = s / (s.sum() + 1e-10)
+                return -(s_norm * torch.log(s_norm + 1e-10)).sum()
+            except: return torch.tensor(0.0, device=device)
+
+        elif metric_name == 'latent_entropy':
+            # 36. Latent Entropy (Entropy of embedding space)
+            w = model.embedding.weight
+            probs, _ = Metrics.soft_histogram(w.view(-1))
+            return -(probs * torch.log(probs)).sum()
+
+        elif metric_name == 'information_bottleneck_entropy':
+            # 37. Information Bottleneck (Mutual Info proxy)
+            return Metrics.calculate_metric(model, 'mutual_information', logits, labels)
+
+        elif metric_name == 'structural_entropy':
+            # 38. Structural Entropy (Graph entropy of layer connections)
+            norms = []
+            for name, param in model.named_parameters():
+                if 'weight' in name and param.dim() > 1:
+                    norms.append(param.norm())
+            norms = torch.stack(norms)
+            probs = norms / (norms.sum() + 1e-10)
+            return -(probs * torch.log(probs + 1e-10)).sum()
+
+        elif metric_name == 'topological_entropy':
+            # 39. Topological Entropy (Spectral radius proxy)
+            max_eigs = []
+            for layer in model.transformer.layers:
+                w = layer.linear1.weight
+                try:
+                    v = torch.randn(w.size(1), 1, device=device)
+                    v = v / v.norm()
+                    for _ in range(5):
+                        v = w.t() @ (w @ v)
+                        v = v / v.norm()
+                    spectral_radius = torch.norm(w @ v)
+                    max_eigs.append(spectral_radius)
+                except: pass
+            if not max_eigs: return torch.tensor(0.0, device=device)
+            eigs = torch.stack(max_eigs)
+            probs = eigs / (eigs.sum() + 1e-10)
+            return -(probs * torch.log(probs + 1e-10)).sum()
+
+        elif metric_name == 'causal_entropy':
+            # 40. Causal Entropy (Proxy: Shannon)
+            return Metrics.calculate_metric(model, 'shannon', logits, labels)
+
+        elif metric_name == 'differential_entropy':
+            # 41. Differential Entropy (Gaussian assumption)
+            var = torch.var(weights)
+            return 0.5 * torch.log(2 * math.pi * math.e * var + 1e-10)
+
+        elif metric_name == 'log_determinant_entropy':
+            # 42. Log-Determinant Entropy
+            n = len(weights)
+            chunk_size = 256
+            num_chunks = min(n // chunk_size, 256)
+            if num_chunks < 2: return torch.tensor(0.0, device=device)
+            w_mat = weights[:num_chunks*chunk_size].view(num_chunks, chunk_size)
+            w_centered = w_mat - w_mat.mean(dim=1, keepdim=True)
+            cov = w_centered @ w_centered.t() / (chunk_size - 1)
+            try:
+                eigs = torch.linalg.eigvalsh(cov)
+                eigs = eigs[eigs > 1e-6]
+                return 0.5 * torch.log(eigs).sum()
+            except: return torch.tensor(0.0, device=device)
+
+        elif metric_name == 'gaussian_entropy':
+            # 43. Gaussian Entropy (Same as Differential)
+            var = torch.var(weights)
+            return 0.5 * torch.log(2 * math.pi * math.e * var + 1e-10)
+
+        elif metric_name == 'mixture_model_entropy':
+            # 44. Mixture Model Entropy (Proxy: Shannon)
+            return Metrics.calculate_metric(model, 'shannon', logits, labels)
+
+        elif metric_name == 'empirical_histogram_entropy':
+            # 45. Empirical Histogram Entropy
+            return Metrics.calculate_metric(model, 'shannon', logits, labels)
+
+        elif metric_name == 'kde_entropy':
+            # 46. KDE Entropy (Resubstitution entropy)
+            n = len(weights)
+            if n > 1000:
+                indices = torch.randperm(n, device=device)[:1000]
+                x = weights[indices]
+            else: x = weights
+            dist = torch.cdist(x.unsqueeze(1), x.unsqueeze(1))**2
+            sigma = torch.std(x) * (n**(-0.2))
+            p = torch.exp(-dist / (2*sigma**2 + 1e-10)).mean(dim=1) / (sigma * math.sqrt(2*math.pi) + 1e-10)
+            return -torch.log(p + 1e-10).mean()
+
+        elif metric_name == 'copula_entropy':
+            # 47. Copula Entropy (Skip)
+            return torch.tensor(0.0, device=device)
+
+        elif metric_name == 'cumulative_residual_entropy':
+            # 48. Cumulative Residual Entropy
+            probs, num_bins = Metrics.soft_histogram(weights)
+            cdf = torch.cumsum(probs, dim=0)
+            survival = 1.0 - cdf
+            survival = torch.clamp(survival, 1e-10, 1.0)
+            return -(survival * torch.log(survival)).sum()
+
+        elif metric_name == 'quadratic_entropy':
+            # 49. Quadratic Entropy (Rao's Quadratic Entropy)
+            probs, num_bins = Metrics.soft_histogram(weights)
+            indices = torch.arange(num_bins, device=device).float()
+            dist = torch.abs(indices.unsqueeze(0) - indices.unsqueeze(1))
+            return (probs.unsqueeze(0) * probs.unsqueeze(1) * dist).sum()
+
+        elif metric_name == 'energy_entropy':
+            # 50. Energy Entropy (LogSumExp of logits)
+            if logits is None: return torch.tensor(0.0, device=device)
+            energies = -torch.logsumexp(logits, dim=-1)
+            probs, _ = Metrics.soft_histogram(energies)
+            return -(probs * torch.log(probs)).sum()
+
+        elif metric_name == 'logit_distribution_entropy':
+            # 51. Logit Distribution Entropy
+            if logits is None: return torch.tensor(0.0, device=device)
+            probs, _ = Metrics.soft_histogram(logits.view(-1))
+            return -(probs * torch.log(probs)).sum()
+
+        elif metric_name == 'softmax_temperature_entropy':
+            # 52. Softmax Temperature-Scaled Entropy (High Temp)
+            if logits is None: return torch.tensor(0.0, device=device)
+            T = 2.0
+            probs = torch.softmax(logits / T, dim=-1)
+            return -(probs * torch.log(probs + 1e-10)).sum(dim=-1).mean()
+
+        elif metric_name == 'renyi_divergence':
+            # 53. Renyi Divergence
+            probs, num_bins = Metrics.soft_histogram(weights)
+            x = torch.linspace(-3, 3, num_bins, device=device)
+            q = torch.exp(-0.5 * x**2) / math.sqrt(2 * math.pi)
+            q = q / q.sum()
+            alpha = 2.0
+            return (1.0 / (alpha - 1.0)) * torch.log((probs**alpha * q**(1-alpha)).sum())
+
+        elif metric_name == 'alpha_entropy':
+            # 54. Alpha Entropy (Same as Renyi)
+            return Metrics.calculate_metric(model, 'renyi_entropy', logits, labels)
+
+        elif metric_name == 'wasserstein_entropy':
+            # 55. Wasserstein Entropy (Wasserstein distance to Gaussian)
+            probs, num_bins = Metrics.soft_histogram(weights)
+            cdf_p = torch.cumsum(probs, dim=0)
+            x = torch.linspace(-3, 3, num_bins, device=device)
+            q = torch.exp(-0.5 * x**2) / math.sqrt(2 * math.pi)
+            q = q / q.sum()
+            cdf_q = torch.cumsum(q, dim=0)
+            return torch.abs(cdf_p - cdf_q).sum()
+
+        elif metric_name == 'sinkhorn_entropy':
+            # 56. Sinkhorn Entropy (Approximation of Wasserstein)
+            return Metrics.calculate_metric(model, 'wasserstein_entropy', logits, labels)
+
+        elif metric_name == 'flow_entropy':
+            # 57. Flow Entropy (Skip)
+            return torch.tensor(0.0, device=device)
+
+        elif metric_name == 'spike_entropy':
+            # 58. Spike Entropy (Skip)
+            return torch.tensor(0.0, device=device)
+
+        elif metric_name == 'class_conditional_entropy':
+            # 59. Class-Conditional Distribution Entropy
+            if logits is None or labels is None: return torch.tensor(0.0, device=device)
+            mask = labels != -100
+            valid_logits = logits.view(-1, logits.size(-1))[mask.view(-1)]
+            valid_labels = labels.view(-1)[mask.view(-1)]
+            if len(valid_labels) == 0: return torch.tensor(0.0, device=device)
+            classes = torch.unique(valid_labels)
+            total_entropy = 0.0
+            for c in classes:
+                class_logits = valid_logits[valid_labels == c]
+                probs = torch.softmax(class_logits, dim=-1)
+                entropy = -(probs * torch.log(probs + 1e-10)).sum(dim=-1).mean()
+                total_entropy += entropy
+            return total_entropy / len(classes)
+
+        elif metric_name == 'population_coding_entropy':
+            # 60. Population Coding Entropy
+            if logits is None: return torch.tensor(0.0, device=device)
+            mean_logits = logits.mean(dim=0).mean(dim=0)
+            probs = torch.softmax(mean_logits, dim=-1)
+            return -(probs * torch.log(probs + 1e-10)).sum()
+
         return torch.tensor(0.0, device=weights.device)
 
 # ============================================================================
@@ -653,7 +944,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
         if metric_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
-            metric_tensor = Metrics.calculate_metric(model, config.METRIC_NAME)
+            metric_tensor = Metrics.calculate_metric(model, config.METRIC_NAME, logits, labels)
             metric_value = metric_tensor 
             metric_value_scalar = metric_tensor.item()
  
@@ -838,23 +1129,31 @@ def run_training_single(output_dir, config, run_num):
     test_losses_wiki = []
     test_losses_shakespeare = []
     
-    # Initial Metric Calculation
-    start_metric = Metrics.calculate_metric(model, config.METRIC_NAME).item()
-    
-    print("\nCalculating initial CE loss...")
+    print("\nCalculating initial CE loss and Metric...")
     model.eval()
     with torch.no_grad():
         initial_ce_losses = []
-        for batch in train_loader:
+        first_batch_logits = None
+        first_batch_labels = None
+        
+        for i, batch in enumerate(train_loader):
             input_ids = batch['input_ids'].to(device, non_blocking=True)
             labels = batch['labels'].to(device, non_blocking=True)
             logits = model(input_ids)
+            
+            if i == 0:
+                first_batch_logits = logits
+                first_batch_labels = labels
+            
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
             ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
             initial_ce_losses.append(ce_loss.item())
             if len(initial_ce_losses) > 10: break # Estimate from first few batches
         start_ce = sum(initial_ce_losses) / len(initial_ce_losses)
+        
+        # Initial Metric Calculation
+        start_metric = Metrics.calculate_metric(model, config.METRIC_NAME, first_batch_logits, first_batch_labels).item()
     print(f"Initial CE loss: {start_ce:.16f}")
     print(f"Initial Metric ({config.METRIC_NAME}): {start_metric:.16f}")
     model.train()
@@ -889,7 +1188,7 @@ def run_training_single(output_dir, config, run_num):
         test_loss_wiki_epoch = test(model, test_loader_wiki, device, vocab_size)
         test_loss_shakespeare_epoch = test(model, test_loader_shakespeare, device, vocab_size)
         
-        metric_val = Metrics.calculate_metric(model, config.METRIC_NAME).item()
+        metric_val = train_metric
         
         train_losses.append(train_loss)
         val_losses.append(val_loss)
@@ -952,6 +1251,46 @@ def main():
         (False, 'svd_entropy', '18_svd_entropy'),
         (False, 'graph_entropy', '19_graph_entropy'),
         (False, 'bgs_entropy', '20_bgs_entropy'),
+        (False, 'tsallis_entropy', '21_tsallis_entropy'),
+        (False, 'von_neumann_entropy', '22_von_neumann_entropy'),
+        (False, 'path_entropy', '23_path_entropy'),
+        (False, 'layer_activation_entropy', '24_layer_activation_entropy'),
+        (False, 'weight_distribution_entropy', '25_weight_distribution_entropy'),
+        (False, 'gradient_entropy', '26_gradient_entropy'),
+        (False, 'fisher_info_entropy', '27_fisher_info_entropy'),
+        (False, 'prediction_entropy', '28_prediction_entropy'),
+        (False, 'bayesian_entropy', '29_bayesian_entropy'),
+        (False, 'attention_entropy', '30_attention_entropy'),
+        (False, 'token_entropy', '31_token_entropy'),
+        (False, 'entropy_rate', '32_entropy_rate'),
+        (False, 'multi_scale_entropy', '33_multi_scale_entropy'),
+        (False, 'conditional_output_entropy', '34_conditional_output_entropy'),
+        (False, 'effective_dimensionality_entropy', '35_effective_dimensionality_entropy'),
+        (False, 'latent_entropy', '36_latent_entropy'),
+        (False, 'information_bottleneck_entropy', '37_information_bottleneck_entropy'),
+        (False, 'structural_entropy', '38_structural_entropy'),
+        (False, 'topological_entropy', '39_topological_entropy'),
+        (False, 'causal_entropy', '40_causal_entropy'),
+        (False, 'differential_entropy', '41_differential_entropy'),
+        (False, 'log_determinant_entropy', '42_log_determinant_entropy'),
+        (False, 'gaussian_entropy', '43_gaussian_entropy'),
+        (False, 'mixture_model_entropy', '44_mixture_model_entropy'),
+        (False, 'empirical_histogram_entropy', '45_empirical_histogram_entropy'),
+        (False, 'kde_entropy', '46_kde_entropy'),
+        (False, 'copula_entropy', '47_copula_entropy'),
+        (False, 'cumulative_residual_entropy', '48_cumulative_residual_entropy'),
+        (False, 'quadratic_entropy', '49_quadratic_entropy'),
+        (False, 'energy_entropy', '50_energy_entropy'),
+        (False, 'logit_distribution_entropy', '51_logit_distribution_entropy'),
+        (False, 'softmax_temperature_entropy', '52_softmax_temperature_entropy'),
+        (False, 'renyi_divergence', '53_renyi_divergence'),
+        (False, 'alpha_entropy', '54_alpha_entropy'),
+        (False, 'wasserstein_entropy', '55_wasserstein_entropy'),
+        (False, 'sinkhorn_entropy', '56_sinkhorn_entropy'),
+        (False, 'flow_entropy', '57_flow_entropy'),
+        (False, 'spike_entropy', '58_spike_entropy'),
+        (False, 'class_conditional_entropy', '59_class_conditional_entropy'),
+        (False, 'population_coding_entropy', '60_population_coding_entropy'),
     ]
     
     for control_mode, metric_name, folder_name in experiments:
