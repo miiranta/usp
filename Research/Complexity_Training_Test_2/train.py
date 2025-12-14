@@ -30,13 +30,13 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 256 
-    EPOCHS = 50
+    EPOCHS = 20
     SEQ_LENGTH = 32
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = None
+    MAX_SAMPLES = 1000
     
     # Number of runs
-    NUM_OF_RUN_PER_CALL = 3
+    NUM_OF_RUN_PER_CALL = 1
     
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1 
