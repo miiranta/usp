@@ -750,17 +750,29 @@ def save_results_to_csv(output_dir, train_losses, val_losses, metric_values, slo
         writer = csv.writer(f)
         
         writer.writerow(['Metric', 'Value'])
+        writer.writerow(['=== WikiText-2 Test Results ===', ''])
         writer.writerow(['Test Loss (WikiText-2)', f'{test_losses_wiki[-1]:.16f}'])
+        writer.writerow([])
+        writer.writerow(['=== Tiny-Shakespeare Test Results ===', ''])
         writer.writerow(['Test Loss (Tiny-Shakespeare)', f'{test_losses_shakespeare[-1]:.16f}'])
+        writer.writerow([])
+        writer.writerow(['=== Training Summary ===', ''])
+        writer.writerow(['Final Training Loss', f'{train_losses[-1]:.16f}'])
+        writer.writerow(['Final Validation Loss', f'{val_losses[-1]:.16f}'])
         writer.writerow(['Final Metric Value', f'{metric_values[-1]:.16f}'])
+        writer.writerow(['Final Val Error Slope', f'{slope_values[-1]:.16f}'])
+        writer.writerow(['Final LMC Weight', f'{lmc_weight_values[-1]:.3f}'])
+        writer.writerow(['Run Number', f'{run_num}'])
         writer.writerow([])
         
-        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Metric Value', 'Slope', 'Weight'])
+        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Test Loss Wiki', 'Test Loss Shakespeare', 'Metric Value', 'Slope', 'Weight'])
         for epoch in range(len(train_losses)):
             writer.writerow([
                 epoch + 1,
                 f'{train_losses[epoch]:.16f}',
                 f'{val_losses[epoch]:.16f}',
+                f'{test_losses_wiki[epoch]:.16f}',
+                f'{test_losses_shakespeare[epoch]:.16f}',
                 f'{metric_values[epoch]:.16f}',
                 f'{slope_values[epoch]:.16f}',
                 f'{lmc_weight_values[epoch]:.3f}'
