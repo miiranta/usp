@@ -379,36 +379,47 @@ class Metrics:
 
             elif metric_name == 'permutation_entropy':
                 # Soft Permutation Entropy
-                # Use soft ranking?
-                # Or just use the values of sorted indices?
-                # Let's use a simpler proxy: Entropy of differences?
-                # Or "Spatial Permutation Entropy"
-                # We'll use the distribution of ordinal patterns of length 3
+                # We need a contiguous sequence to measure order patterns
+                n = len(weights)
+                limit = min(n, 10000)
+                x_seq = weights[:limit]
+                
                 m = 3
-                N = len(x)
-                windows = x.unfold(0, m, 1) # [W, 3]
-                # We need to classify each window into one of m! permutations
-                # Soft classification?
-                # There are 6 permutations for m=3.
-                # 012, 021, 102, 120, 201, 210
-                # We can compute scores for each permutation based on soft comparisons
-                # s(a<b) = sigmoid(k*(b-a))
+                if len(x_seq) < m: return torch.tensor(0.0, device=weights.device)
                 
+                windows = x_seq.unfold(0, m, 1) # [W, 3]
                 w0, w1, w2 = windows[:,0], windows[:,1], windows[:,2]
-                p01 = torch.sigmoid(100*(w1-w0))
-                p12 = torch.sigmoid(100*(w2-w1))
-                p02 = torch.sigmoid(100*(w2-w0))
                 
-                # Probabilities of orderings
-                # 012: w0<w1<w2 -> p01 * p12 * p02
-                prob_012 = p01 * p12 * p02
-                # prob_210 = (1-p01) * (1-p12) * (1-p02)
-                # ... and so on.
-                # This is getting complicated to cover all 6.
-                # Let's use a simplified proxy: Entropy of the sorted values? No.
-                # Let's return 0.0 if too complex to implement reliably in one go.
-                # Or use Shannon entropy of the weights as fallback.
-                return -(probs * torch.log(probs)).sum() # Fallback to Shannon
+                k = 100.0
+                p01 = torch.sigmoid(k * (w1 - w0))
+                p12 = torch.sigmoid(k * (w2 - w1))
+                p02 = torch.sigmoid(k * (w2 - w0))
+                
+                # Complements
+                q01 = 1.0 - p01
+                q12 = 1.0 - p12
+                q02 = 1.0 - p02
+                
+                # 6 Permutations probabilities (approximate)
+                # 012: 0<1<2
+                s_012 = p01 * p12
+                # 021: 0<2<1
+                s_021 = p02 * q12
+                # 102: 1<0<2
+                s_102 = q01 * p02
+                # 120: 1<2<0
+                s_120 = p12 * q02
+                # 201: 2<0<1
+                s_201 = q02 * p01
+                # 210: 2<1<0
+                s_210 = q12 * q01
+                
+                scores = torch.stack([s_012, s_021, s_102, s_120, s_201, s_210], dim=1)
+                probs_window = scores / (scores.sum(dim=1, keepdim=True) + 1e-10)
+                global_counts = probs_window.sum(dim=0)
+                global_probs = global_counts / (global_counts.sum() + 1e-10)
+                
+                return -(global_probs * torch.log(global_probs + 1e-10)).sum()
 
         elif metric_name == 'diffusion_spectral_entropy':
             # Subsample
@@ -886,7 +897,8 @@ class Metrics:
             loss2 = nn.CrossEntropyLoss(ignore_index=-100)(l2.view(-1, l2.size(-1)), y2.view(-1))
             
             params = [p for p in model.parameters() if p.requires_grad]
-            grads1 = torch.autograd.grad(loss1, params, retain_graph=True)
+            # Both gradient computations need create_graph=True to be differentiable
+            grads1 = torch.autograd.grad(loss1, params, create_graph=True)
             grads2 = torch.autograd.grad(loss2, params, create_graph=True)
             
             g1 = torch.cat([g.view(-1) for g in grads1])
@@ -1031,10 +1043,13 @@ class Metrics:
             r_vals = torch.logspace(-1, 1, 10, device=device)
             c_vals = []
             for r in r_vals:
-                c = (dist < r).float().mean()
+                # Soft count: sigmoid(k * (r - dist))
+                # k controls sharpness.
+                k = 10.0
+                c = torch.sigmoid(k * (r - dist)).mean()
                 c_vals.append(c)
             c_vals = torch.stack(c_vals)
-            mask = c_vals > 0
+            mask = c_vals > 1e-5 # Avoid log(0)
             if mask.sum() < 2: return torch.tensor(0.0, device=device)
             log_c = torch.log(c_vals[mask])
             log_r = torch.log(r_vals[mask])
@@ -1336,15 +1351,31 @@ class Metrics:
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
             all_grads = torch.cat([g.view(-1) for g in grads])
-            signs = torch.sign(all_grads)
-            # Entropy of signs? Signs are -1, 0, 1.
-            # Compute distribution
-            n = len(signs)
-            p_pos = (signs == 1).float().sum() / n
-            p_neg = (signs == -1).float().sum() / n
-            p_zero = (signs == 0).float().sum() / n
+            
+            # Soft sign approximation: tanh(k * g)
+            # Values close to -1, 0, 1
+            k = 100.0
+            soft_signs = torch.tanh(k * all_grads)
+            
+            # Soft binning
+            # Pos: close to 1. Neg: close to -1. Zero: close to 0.
+            # We can use Gaussian kernels centered at -1, 0, 1
+            
+            # p_pos ~ exp(-(s-1)^2 / sigma)
+            sigma = 0.1
+            w_pos = torch.exp(-(soft_signs - 1.0)**2 / sigma)
+            w_neg = torch.exp(-(soft_signs + 1.0)**2 / sigma)
+            w_zero = torch.exp(-(soft_signs)**2 / sigma)
+            
+            total = w_pos.sum() + w_neg.sum() + w_zero.sum() + 1e-10
+            p_pos = w_pos.sum() / total
+            p_neg = w_neg.sum() / total
+            p_zero = w_zero.sum() / total
+            
             probs = torch.stack([p_pos, p_neg, p_zero])
-            probs = probs[probs > 0]
+            probs = probs + 1e-10 # Avoid log(0)
+            probs = probs / probs.sum()
+            
             return -(probs * torch.log(probs)).sum()
 
         elif metric_name == 'activation_skewness':
