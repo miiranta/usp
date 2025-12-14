@@ -587,10 +587,6 @@ class Metrics:
             probs, _ = Metrics.soft_histogram(w.view(-1))
             return -(probs * torch.log(probs)).sum()
 
-        elif metric_name == 'information_bottleneck_entropy':
-            # 37. Information Bottleneck (Mutual Info proxy)
-            return Metrics.calculate_metric(model, 'mutual_information', logits, labels)
-
         elif metric_name == 'structural_entropy':
             # 38. Structural Entropy (Graph entropy of layer connections)
             norms = []
@@ -620,10 +616,6 @@ class Metrics:
             probs = eigs / (eigs.sum() + 1e-10)
             return -(probs * torch.log(probs + 1e-10)).sum()
 
-        elif metric_name == 'causal_entropy':
-            # 40. Causal Entropy (Proxy: Shannon)
-            return Metrics.calculate_metric(model, 'shannon', logits, labels)
-
         elif metric_name == 'differential_entropy':
             # 41. Differential Entropy (Gaussian assumption)
             var = torch.var(weights)
@@ -648,14 +640,6 @@ class Metrics:
             # 43. Gaussian Entropy (Same as Differential)
             var = torch.var(weights)
             return 0.5 * torch.log(2 * math.pi * math.e * var + 1e-10)
-
-        elif metric_name == 'mixture_model_entropy':
-            # 44. Mixture Model Entropy (Proxy: Shannon)
-            return Metrics.calculate_metric(model, 'shannon', logits, labels)
-
-        elif metric_name == 'empirical_histogram_entropy':
-            # 45. Empirical Histogram Entropy
-            return Metrics.calculate_metric(model, 'shannon', logits, labels)
 
         elif metric_name == 'kde_entropy':
             # 46. KDE Entropy (Resubstitution entropy)
@@ -717,10 +701,6 @@ class Metrics:
             alpha = 2.0
             return (1.0 / (alpha - 1.0)) * torch.log((probs**alpha * q**(1-alpha)).sum())
 
-        elif metric_name == 'alpha_entropy':
-            # 54. Alpha Entropy (Same as Renyi)
-            return Metrics.calculate_metric(model, 'renyi_entropy', logits, labels)
-
         elif metric_name == 'wasserstein_entropy':
             # 55. Wasserstein Entropy (Wasserstein distance to Gaussian)
             probs, num_bins = Metrics.soft_histogram(weights)
@@ -730,10 +710,6 @@ class Metrics:
             q = q / q.sum()
             cdf_q = torch.cumsum(q, dim=0)
             return torch.abs(cdf_p - cdf_q).sum()
-
-        elif metric_name == 'sinkhorn_entropy':
-            # 56. Sinkhorn Entropy (Approximation of Wasserstein)
-            return Metrics.calculate_metric(model, 'wasserstein_entropy', logits, labels)
 
         elif metric_name == 'flow_entropy':
             # 57. Flow Entropy (Skip)
@@ -803,18 +779,6 @@ class Metrics:
             Hv = torch.autograd.grad(grad_v, params, create_graph=True)
             spectral_radius = sum([(hvi * vi).sum() for hvi, vi in zip(Hv, v)])
             return torch.abs(spectral_radius)
-
-        elif metric_name == 'local_loss_landscape_anisotropy':
-            # Ratio of max/min eigenvalues (Condition number of Hessian)
-            # We approximate min eigenvalue using power iteration on (H - lambda_max I) or similar?
-            # Or just use random projections.
-            # Simplified: |lambda_max| / (|lambda_min| + eps)
-            # Finding lambda_min is hard.
-            # Let's use a proxy: Variance of Hessian diagonals?
-            # Or just return 0.0 if too hard.
-            # User said "Nontrivial geometry-aware signal".
-            # Let's try to estimate lambda_max and lambda_min (via shift).
-            return Metrics.calculate_metric(model, 'hessian_spectral_radius', logits, labels, input_ids) # Placeholder
 
         elif metric_name == 'fisher_info_condition_number':
             # Fisher Information Matrix Condition Number
@@ -962,10 +926,6 @@ class Metrics:
                 return -(s * torch.log(s + 1e-10)).sum()
             except: return torch.tensor(0.0, device=device)
 
-        elif metric_name == 'spectral_entropy_weights':
-            # Same as svd_entropy
-            return Metrics.calculate_metric(model, 'svd_entropy', logits, labels, input_ids)
-
         elif metric_name == 'log_det_activation_covariance':
             # log det (Cov(a))
             # Use embeddings as proxy
@@ -1085,9 +1045,6 @@ class Metrics:
             den = ((log_r - mean_x)**2).sum()
             return num / (den + 1e-10)
 
-        elif metric_name == 'correlation_dimension':
-            return Metrics.calculate_metric(model, 'fractal_dimension', logits, labels, input_ids)
-
         elif metric_name == 'ntk_condition_number':
             # Proxy: Condition number of embedding covariance
             w = model.embedding.weight
@@ -1129,10 +1086,6 @@ class Metrics:
             n_params = sum([p.numel() for p in model.parameters()])
             kl = n_params * (math.log(prior_sigma/sigma) + 0.5 * (sigma**2 / prior_sigma**2) - 0.5) + weights_sq / (2 * prior_sigma**2)
             return kl
-
-        elif metric_name == 'mi_weights_data':
-            # MI(W; Data) - Proxy: MI(Input; Output)
-            return Metrics.calculate_metric(model, 'mutual_information', logits, labels, input_ids)
 
         elif metric_name == 'activation_total_correlation':
             # TC(Z) = sum H(Z_i) - H(Z)
@@ -1366,9 +1319,6 @@ class Metrics:
                 return pr
             except: return torch.tensor(0.0, device=device)
 
-        elif metric_name == 'heavy_tail_index':
-            return Metrics.calculate_metric(model, 'spectral_decay_rate', logits, labels, input_ids)
-
         elif metric_name == 'energy_landscape_ruggedness':
             # Proxy: Gradient norm variance or similar
             # Or "Roughness" of loss surface
@@ -1379,13 +1329,6 @@ class Metrics:
             grads = torch.autograd.grad(loss, params, create_graph=True)
             grad_norm = torch.sqrt(sum([(g**2).sum() for g in grads]))
             return grad_norm
-
-        elif metric_name == 'class_conditional_fisher_overlap':
-            # Overlap between Fisher matrices of different classes
-            # Proxy: Cosine similarity of class-averaged gradients?
-            # Too expensive to compute per class.
-            # Proxy: Overlap of class means in embedding space
-            return Metrics.calculate_metric(model, 'class_conditional_overlap', logits, labels, input_ids)
 
         elif metric_name == 'gradient_sign_entropy':
             if logits is None or labels is None: return torch.tensor(0.0, device=device)
@@ -1403,11 +1346,6 @@ class Metrics:
             probs = torch.stack([p_pos, p_neg, p_zero])
             probs = probs[probs > 0]
             return -(probs * torch.log(probs)).sum()
-
-        elif metric_name == 'input_output_sensitivity':
-            # ||d(output)/d(input)||
-            # Proxy: Product of spectral norms
-            return Metrics.calculate_metric(model, 'layerwise_lipschitz', logits, labels, input_ids)
 
         elif metric_name == 'activation_skewness':
             # E[(a - mu)^3 / sigma^3]
@@ -1437,19 +1375,6 @@ class Metrics:
                 except: pass
             if count == 0: return torch.tensor(0.0, device=device)
             return val / count
-
-        elif metric_name == 'cross_layer_mi':
-            # MI between layers
-            # Proxy: MI between embeddings and output
-            return Metrics.calculate_metric(model, 'mutual_information', logits, labels, input_ids)
-
-        elif metric_name == 'functional_path_length':
-            # Length of path in function space during training?
-            # Or length of path of activation through layers?
-            # Proxy: Sum of norms of differences between layer outputs
-            # We don't have layer outputs here.
-            # Proxy: Sum of spectral norms of weights (Lipschitz constant)
-            return Metrics.calculate_metric(model, 'layerwise_lipschitz', logits, labels, input_ids)
 
         elif metric_name == 'log_volume_convex_hull':
             # Log volume of convex hull of activations
@@ -1485,20 +1410,6 @@ class Metrics:
                 except: pass
             if not norms: return torch.tensor(0.0, device=device)
             return torch.var(torch.stack(norms))
-
-        elif metric_name == 'logit_ordering_entropy':
-            if logits is None: return torch.tensor(0.0, device=device)
-            # Rank of logits
-            ranks = torch.argsort(logits, dim=-1)
-            # Entropy of rank distribution?
-            # "Entropy of Class-Conditional Logit Ordering"
-            # H(rank(logits | c))
-            # Simplified: Entropy of the rank of the true class?
-            # Or entropy of the permutation?
-            # Let's compute entropy of the predicted class distribution (which is prediction_entropy).
-            # But this says "Logit Ordering".
-            # Maybe entropy of the rank vector?
-            return Metrics.calculate_metric(model, 'prediction_entropy', logits, labels, input_ids)
 
         elif metric_name == 'third_order_curvature_norm':
             # ||grad^3 L||_F
@@ -1548,12 +1459,6 @@ class Metrics:
             sigma = fisher_diag.std()
             kurt = ((fisher_diag - mu)**4).mean() / (sigma**4 + 1e-10)
             return kurt
-
-        elif metric_name == 'hessian_eigenvector_stability':
-            # 1 - cos(v_max(t), v_max(t-1))
-            # Proxy: 1 - cos(g(t), g(t-1)) (Gradient direction stability)
-            # We implemented gradient_cosine_drift earlier.
-            return Metrics.calculate_metric(model, 'gradient_cosine_drift', logits, labels, input_ids)
 
         elif metric_name == 'loss_surface_convexity_ratio':
             # Fraction of lambda > 0
@@ -1615,27 +1520,11 @@ class Metrics:
             if not curvatures: return torch.tensor(0.0, device=device)
             return torch.var(torch.stack(curvatures))
 
-        elif metric_name == 'loss_landscape_fractal_dimension':
-            # Box counting on loss?
-            # Proxy: Correlation dimension of gradients
-            # Or just use the fractal_dimension metric we implemented
-            return Metrics.calculate_metric(model, 'fractal_dimension', logits, labels, input_ids)
-
-        elif metric_name == 'energy_barrier_height':
-            # max L(theta+delta) - L(theta)
-            # Proxy: Sharpness perturbation
-            return Metrics.calculate_metric(model, 'sharpness_perturbation', logits, labels, input_ids)
-
         elif metric_name == 'loss_basin_connectivity_index':
             # Prob random perturbation remains low loss
             # Proxy: 1 / (1 + Sharpness)
             sharpness = Metrics.calculate_metric(model, 'sharpness_perturbation', logits, labels, input_ids)
             return 1.0 / (1.0 + sharpness)
-
-        elif metric_name == 'flatness_anisotropy_entropy':
-            # Entropy of normalized Hessian eigenvalues
-            # Proxy: Hessian Eigenvalue Entropy
-            return Metrics.calculate_metric(model, 'hessian_eigenvalue_entropy', logits, labels, input_ids)
 
         elif metric_name == 'curvature_gradient_alignment':
             # cos(g, Hg)
@@ -1675,10 +1564,6 @@ class Metrics:
             hess = Metrics.calculate_metric(model, 'hessian_spectral_radius', logits, labels, input_ids)
             return grad_norm + hess * 0.01
 
-        elif metric_name == 'directional_sharpness_dispersion':
-            # Variance of sharpness
-            return Metrics.calculate_metric(model, 'random_direction_curvature_variance', logits, labels, input_ids)
-
         elif metric_name == 'activation_description_length':
             # MDL of activations
             # Proxy: Sum of log(|a| + eps) + entropy
@@ -1689,11 +1574,6 @@ class Metrics:
             probs, _ = Metrics.soft_histogram(w.view(-1))
             return -(probs * torch.log(probs)).sum()
 
-        elif metric_name == 'weight_algorithmic_complexity':
-            # Compression ratio
-            # Proxy: Entropy of weights
-            return Metrics.calculate_metric(model, 'shannon', logits, labels, input_ids)
-
         elif metric_name == 'kolmogorov_structure_index':
             # Entropy of differences between adjacent weights
             w = Metrics.get_all_weights(model)
@@ -1701,37 +1581,11 @@ class Metrics:
             probs, _ = Metrics.soft_histogram(diff)
             return -(probs * torch.log(probs)).sum()
 
-        elif metric_name == 'effective_function_degree':
-            # Polynomial degree
-            # Proxy: Number of sign changes in gradients?
-            # Or just depth * non-linearity count? Constant.
-            # Proxy: Gradient Sign Entropy
-            return Metrics.calculate_metric(model, 'gradient_sign_entropy', logits, labels, input_ids)
-
-        elif metric_name == 'representation_fractal_dimension':
-            # Intrinsic dimension of activations
-            # Proxy: Effective dimensionality entropy
-            return Metrics.calculate_metric(model, 'effective_dimensionality_entropy', logits, labels, input_ids)
-
-        elif metric_name == 'manifold_volume_growth_rate':
-            # Volume growth
-            # Proxy: LogDet of Covariance
-            return Metrics.calculate_metric(model, 'log_det_activation_covariance', logits, labels, input_ids)
-
         elif metric_name == 'empirical_covering_number':
             # Covering number
             # Proxy: exp(Entropy)
             ent = Metrics.calculate_metric(model, 'shannon', logits, labels, input_ids)
             return torch.exp(ent)
-
-        elif metric_name == 'function_space_path_length':
-            # Integral of function change
-            # Proxy: Functional path length (Lipschitz)
-            return Metrics.calculate_metric(model, 'functional_path_length', logits, labels, input_ids)
-
-        elif metric_name == 'weight_space_entanglement':
-            # MI between layers
-            return Metrics.calculate_metric(model, 'mutual_information', logits, labels, input_ids)
 
         elif metric_name == 'cross_layer_rank_coupling':
             # Rank correlation of singular spectra
@@ -1775,25 +1629,11 @@ class Metrics:
             spr = Metrics.calculate_metric(model, 'spectral_participation_ratio', logits, labels, input_ids)
             return spr / Config.HIDDEN_DIM
 
-        elif metric_name == 'empirical_chaitin_complexity':
-            # Entropy of bit-quantized weights
-            # Proxy: Shannon entropy
-            return Metrics.calculate_metric(model, 'shannon', logits, labels, input_ids)
-
-        elif metric_name == 'spectral_compressibility_index':
-            # Decay rate
-            return Metrics.calculate_metric(model, 'spectral_decay_rate', logits, labels, input_ids)
-
         elif metric_name == 'vc_margin_ratio':
             # Margin / VC
             # Proxy: 1 / VC_proxy
             vc = Metrics.calculate_metric(model, 'vc_dimension_proxy', logits, labels, input_ids)
             return 1.0 / (vc + 1e-10)
-
-        elif metric_name == 'activation_emd_skew':
-            # Asymmetry under Wasserstein
-            # Proxy: Activation skewness
-            return Metrics.calculate_metric(model, 'activation_skewness', logits, labels, input_ids)
 
         elif metric_name == 'higher_order_cumulant_energy':
             # Sum of squared cumulants (3, 4)
@@ -1801,26 +1641,6 @@ class Metrics:
             skew = Metrics.calculate_metric(model, 'activation_skewness', logits, labels, input_ids)
             kurt = Metrics.calculate_metric(model, 'distributional_flatness', logits, labels, input_ids)
             return skew**2 + kurt**2
-
-        elif metric_name == 'covariance_eigenvector_entropy':
-            # Entropy of eigenvectors?
-            # Proxy: Von Neumann entropy
-            return Metrics.calculate_metric(model, 'von_neumann_entropy', logits, labels, input_ids)
-
-        elif metric_name == 'class_conditional_wasserstein_overlap':
-            # W2 between classes
-            # Proxy: Energy distance
-            return Metrics.calculate_metric(model, 'energy_distance_class', logits, labels, input_ids)
-
-        elif metric_name == 'activation_tail_index':
-            # Power law exponent
-            # Proxy: Spectral decay rate
-            return Metrics.calculate_metric(model, 'spectral_decay_rate', logits, labels, input_ids)
-
-        elif metric_name == 'distributional_curvature':
-            # 2nd derivative of log density
-            # Proxy: Fisher info
-            return Metrics.calculate_metric(model, 'fisher_info_condition_number', logits, labels, input_ids)
 
         elif metric_name == 'logit_gap_entropy':
             # Entropy of differences between top-k logits
@@ -1840,11 +1660,6 @@ class Metrics:
             kurt = ((l - mu)**4).mean() / (sigma**4 + 1e-10)
             return (skew**2 + 1) / (kurt + 1e-10)
 
-        elif metric_name == 'conditional_moment_discrepancy':
-            # Mismatch of moments across classes
-            # Proxy: Variance of class means (1st moment)
-            return Metrics.calculate_metric(model, 'wasserstein_barycenter_dispersion', logits, labels, input_ids)
-
         elif metric_name == 'population_sparsity_gini':
             # Gini coefficient of neuron activations
             # Use embeddings
@@ -1856,20 +1671,6 @@ class Metrics:
             n = len(act)
             index = torch.arange(1, n+1, device=device)
             return (2 * (index * act_sorted).sum() / (n * act_sorted.sum()) - (n + 1) / n)
-
-        elif metric_name == 'activation_mutual_redundancy':
-            # Total correlation
-            return Metrics.calculate_metric(model, 'activation_total_correlation', logits, labels, input_ids)
-
-        elif metric_name == 'distributional_stability_noise':
-            # Var(output) under noise
-            # Proxy: Sharpness
-            return Metrics.calculate_metric(model, 'sharpness_perturbation', logits, labels, input_ids)
-
-        elif metric_name == 'decision_boundary_entropy':
-            # Direction variability
-            # Proxy: Gradient direction entropy
-            return Metrics.calculate_metric(model, 'gradient_direction_entropy', logits, labels, input_ids)
 
         elif metric_name == 'activation_kurtosis_variance':
             # Layerwise tail instability
@@ -1883,32 +1684,6 @@ class Metrics:
                 kurts.append(k)
             if not kurts: return torch.tensor(0.0, device=device)
             return torch.var(torch.stack(kurts))
-
-        elif metric_name == 'logit_fisher_entropy':
-            # Curvature of output manifold
-            # Proxy: Info geometric volume
-            return Metrics.calculate_metric(model, 'info_geometric_volume', logits, labels, input_ids)
-
-        elif metric_name == 'optimization_entropy_production':
-            # Entropy of velocity
-            # Proxy: Gradient entropy
-            return Metrics.calculate_metric(model, 'gradient_entropy', logits, labels, input_ids)
-
-        elif metric_name == 'training_trajectory_curvature':
-            # 2nd derivative of path
-            # Proxy: Gradient cosine drift (change in direction)
-            return Metrics.calculate_metric(model, 'gradient_cosine_drift', logits, labels, input_ids)
-
-        elif metric_name == 'gradient_field_divergence':
-            # Div(grad L) = Trace(H)
-            return Metrics.calculate_metric(model, 'hessian_trace', logits, labels, input_ids)
-
-        elif metric_name == 'gradient_field_curl':
-            # Curl of gradient is 0 for scalar potential (Loss).
-            # But stochastic gradient has curl.
-            # Proxy: Norm of difference between grad(batch1) and grad(batch2)?
-            # Or just Gradient Noise
-            return Metrics.calculate_metric(model, 'stochastic_loss_variance', logits, labels, input_ids)
 
         elif metric_name == 'lyapunov_spectrum_width':
             # Range of exponents
@@ -1937,42 +1712,17 @@ class Metrics:
             hsr = Metrics.calculate_metric(model, 'hessian_spectral_radius', logits, labels, input_ids)
             return 1.0 / (hsr + 1e-10)
 
-        elif metric_name == 'time_averaged_gradient_rank':
-            # Rank of subspace
-            # Proxy: Gradient subspace dimension
-            return Metrics.calculate_metric(model, 'gradient_subspace_dimension', logits, labels, input_ids)
-
-        elif metric_name == 'update_sign_entropy':
-            # Oscillatory behavior
-            # Proxy: Gradient sign entropy
-            return Metrics.calculate_metric(model, 'gradient_sign_entropy', logits, labels, input_ids)
-
         elif metric_name == 'functional_inertia':
             # Resistance to change
             # Proxy: 1 / Gradient norm
             gn = Metrics.calculate_metric(model, 'trajectory_length', logits, labels, input_ids)
             return 1.0 / (gn + 1e-10)
 
-        elif metric_name == 'learning_dynamics_compressibility':
-            # Compression of update sequence
-            # Proxy: Entropy of gradients
-            return Metrics.calculate_metric(model, 'gradient_entropy', logits, labels, input_ids)
-
         elif metric_name == 'implicit_bias_alignment':
             # Correlation with min-norm
             # Proxy: Norm of weights (L2)
             w = Metrics.get_all_weights(model)
             return torch.norm(w)
-
-        elif metric_name == 'parameter_space_curvature':
-            # Riemannian curvature
-            # Proxy: Fisher info condition number
-            return Metrics.calculate_metric(model, 'fisher_info_condition_number', logits, labels, input_ids)
-
-        elif metric_name == 'energy_dissipation_rate':
-            # ||grad L||^2
-            # Proxy: Gradient covariance trace
-            return Metrics.calculate_metric(model, 'gradient_covariance_trace', logits, labels, input_ids)
 
         return torch.tensor(0.0, device=weights.device)
 
@@ -2440,7 +2190,7 @@ def main():
     
     # List of experiments: (Control_Mode, Metric_Name, Folder_Name)
     experiments = [
-        (True, 'shannon', 'control'), # Control (CE Only)
+        (True, 'shannon', 'control'),
         (False, 'shannon', '1_shannon'),
         (False, 'cross_entropy', '2_cross_entropy'),
         (False, 'conditional_entropy', '3_conditional_entropy'),
@@ -2477,150 +2227,102 @@ def main():
         (False, 'conditional_output_entropy', '34_conditional_output_entropy'),
         (False, 'effective_dimensionality_entropy', '35_effective_dimensionality_entropy'),
         (False, 'latent_entropy', '36_latent_entropy'),
-        (False, 'information_bottleneck_entropy', '37_information_bottleneck_entropy'),
-        (False, 'structural_entropy', '38_structural_entropy'),
-        (False, 'topological_entropy', '39_topological_entropy'),
-        (False, 'causal_entropy', '40_causal_entropy'),
-        (False, 'differential_entropy', '41_differential_entropy'),
-        (False, 'log_determinant_entropy', '42_log_determinant_entropy'),
-        (False, 'gaussian_entropy', '43_gaussian_entropy'),
-        (False, 'mixture_model_entropy', '44_mixture_model_entropy'),
-        (False, 'empirical_histogram_entropy', '45_empirical_histogram_entropy'),
-        (False, 'kde_entropy', '46_kde_entropy'),
-        (False, 'copula_entropy', '47_copula_entropy'),
-        (False, 'cumulative_residual_entropy', '48_cumulative_residual_entropy'),
-        (False, 'quadratic_entropy', '49_quadratic_entropy'),
-        (False, 'energy_entropy', '50_energy_entropy'),
-        (False, 'logit_distribution_entropy', '51_logit_distribution_entropy'),
-        (False, 'softmax_temperature_entropy', '52_softmax_temperature_entropy'),
-        (False, 'renyi_divergence', '53_renyi_divergence'),
-        (False, 'alpha_entropy', '54_alpha_entropy'),
-        (False, 'wasserstein_entropy', '55_wasserstein_entropy'),
-        (False, 'sinkhorn_entropy', '56_sinkhorn_entropy'),
-        (False, 'flow_entropy', '57_flow_entropy'),
-        (False, 'spike_entropy', '58_spike_entropy'),
-        (False, 'class_conditional_entropy', '59_class_conditional_entropy'),
-        (False, 'population_coding_entropy', '60_population_coding_entropy'),
-        (False, 'hessian_trace', '61_hessian_trace'),
-        (False, 'hessian_spectral_radius', '62_hessian_spectral_radius'),
-        (False, 'local_loss_landscape_anisotropy', '63_local_loss_landscape_anisotropy'),
-        (False, 'fisher_info_condition_number', '64_fisher_info_condition_number'),
-        (False, 'sharpness_perturbation', '65_sharpness_perturbation'),
-        (False, 'pac_bayes_flatness', '66_pac_bayes_flatness'),
-        (False, 'gradient_covariance_trace', '67_gradient_covariance_trace'),
-        (False, 'gradient_direction_entropy', '68_gradient_direction_entropy'),
-        (False, 'gradient_cosine_drift', '69_gradient_cosine_drift'),
-        (False, 'activation_jacobian_frobenius_norm', '70_activation_jacobian_frobenius_norm'),
-        (False, 'layerwise_lipschitz', '71_layerwise_lipschitz'),
-        (False, 'effective_rank_activations', '72_effective_rank_activations'),
-        (False, 'spectral_entropy_weights', '73_spectral_entropy_weights'),
-        (False, 'log_det_activation_covariance', '74_log_det_activation_covariance'),
-        (False, 'class_conditional_overlap', '75_class_conditional_overlap'),
-        (False, 'information_compression_ratio', '76_information_compression_ratio'),
-        (False, 'trajectory_length', '77_trajectory_length'),
-        (False, 'stochastic_loss_variance', '78_stochastic_loss_variance'),
-        (False, 'local_linearization_error', '79_local_linearization_error'),
-        (False, 'output_jacobian_condition_number', '80_output_jacobian_condition_number'),
-        (False, 'mdl_surrogate', '81_mdl_surrogate'),
-        (False, 'kolmogorov_complexity_proxy', '82_kolmogorov_complexity_proxy'),
-        (False, 'fractal_dimension', '83_fractal_dimension'),
-        (False, 'correlation_dimension', '84_correlation_dimension'),
-        (False, 'ntk_condition_number', '85_ntk_condition_number'),
-        (False, 'ntk_trace', '86_ntk_trace'),
-        (False, 'rademacher_complexity', '87_rademacher_complexity'),
-        (False, 'pac_bayes_kl', '88_pac_bayes_kl'),
-        (False, 'mi_weights_data', '89_mi_weights_data'),
-        (False, 'activation_total_correlation', '90_activation_total_correlation'),
-        (False, 'class_conditional_activation_kl', '91_class_conditional_activation_kl'),
-        (False, 'energy_distance_class', '92_energy_distance_class'),
-        (False, 'wasserstein_barycenter_dispersion', '93_wasserstein_barycenter_dispersion'),
-        (False, 'entropy_rate_activations', '94_entropy_rate_activations'),
-        (False, 'lyapunov_exponent', '95_lyapunov_exponent'),
-        (False, 'topological_persistence_entropy', '96_topological_persistence_entropy'),
-        (False, 'info_geometric_volume', '97_info_geometric_volume'),
-        (False, 'vc_dimension_proxy', '98_vc_dimension_proxy'),
-        (False, 'spectral_decay_rate', '99_spectral_decay_rate'),
-        (False, 'distributional_flatness', '100_distributional_flatness'),
-        (False, 'hessian_log_determinant', '101_hessian_log_determinant'),
-        (False, 'hessian_eigenvalue_entropy', '102_hessian_eigenvalue_entropy'),
-        (False, 'gradient_subspace_dimension', '103_gradient_subspace_dimension'),
-        (False, 'jacobian_mutual_coherence', '104_jacobian_mutual_coherence'),
-        (False, 'activation_covariance_condition', '105_activation_covariance_condition'),
-        (False, 'spectral_participation_ratio', '106_spectral_participation_ratio'),
-        (False, 'heavy_tail_index', '107_heavy_tail_index'),
-        (False, 'energy_landscape_ruggedness', '108_energy_landscape_ruggedness'),
-        (False, 'class_conditional_fisher_overlap', '109_class_conditional_fisher_overlap'),
-        (False, 'gradient_sign_entropy', '110_gradient_sign_entropy'),
-        (False, 'input_output_sensitivity', '111_input_output_sensitivity'),
-        (False, 'activation_skewness', '112_activation_skewness'),
-        (False, 'singular_vector_alignment_entropy', '113_singular_vector_alignment_entropy'),
-        (False, 'cross_layer_mi', '114_cross_layer_mi'),
-        (False, 'functional_path_length', '115_functional_path_length'),
-        (False, 'log_volume_convex_hull', '116_log_volume_convex_hull'),
-        (False, 'activation_manifold_curvature', '117_activation_manifold_curvature'),
-        (False, 'spectral_gap_activation', '118_spectral_gap_activation'),
-        (False, 'lipschitz_variance', '119_lipschitz_variance'),
-        (False, 'logit_ordering_entropy', '120_logit_ordering_entropy'),
-        (False, 'third_order_curvature_norm', '121_third_order_curvature_norm'),
-        (False, 'curvature_skewness', '122_curvature_skewness'),
-        (False, 'curvature_kurtosis', '123_curvature_kurtosis'),
-        (False, 'hessian_eigenvector_stability', '124_hessian_eigenvector_stability'),
-        (False, 'loss_surface_convexity_ratio', '125_loss_surface_convexity_ratio'),
-        (False, 'negative_curvature_mass', '126_negative_curvature_mass'),
-        (False, 'random_direction_curvature_variance', '127_random_direction_curvature_variance'),
-        (False, 'loss_landscape_fractal_dimension', '128_loss_landscape_fractal_dimension'),
-        (False, 'energy_barrier_height', '129_energy_barrier_height'),
-        (False, 'loss_basin_connectivity_index', '130_loss_basin_connectivity_index'),
-        (False, 'flatness_anisotropy_entropy', '131_flatness_anisotropy_entropy'),
-        (False, 'curvature_gradient_alignment', '132_curvature_gradient_alignment'),
-        (False, 'quadratic_approximation_error', '133_quadratic_approximation_error'),
-        (False, 'local_loss_lipschitz_constant', '134_local_loss_lipschitz_constant'),
-        (False, 'directional_sharpness_dispersion', '135_directional_sharpness_dispersion'),
-        (False, 'activation_description_length', '136_activation_description_length'),
-        (False, 'weight_algorithmic_complexity', '137_weight_algorithmic_complexity'),
-        (False, 'kolmogorov_structure_index', '138_kolmogorov_structure_index'),
-        (False, 'effective_function_degree', '139_effective_function_degree'),
-        (False, 'representation_fractal_dimension', '140_representation_fractal_dimension'),
-        (False, 'manifold_volume_growth_rate', '141_manifold_volume_growth_rate'),
-        (False, 'empirical_covering_number', '142_empirical_covering_number'),
-        (False, 'function_space_path_length', '143_function_space_path_length'),
-        (False, 'weight_space_entanglement', '144_weight_space_entanglement'),
-        (False, 'cross_layer_rank_coupling', '145_cross_layer_rank_coupling'),
-        (False, 'ntk_entropy', '146_ntk_entropy'),
-        (False, 'capacity_utilization_ratio', '147_capacity_utilization_ratio'),
-        (False, 'empirical_chaitin_complexity', '148_empirical_chaitin_complexity'),
-        (False, 'spectral_compressibility_index', '149_spectral_compressibility_index'),
-        (False, 'vc_margin_ratio', '150_vc_margin_ratio'),
-        (False, 'activation_emd_skew', '151_activation_emd_skew'),
-        (False, 'higher_order_cumulant_energy', '152_higher_order_cumulant_energy'),
-        (False, 'covariance_eigenvector_entropy', '153_covariance_eigenvector_entropy'),
-        (False, 'class_conditional_wasserstein_overlap', '154_class_conditional_wasserstein_overlap'),
-        (False, 'activation_tail_index', '155_activation_tail_index'),
-        (False, 'distributional_curvature', '156_distributional_curvature'),
-        (False, 'logit_gap_entropy', '157_logit_gap_entropy'),
-        (False, 'output_bimodality_coefficient', '158_output_bimodality_coefficient'),
-        (False, 'conditional_moment_discrepancy', '159_conditional_moment_discrepancy'),
-        (False, 'population_sparsity_gini', '160_population_sparsity_gini'),
-        (False, 'activation_mutual_redundancy', '161_activation_mutual_redundancy'),
-        (False, 'distributional_stability_noise', '162_distributional_stability_noise'),
-        (False, 'decision_boundary_entropy', '163_decision_boundary_entropy'),
-        (False, 'activation_kurtosis_variance', '164_activation_kurtosis_variance'),
-        (False, 'logit_fisher_entropy', '165_logit_fisher_entropy'),
-        (False, 'optimization_entropy_production', '166_optimization_entropy_production'),
-        (False, 'training_trajectory_curvature', '167_training_trajectory_curvature'),
-        (False, 'gradient_field_divergence', '168_gradient_field_divergence'),
-        (False, 'gradient_field_curl', '169_gradient_field_curl'),
-        (False, 'lyapunov_spectrum_width', '170_lyapunov_spectrum_width'),
-        (False, 'update_direction_autocorrelation', '171_update_direction_autocorrelation'),
-        (False, 'noise_drift_magnitude', '172_noise_drift_magnitude'),
-        (False, 'stochastic_stability_radius', '173_stochastic_stability_radius'),
-        (False, 'time_averaged_gradient_rank', '174_time_averaged_gradient_rank'),
-        (False, 'update_sign_entropy', '175_update_sign_entropy'),
-        (False, 'functional_inertia', '176_functional_inertia'),
-        (False, 'learning_dynamics_compressibility', '177_learning_dynamics_compressibility'),
-        (False, 'implicit_bias_alignment', '178_implicit_bias_alignment'),
-        (False, 'parameter_space_curvature', '179_parameter_space_curvature'),
-        (False, 'energy_dissipation_rate', '180_energy_dissipation_rate'),
+        (False, 'structural_entropy', '37_structural_entropy'),
+        (False, 'topological_entropy', '38_topological_entropy'),
+        (False, 'differential_entropy', '39_differential_entropy'),
+        (False, 'log_determinant_entropy', '40_log_determinant_entropy'),
+        (False, 'gaussian_entropy', '41_gaussian_entropy'),
+        (False, 'kde_entropy', '42_kde_entropy'),
+        (False, 'copula_entropy', '43_copula_entropy'),
+        (False, 'cumulative_residual_entropy', '44_cumulative_residual_entropy'),
+        (False, 'quadratic_entropy', '45_quadratic_entropy'),
+        (False, 'energy_entropy', '46_energy_entropy'),
+        (False, 'logit_distribution_entropy', '47_logit_distribution_entropy'),
+        (False, 'softmax_temperature_entropy', '48_softmax_temperature_entropy'),
+        (False, 'renyi_divergence', '49_renyi_divergence'),
+        (False, 'wasserstein_entropy', '50_wasserstein_entropy'),
+        (False, 'flow_entropy', '51_flow_entropy'),
+        (False, 'spike_entropy', '52_spike_entropy'),
+        (False, 'class_conditional_entropy', '53_class_conditional_entropy'),
+        (False, 'population_coding_entropy', '54_population_coding_entropy'),
+        (False, 'hessian_trace', '55_hessian_trace'),
+        (False, 'hessian_spectral_radius', '56_hessian_spectral_radius'),
+        (False, 'fisher_info_condition_number', '57_fisher_info_condition_number'),
+        (False, 'sharpness_perturbation', '58_sharpness_perturbation'),
+        (False, 'pac_bayes_flatness', '59_pac_bayes_flatness'),
+        (False, 'gradient_covariance_trace', '60_gradient_covariance_trace'),
+        (False, 'gradient_direction_entropy', '61_gradient_direction_entropy'),
+        (False, 'gradient_cosine_drift', '62_gradient_cosine_drift'),
+        (False, 'activation_jacobian_frobenius_norm', '63_activation_jacobian_frobenius_norm'),
+        (False, 'layerwise_lipschitz', '64_layerwise_lipschitz'),
+        (False, 'effective_rank_activations', '65_effective_rank_activations'),
+        (False, 'log_det_activation_covariance', '66_log_det_activation_covariance'),
+        (False, 'class_conditional_overlap', '67_class_conditional_overlap'),
+        (False, 'information_compression_ratio', '68_information_compression_ratio'),
+        (False, 'trajectory_length', '69_trajectory_length'),
+        (False, 'stochastic_loss_variance', '70_stochastic_loss_variance'),
+        (False, 'local_linearization_error', '71_local_linearization_error'),
+        (False, 'output_jacobian_condition_number', '72_output_jacobian_condition_number'),
+        (False, 'mdl_surrogate', '73_mdl_surrogate'),
+        (False, 'kolmogorov_complexity_proxy', '74_kolmogorov_complexity_proxy'),
+        (False, 'fractal_dimension', '75_fractal_dimension'),
+        (False, 'ntk_condition_number', '76_ntk_condition_number'),
+        (False, 'ntk_trace', '77_ntk_trace'),
+        (False, 'rademacher_complexity', '78_rademacher_complexity'),
+        (False, 'pac_bayes_kl', '79_pac_bayes_kl'),
+        (False, 'activation_total_correlation', '80_activation_total_correlation'),
+        (False, 'class_conditional_activation_kl', '81_class_conditional_activation_kl'),
+        (False, 'energy_distance_class', '82_energy_distance_class'),
+        (False, 'wasserstein_barycenter_dispersion', '83_wasserstein_barycenter_dispersion'),
+        (False, 'entropy_rate_activations', '84_entropy_rate_activations'),
+        (False, 'lyapunov_exponent', '85_lyapunov_exponent'),
+        (False, 'topological_persistence_entropy', '86_topological_persistence_entropy'),
+        (False, 'info_geometric_volume', '87_info_geometric_volume'),
+        (False, 'vc_dimension_proxy', '88_vc_dimension_proxy'),
+        (False, 'spectral_decay_rate', '89_spectral_decay_rate'),
+        (False, 'distributional_flatness', '90_distributional_flatness'),
+        (False, 'hessian_log_determinant', '91_hessian_log_determinant'),
+        (False, 'hessian_eigenvalue_entropy', '92_hessian_eigenvalue_entropy'),
+        (False, 'gradient_subspace_dimension', '93_gradient_subspace_dimension'),
+        (False, 'jacobian_mutual_coherence', '94_jacobian_mutual_coherence'),
+        (False, 'activation_covariance_condition', '95_activation_covariance_condition'),
+        (False, 'spectral_participation_ratio', '96_spectral_participation_ratio'),
+        (False, 'energy_landscape_ruggedness', '97_energy_landscape_ruggedness'),
+        (False, 'gradient_sign_entropy', '98_gradient_sign_entropy'),
+        (False, 'activation_skewness', '99_activation_skewness'),
+        (False, 'singular_vector_alignment_entropy', '100_singular_vector_alignment_entropy'),
+        (False, 'log_volume_convex_hull', '101_log_volume_convex_hull'),
+        (False, 'activation_manifold_curvature', '102_activation_manifold_curvature'),
+        (False, 'spectral_gap_activation', '103_spectral_gap_activation'),
+        (False, 'lipschitz_variance', '104_lipschitz_variance'),
+        (False, 'third_order_curvature_norm', '105_third_order_curvature_norm'),
+        (False, 'curvature_skewness', '106_curvature_skewness'),
+        (False, 'curvature_kurtosis', '107_curvature_kurtosis'),
+        (False, 'loss_surface_convexity_ratio', '108_loss_surface_convexity_ratio'),
+        (False, 'negative_curvature_mass', '109_negative_curvature_mass'),
+        (False, 'random_direction_curvature_variance', '110_random_direction_curvature_variance'),
+        (False, 'loss_basin_connectivity_index', '111_loss_basin_connectivity_index'),
+        (False, 'curvature_gradient_alignment', '112_curvature_gradient_alignment'),
+        (False, 'quadratic_approximation_error', '113_quadratic_approximation_error'),
+        (False, 'local_loss_lipschitz_constant', '114_local_loss_lipschitz_constant'),
+        (False, 'activation_description_length', '115_activation_description_length'),
+        (False, 'kolmogorov_structure_index', '116_kolmogorov_structure_index'),
+        (False, 'empirical_covering_number', '117_empirical_covering_number'),
+        (False, 'cross_layer_rank_coupling', '118_cross_layer_rank_coupling'),
+        (False, 'ntk_entropy', '119_ntk_entropy'),
+        (False, 'capacity_utilization_ratio', '120_capacity_utilization_ratio'),
+        (False, 'vc_margin_ratio', '121_vc_margin_ratio'),
+        (False, 'higher_order_cumulant_energy', '122_higher_order_cumulant_energy'),
+        (False, 'logit_gap_entropy', '123_logit_gap_entropy'),
+        (False, 'output_bimodality_coefficient', '124_output_bimodality_coefficient'),
+        (False, 'population_sparsity_gini', '125_population_sparsity_gini'),
+        (False, 'activation_kurtosis_variance', '126_activation_kurtosis_variance'),
+        (False, 'lyapunov_spectrum_width', '127_lyapunov_spectrum_width'),
+        (False, 'update_direction_autocorrelation', '128_update_direction_autocorrelation'),
+        (False, 'noise_drift_magnitude', '129_noise_drift_magnitude'),
+        (False, 'stochastic_stability_radius', '130_stochastic_stability_radius'),
+        (False, 'functional_inertia', '131_functional_inertia'),
+        (False, 'implicit_bias_alignment', '132_implicit_bias_alignment'),
     ]
     
     for control_mode, metric_name, folder_name in experiments:
