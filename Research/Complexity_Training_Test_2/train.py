@@ -2189,10 +2189,12 @@ def run_training_single(output_dir, config, run_num):
     
     print("\nCalculating initial CE loss and Metric...")
     model.eval()
+    
+    metric_input_ids = None
+    metric_labels = None
+    
     with torch.no_grad():
         initial_ce_losses = []
-        first_batch_logits = None
-        first_batch_labels = None
         
         for i, batch in enumerate(train_loader):
             input_ids = batch['input_ids'].to(device, non_blocking=True)
@@ -2200,8 +2202,8 @@ def run_training_single(output_dir, config, run_num):
             logits = model(input_ids)
             
             if i == 0:
-                first_batch_logits = logits
-                first_batch_labels = labels
+                metric_input_ids = input_ids
+                metric_labels = labels
             
             logits_flat = logits.view(-1, vocab_size)
             labels_flat = labels.view(-1)
@@ -2210,10 +2212,11 @@ def run_training_single(output_dir, config, run_num):
             if len(initial_ce_losses) > 10: break # Estimate from first few batches
         start_ce = sum(initial_ce_losses) / len(initial_ce_losses)
         
-        # Initial Metric Calculation
-        # We need input_ids for some metrics, so we grab from the last batch in the loop
-        # Note: input_ids is defined in the loop above
-        start_metric = Metrics.calculate_metric(model, config.METRIC_NAME, first_batch_logits, first_batch_labels, batch['input_ids'].to(device)).item()
+    # Initial Metric Calculation
+    # Re-compute logits with gradients enabled for metrics that require it (e.g. gradient_entropy)
+    with torch.enable_grad():
+        metric_logits = model(metric_input_ids)
+        start_metric = Metrics.calculate_metric(model, config.METRIC_NAME, metric_logits, metric_labels, metric_input_ids).item()
     print(f"Initial CE loss: {start_ce:.16f}")
     print(f"Initial Metric ({config.METRIC_NAME}): {start_metric:.16f}")
     model.train()
