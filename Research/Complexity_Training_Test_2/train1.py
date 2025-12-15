@@ -1119,6 +1119,12 @@ class Metrics:
             # Proxy: Cond(Cov(logits))
             if logits is None: return torch.tensor(0.0, device=device)
             l = logits.view(-1, logits.size(-1))
+            
+            # Subsample vocabulary if too large to avoid OOM
+            if l.size(1) > 4000:
+                indices = torch.randperm(l.size(1), device=device)[:4000]
+                l = l[:, indices]
+            
             cov = l.t() @ l
             return torch.linalg.cond(cov + 1e-6*torch.eye(cov.size(0), device=device))
 
