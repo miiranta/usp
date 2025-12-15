@@ -93,19 +93,20 @@ class Metrics:
 
     @staticmethod
     def soft_histogram(x, num_bins=None, min_val=None, max_val=None):
+        x = x.view(-1)
         if min_val is None: min_val = x.min()
         if max_val is None: max_val = x.max()
         
         # Normalize
         normalized = (x - min_val) / (max_val - min_val + 1e-10)
         
-        n = len(x)
+        n = x.numel()
         if num_bins is None:
             # Freedman-Diaconis rule approximation
             with torch.no_grad():
                 sample_size = min(10000, n)
                 if n > sample_size:
-                    indices = torch.randperm(n, device=x.device)[:sample_size]
+                    indices = torch.randint(0, n, (sample_size,), device=x.device)
                     sample = normalized[indices]
                 else:
                     sample = normalized
