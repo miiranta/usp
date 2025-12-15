@@ -1205,7 +1205,8 @@ class Metrics:
             # We sum over batch.
             # For each class? Or max over classes?
             # Usually max over classes.
-            val = (logits.max(dim=1).values * sigma).mean()
+            # Flatten logits to handle [B, S, V] case by taking max over all outputs for a sample
+            val = (logits.view(logits.size(0), -1).max(dim=1).values * sigma).mean()
             return val
 
         elif metric_name == 'pac_bayes_kl':
