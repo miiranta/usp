@@ -1275,7 +1275,7 @@ def main():
     ]
     
     for control_mode, metric_name, folder_name in experiments:
-        output_dir = os.path.join(script_dir, f'output/{folder_name}')
+        output_dir = os.path.join(script_dir, f'output_max/{folder_name}')
         
         if os.path.exists(output_dir):
             print(f"Skipping {folder_name} (already exists)")
