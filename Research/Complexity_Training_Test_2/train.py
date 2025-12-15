@@ -531,12 +531,30 @@ class Metrics:
             return -(probs * torch.log(probs)).sum()
 
         elif metric_name == 'gradient_entropy':
-            # 26. Gradient Entropy (Proxy: Entropy of weight magnitudes as proxy for gradient scale)
-            return torch.tensor(0.0, device=device)
+            # 26. Gradient Entropy (Proxy: Entropy of gradient magnitudes)
+            if logits is None or labels is None:
+                # Fallback to weight entropy
+                probs, _ = Metrics.soft_histogram(weights)
+                return -(probs * torch.log(probs)).sum()
+            
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits.view(-1, logits.size(-1)), labels.view(-1))
+            params = [p for p in model.parameters() if p.requires_grad]
+            grads = torch.autograd.grad(loss, params, create_graph=True)
+            all_grads = torch.cat([g.view(-1) for g in grads])
+            probs, _ = Metrics.soft_histogram(torch.abs(all_grads))
+            return -(probs * torch.log(probs)).sum()
 
         elif metric_name == 'fisher_info_entropy':
-            # 27. Fisher Information Entropy (Skip - too expensive)
-            return torch.tensor(0.0, device=device)
+            # 27. Fisher Information Entropy (Diagonal approximation)
+            if logits is None or labels is None:
+                return torch.tensor(0.0, device=device)
+            
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits.view(-1, logits.size(-1)), labels.view(-1))
+            params = [p for p in model.parameters() if p.requires_grad]
+            grads = torch.autograd.grad(loss, params, create_graph=True)
+            fisher_diag = torch.cat([g.view(-1)**2 for g in grads])
+            probs = fisher_diag / (fisher_diag.sum() + 1e-10)
+            return -(probs * torch.log(probs + 1e-10)).sum()
 
         elif metric_name == 'prediction_entropy':
             # 28. Prediction Entropy (Entropy of output probabilities)
@@ -546,12 +564,33 @@ class Metrics:
             return entropy
 
         elif metric_name == 'bayesian_entropy':
-            # 29. Bayesian Entropy (Skip)
-            return torch.tensor(0.0, device=device)
+            # 29. Bayesian Entropy (Proxy: Entropy of weights + Entropy of predictions)
+            # H(w) ~ sum log(|w| * 0.1)
+            h_w = torch.log(torch.abs(weights) * 0.1 + 1e-10).mean()
+            
+            if logits is not None:
+                probs = torch.softmax(logits, dim=-1)
+                h_y = -(probs * torch.log(probs + 1e-10)).sum(dim=-1).mean()
+                return h_w + h_y
+            return h_w
 
         elif metric_name == 'attention_entropy':
-            # 30. Attention Entropy (Skip - requires attention weights)
-            return torch.tensor(0.0, device=device)
+            # 30. Attention Entropy (Entropy of attention parameters)
+            entropies = []
+            for layer in model.transformer.layers:
+                # Try to access self_attn weights if available, else linear1
+                if hasattr(layer, 'self_attn') and hasattr(layer.self_attn, 'in_proj_weight'):
+                    w = layer.self_attn.in_proj_weight
+                elif hasattr(layer, 'linear1'):
+                    w = layer.linear1.weight
+                else:
+                    continue
+                
+                probs, _ = Metrics.soft_histogram(w.view(-1))
+                entropies.append(-(probs * torch.log(probs)).sum())
+            
+            if not entropies: return torch.tensor(0.0, device=device)
+            return torch.stack(entropies).mean()
 
         elif metric_name == 'token_entropy':
             # 31. Token Entropy (Same as Prediction Entropy)
@@ -665,8 +704,20 @@ class Metrics:
             return -torch.log(p + 1e-10).mean()
 
         elif metric_name == 'copula_entropy':
-            # 47. Copula Entropy (Skip)
-            return torch.tensor(0.0, device=device)
+            # 47. Copula Entropy (Proxy: Sum of marginal entropies - Joint entropy)
+            w = model.embedding.weight
+            n = min(len(w), 500)
+            idx = torch.randperm(len(w), device=device)[:n]
+            x = w[idx] # [N, D]
+            
+            # H(X) via log det cov
+            cov = torch.cov(x.t())
+            h_joint = 0.5 * torch.logdet(cov + 1e-6*torch.eye(cov.size(0), device=device))
+            
+            # sum H(X_i) via variances
+            h_marginals = 0.5 * torch.log(torch.diag(cov) + 1e-6).sum()
+            
+            return h_marginals - h_joint
 
         elif metric_name == 'cumulative_residual_entropy':
             # 48. Cumulative Residual Entropy
@@ -723,12 +774,30 @@ class Metrics:
             return torch.abs(cdf_p - cdf_q).sum()
 
         elif metric_name == 'flow_entropy':
-            # 57. Flow Entropy (Skip)
-            return torch.tensor(0.0, device=device)
+            # 57. Flow Entropy (Proxy: Smoothness of weights across layers)
+            layers = Metrics.get_layer_weights(model)
+            val = 0.0
+            count = 0
+            for i in range(1, len(layers)):
+                w1 = layers[i-1]
+                w2 = layers[i]
+                n = min(len(w1), len(w2))
+                diff = w1[:n] - w2[:n]
+                val += (diff**2).mean()
+                count += 1
+            if count == 0: return torch.tensor(0.0, device=device)
+            return val / count
 
         elif metric_name == 'spike_entropy':
-            # 58. Spike Entropy (Skip)
-            return torch.tensor(0.0, device=device)
+            # 58. Spike Entropy (Entropy of soft spikes)
+            mu = weights.mean()
+            sigma = weights.std()
+            threshold = mu + 2 * sigma
+            spikes = torch.sigmoid(100.0 * (weights - threshold)) # Soft spike indicator
+            prob_spike = spikes.mean()
+            # Binary entropy
+            p = prob_spike
+            return -(p * torch.log(p + 1e-10) + (1-p) * torch.log(1-p + 1e-10))
 
         elif metric_name == 'class_conditional_entropy':
             # 59. Class-Conditional Distribution Entropy

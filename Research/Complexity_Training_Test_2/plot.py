@@ -35,7 +35,7 @@ RED = '#d62728'
 
 # Consistent Palette for Sources
 # Using tab20 to ensure enough distinct colors for all sources
-_colors = sns.color_palette('tab20', 11)
+_colors = sns.color_palette('tab20', 20)
 SOURCE_PALETTE = {
     'Control': _colors[0],
     'Shannon': _colors[1],
@@ -48,6 +48,15 @@ SOURCE_PALETTE = {
     'Jensen Shannon': _colors[8],
     'Transfer Entropy': _colors[9],
     'Intrinsic TE': _colors[10],
+    'Renyi Entropy': _colors[11],
+    'Neural Rep Entropy': _colors[12],
+    'Diffusion Spectral': _colors[13],
+    'Approximate Entropy': _colors[14],
+    'Sample Entropy': _colors[15],
+    'Spectral Entropy': _colors[16],
+    'SVD Entropy': _colors[17],
+    'Graph Entropy': _colors[18],
+    'BGS Entropy': _colors[19],
 }
 # Fallback list if dict doesn't work in some seaborn versions (though it should for hue)
 SOURCE_COLORS_LIST = list(_colors)
@@ -66,6 +75,15 @@ SOURCES = [
     ('Jensen Shannon', os.path.join(BASE_OUTPUT_DIR, '8_jensen_shannon')),
     ('Transfer Entropy', os.path.join(BASE_OUTPUT_DIR, '9_transfer_entropy')),
     ('Intrinsic TE', os.path.join(BASE_OUTPUT_DIR, '10_intrinsic_te')),
+    ('Renyi Entropy', os.path.join(BASE_OUTPUT_DIR, '11_renyi_entropy')),
+    ('Neural Rep Entropy', os.path.join(BASE_OUTPUT_DIR, '12_neural_representation_entropy')),
+    ('Diffusion Spectral', os.path.join(BASE_OUTPUT_DIR, '13_diffusion_spectral_entropy')),
+    ('Approximate Entropy', os.path.join(BASE_OUTPUT_DIR, '14_approximate_entropy')),
+    ('Sample Entropy', os.path.join(BASE_OUTPUT_DIR, '15_sample_entropy')),
+    ('Spectral Entropy', os.path.join(BASE_OUTPUT_DIR, '17_spectral_entropy')),
+    ('SVD Entropy', os.path.join(BASE_OUTPUT_DIR, '18_svd_entropy')),
+    ('Graph Entropy', os.path.join(BASE_OUTPUT_DIR, '19_graph_entropy')),
+    ('BGS Entropy', os.path.join(BASE_OUTPUT_DIR, '20_bgs_entropy')),
 ]
 
 # Create plots directory if it doesn't exist
