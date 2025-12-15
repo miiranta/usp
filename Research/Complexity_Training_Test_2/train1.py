@@ -1243,7 +1243,8 @@ class Metrics:
             
             # Global mean/cov
             mu = z.mean(dim=0)
-            cov = torch.cov(z.t()) + 1e-6*torch.eye(z.size(1), device=device)
+            # Use diagonal covariance to save memory
+            var = z.var(dim=0, unbiased=True) + 1e-6
             
             kl_sum = 0.0
             classes = torch.unique(y)
@@ -1251,12 +1252,12 @@ class Metrics:
                 zc = z[y==c]
                 if len(zc) < 2: continue
                 mu_c = zc.mean(dim=0)
-                cov_c = torch.cov(zc.t()) + 1e-6*torch.eye(zc.size(1), device=device)
+                var_c = zc.var(dim=0, unbiased=True) + 1e-6
                 
-                # KL(N_c || N)
-                term1 = torch.logdet(cov) - torch.logdet(cov_c)
-                term2 = torch.trace(torch.linalg.solve(cov, cov_c))
-                term3 = (mu_c - mu) @ torch.linalg.solve(cov, (mu_c - mu))
+                # KL(N_c || N) for diagonal Gaussians
+                term1 = torch.log(var).sum() - torch.log(var_c).sum()
+                term2 = (var_c / var).sum()
+                term3 = ((mu_c - mu)**2 / var).sum()
                 kl = 0.5 * (term1 - z.size(1) + term2 + term3)
                 kl_sum += kl
             return kl_sum / len(classes)
