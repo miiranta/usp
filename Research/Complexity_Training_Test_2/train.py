@@ -1567,10 +1567,21 @@ class Metrics:
             # Proxy: Norm of gradient of Hessian Trace
             # Or gradient of gradient norm squared
             if logits is None or labels is None: return torch.tensor(0.0, device=device)
-            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits.view(-1, logits.size(-1)), labels.view(-1))
+            
+            # Subsample batch to save memory for 3rd order derivatives
+            batch_size = logits.shape[0]
+            max_samples = 1 # Very small batch for 3rd order
+            if batch_size > max_samples:
+                logits_subset = logits[:max_samples]
+                labels_subset = labels[:max_samples]
+            else:
+                logits_subset = logits
+                labels_subset = labels
+
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_subset.view(-1, logits_subset.size(-1)), labels_subset.view(-1))
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
-            grad_norm_sq = sum([(g**2).sum() for g in grads])
+            
             # Grad of grad norm sq is 2 * H * g
             # We want 3rd order.
             # Let's take grad of (g^T H g) or similar.
