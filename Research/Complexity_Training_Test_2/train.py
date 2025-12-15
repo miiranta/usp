@@ -12,6 +12,15 @@ from transformers import RobertaTokenizer
 from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
 
+# Disable efficient attention backend to allow second-order derivatives
+# This is necessary for metrics that require double backward (e.g. gradient_entropy)
+try:
+    torch.backends.cuda.enable_flash_sdp(False)
+    torch.backends.cuda.enable_mem_efficient_sdp(False)
+    torch.backends.cuda.enable_math_sdp(True)
+except AttributeError:
+    pass
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
