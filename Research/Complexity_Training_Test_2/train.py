@@ -859,7 +859,18 @@ class Metrics:
         elif metric_name == 'hessian_spectral_radius':
             # Power iteration
             if logits is None or labels is None: return torch.tensor(0.0, device=device)
-            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits.view(-1, logits.size(-1)), labels.view(-1))
+            
+            # Subsample batch to save memory
+            batch_size = logits.shape[0]
+            max_samples = 2
+            if batch_size > max_samples:
+                logits_subset = logits[:max_samples]
+                labels_subset = labels[:max_samples]
+            else:
+                logits_subset = logits
+                labels_subset = labels
+                
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_subset.view(-1, logits_subset.size(-1)), labels_subset.view(-1))
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
             
