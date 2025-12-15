@@ -1566,20 +1566,45 @@ class Metrics:
             # ||grad^3 L||_F
             # Proxy: Norm of gradient of Hessian Trace
             # Or gradient of gradient norm squared
-            if logits is None or labels is None: return torch.tensor(0.0, device=device)
+            if labels is None: return torch.tensor(0.0, device=device)
             
-            # Subsample batch to save memory for 3rd order derivatives
-            batch_size = logits.shape[0]
-            max_samples = 1 # Very small batch for 3rd order
-            if batch_size > max_samples:
-                logits_subset = logits[:max_samples]
-                labels_subset = labels[:max_samples]
+            # Use a fresh forward pass with small batch/seq to save memory
+            # The graph for 3rd order derivatives is HUGE.
+            if input_ids is not None:
+                # Slice input to minimal size
+                # Batch size 1, Sequence length min(64, current)
+                b_size = 1
+                seq_len = min(input_ids.size(1), 64)
+                
+                input_ids_small = input_ids[:b_size, :seq_len]
+                labels_small = labels[:b_size, :seq_len]
+                
+                # New forward pass
+                logits_small = model(input_ids_small)
+                
+                loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_small.view(-1, logits_small.size(-1)), labels_small.view(-1))
             else:
-                logits_subset = logits
-                labels_subset = labels
+                if logits is None: return torch.tensor(0.0, device=device)
+                # Subsample batch to save memory for 3rd order derivatives
+                batch_size = logits.shape[0]
+                max_samples = 1 # Very small batch for 3rd order
+                if batch_size > max_samples:
+                    logits_subset = logits[:max_samples]
+                    labels_subset = labels[:max_samples]
+                else:
+                    logits_subset = logits
+                    labels_subset = labels
 
-            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_subset.view(-1, logits_subset.size(-1)), labels_subset.view(-1))
-            params = [p for p in model.parameters() if p.requires_grad]
+                loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_subset.view(-1, logits_subset.size(-1)), labels_subset.view(-1))
+            
+            # Restrict parameters to save memory (3rd order is very expensive)
+            all_params = [p for p in model.parameters() if p.requires_grad]
+            # Use only the last few parameters (e.g. last layer) to avoid OOM
+            if len(all_params) > 5:
+                params = all_params[-5:]
+            else:
+                params = all_params
+                
             grads = torch.autograd.grad(loss, params, create_graph=True)
             
             # Grad of grad norm sq is 2 * H * g
@@ -1707,12 +1732,6 @@ class Metrics:
             norm_Hg = torch.sqrt(sum([(h**2).sum() for h in Hg]))
             
             return dot / (norm_g * norm_Hg + 1e-10)
-
-        elif metric_name == 'quadratic_approximation_error':
-            # |L(theta+d) - Q(d)|
-            # Proxy: Third order curvature norm * eps^3
-            third = Metrics.calculate_metric(model, 'third_order_curvature_norm', logits, labels, input_ids)
-            return third * 1e-6
 
         elif metric_name == 'local_loss_lipschitz_constant':
             # Max gradient norm in neighborhood
@@ -1861,12 +1880,6 @@ class Metrics:
             # Proxy: 1 - Gradient cosine drift
             drift = Metrics.calculate_metric(model, 'gradient_cosine_drift', logits, labels, input_ids)
             return 1.0 - drift
-
-        elif metric_name == 'noise_drift_magnitude':
-            # Displacement under noise
-            # Proxy: Gradient norm * noise_std
-            grad_norm = Metrics.calculate_metric(model, 'trajectory_length', logits, labels, input_ids)
-            return grad_norm * 0.01
 
         elif metric_name == 'stochastic_stability_radius':
             # Max noise
@@ -2468,7 +2481,6 @@ def main():
         (False, 'random_direction_curvature_variance', '110_random_direction_curvature_variance'),
         (False, 'loss_basin_connectivity_index', '111_loss_basin_connectivity_index'),
         (False, 'curvature_gradient_alignment', '112_curvature_gradient_alignment'),
-        (False, 'quadratic_approximation_error', '113_quadratic_approximation_error'),
         (False, 'local_loss_lipschitz_constant', '114_local_loss_lipschitz_constant'),
         (False, 'activation_description_length', '115_activation_description_length'),
         (False, 'kolmogorov_structure_index', '116_kolmogorov_structure_index'),
@@ -2484,7 +2496,6 @@ def main():
         (False, 'activation_kurtosis_variance', '126_activation_kurtosis_variance'),
         (False, 'lyapunov_spectrum_width', '127_lyapunov_spectrum_width'),
         (False, 'update_direction_autocorrelation', '128_update_direction_autocorrelation'),
-        (False, 'noise_drift_magnitude', '129_noise_drift_magnitude'),
         (False, 'stochastic_stability_radius', '130_stochastic_stability_radius'),
         (False, 'functional_inertia', '131_functional_inertia'),
         (False, 'implicit_bias_alignment', '132_implicit_bias_alignment'),
