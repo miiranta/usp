@@ -141,7 +141,11 @@ def load_all_data(sources):
     # Rename metrics as requested
     combined.rename(columns={
         'Weights Entropy': 'Entropy',
-        'Weights Disequilibrium': 'Disequilibrium'
+        'Weights Disequilibrium': 'Disequilibrium',
+        'LMC Weight': 'λ',
+        'Val Error Slope': '∆Lval',
+        'Weight': 'λ',
+        'Slope': '∆Lval'
     }, inplace=True)
     
     return combined
@@ -862,11 +866,11 @@ def plot_complexity_metrics_comparison(master_df):
 
 def plot_adaptive_mechanism(master_df):
     """
-    Plots LMC Weight and Validation Error Slope to visualize the adaptive mechanism.
+    Plots λ and ∆Lval to visualize the adaptive mechanism.
     """
     if master_df is None: return
     
-    required = ['LMC Weight', 'Val Error Slope']
+    required = ['λ', '∆Lval']
     if not all(c in master_df.columns for c in required): return
 
     # Create figure and first axis
@@ -883,12 +887,12 @@ def plot_adaptive_mechanism(master_df):
     styles = ['-', '--', ':', '-.']
     source_styles = {source: styles[i % len(styles)] for i, source in enumerate(sources)}
     
-    # Plot LMC Weight on left axis (ax1)
+    # Plot λ on left axis (ax1)
     for source in sources:
         subset = master_df[master_df['Source'] == source]
         
         # Calculate mean and CI
-        grouped = subset.groupby('Epoch')['LMC Weight']
+        grouped = subset.groupby('Epoch')['λ']
         mean = grouped.mean()
         sem = grouped.sem()
         ci = sem * 1.96
@@ -898,7 +902,7 @@ def plot_adaptive_mechanism(master_df):
         ax1.fill_between(mean.index, mean - ci, mean + ci, color=color_weight, alpha=0.2)
                  
     ax1.set_xlabel('Epoch', fontsize=12)
-    ax1.set_ylabel('LMC Weight', color=color_weight, fontsize=12)
+    ax1.set_ylabel('λ', color=color_weight, fontsize=12)
     ax1.tick_params(axis='y', labelcolor=color_weight)
     ax1.spines['left'].set_color(color_weight)
     ax1.spines['left'].set_linewidth(2)
@@ -909,7 +913,7 @@ def plot_adaptive_mechanism(master_df):
         subset = master_df[master_df['Source'] == source]
         
         # Calculate mean and CI
-        grouped = subset.groupby('Epoch')['Val Error Slope']
+        grouped = subset.groupby('Epoch')['∆Lval']
         mean = grouped.mean()
         sem = grouped.sem()
         ci = sem * 1.96
@@ -918,7 +922,7 @@ def plot_adaptive_mechanism(master_df):
                  color=color_slope, linestyle=source_styles[source], linewidth=2, alpha=0.8)
         ax2.fill_between(mean.index, mean - ci, mean + ci, color=color_slope, alpha=0.2)
                  
-    ax2.set_ylabel('Val Error Slope', color=color_slope, fontsize=12)
+    ax2.set_ylabel('∆Lval', color=color_slope, fontsize=12)
     ax2.tick_params(axis='y', labelcolor=color_slope)
     ax2.spines['right'].set_color(color_slope)
     ax2.spines['right'].set_linewidth(2)
@@ -927,15 +931,15 @@ def plot_adaptive_mechanism(master_df):
     # Add zero line for slope
     ax2.axhline(0, color='gray', linestyle=':', alpha=0.5)
 
-    plt.title('Adaptive Mechanism: LMC Weight vs Val Error Slope', fontweight='normal', fontsize=16)
+    plt.title('Adaptive Mechanism: λ vs ∆Lval', fontweight='normal', fontsize=16)
     
     # Custom Legend
     legend_elements = []
     
     # Metric Section
     # legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Metric}$'))
-    legend_elements.append(Line2D([0], [0], color=color_weight, lw=2, label='LMC Weight'))
-    legend_elements.append(Line2D([0], [0], color=color_slope, lw=2, label='Val Error Slope'))
+    legend_elements.append(Line2D([0], [0], color=color_weight, lw=2, label='λ'))
+    legend_elements.append(Line2D([0], [0], color=color_slope, lw=2, label='∆Lval'))
     
     # Spacer
     legend_elements.append(Line2D([0], [0], color='none', label=''))
@@ -959,11 +963,11 @@ def plot_adaptive_mechanism(master_df):
 
 def plot_adaptive_mechanism_faceted(master_df):
     """
-    Plots LMC Weight and Validation Error Slope in faceted subplots by Source.
+    Plots λ and ∆Lval in faceted subplots by Source.
     """
     if master_df is None: return
     
-    required = ['LMC Weight', 'Val Error Slope']
+    required = ['λ', '∆Lval']
     if not all(c in master_df.columns for c in required): return
 
     sources = master_df['Source'].unique()
@@ -985,19 +989,19 @@ def plot_adaptive_mechanism_faceted(master_df):
         # Group by Epoch to get mean (if multiple runs)
         # subset_mean = subset.groupby('Epoch')[required].mean()
         
-        # Plot LMC Weight (Left Axis)
-        grouped_weight = subset.groupby('Epoch')['LMC Weight']
+        # Plot λ (Left Axis)
+        grouped_weight = subset.groupby('Epoch')['λ']
         mean_weight = grouped_weight.mean()
         sem_weight = grouped_weight.sem()
         ci_weight = sem_weight * 1.96
         
         ax1.plot(mean_weight.index, mean_weight.values, 
-                 color=color_weight, linewidth=4.0, label='LMC Weight')
+                 color=color_weight, linewidth=4.0, label='λ')
         ax1.fill_between(mean_weight.index, mean_weight - ci_weight, mean_weight + ci_weight, 
                          color=color_weight, alpha=0.2)
         
         ax1.set_xlabel('Epoch', fontsize=18, fontweight='bold')
-        ax1.set_ylabel('LMC Weight', color=color_weight, fontsize=18, fontweight='bold')
+        ax1.set_ylabel('λ', color=color_weight, fontsize=18, fontweight='bold')
         ax1.tick_params(axis='y', labelcolor=color_weight, labelsize=16)
         ax1.tick_params(axis='x', labelsize=16)
         ax1.set_title(f'{source}', fontsize=20, fontweight='bold', pad=20) # Added padding
@@ -1006,17 +1010,17 @@ def plot_adaptive_mechanism_faceted(master_df):
         # Plot Slope (Right Axis)
         ax2 = ax1.twinx()
         
-        grouped_slope = subset.groupby('Epoch')['Val Error Slope']
+        grouped_slope = subset.groupby('Epoch')['∆Lval']
         mean_slope = grouped_slope.mean()
         sem_slope = grouped_slope.sem()
         ci_slope = sem_slope * 1.96
         
         ax2.plot(mean_slope.index, mean_slope.values, 
-                 color=color_slope, linewidth=4.0, linestyle='--', alpha=1.0, label='Val Error Slope')
+                 color=color_slope, linewidth=4.0, linestyle='--', alpha=1.0, label='∆Lval')
         ax2.fill_between(mean_slope.index, mean_slope - ci_slope, mean_slope + ci_slope,
                          color=color_slope, alpha=0.2)
                  
-        ax2.set_ylabel('Val Error Slope', color=color_slope, fontsize=18, fontweight='bold')
+        ax2.set_ylabel('∆Lval', color=color_slope, fontsize=18, fontweight='bold')
         ax2.tick_params(axis='y', labelcolor=color_slope, labelsize=16)
         
         # Add zero line for slope
@@ -1036,8 +1040,8 @@ def plot_adaptive_mechanism_faceted(master_df):
     
     # Legend
     legend_elements = [
-        Line2D([0], [0], color=color_weight, lw=4.0, label='LMC Weight'),
-        Line2D([0], [0], color=color_slope, lw=4.0, linestyle='--', label='Val Error Slope')
+        Line2D([0], [0], color=color_weight, lw=4.0, label='λ'),
+        Line2D([0], [0], color=color_slope, lw=4.0, linestyle='--', label='∆Lval')
     ]
     fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.92), ncol=2, frameon=False, fontsize=18)
 
