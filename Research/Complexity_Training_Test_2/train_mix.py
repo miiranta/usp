@@ -248,6 +248,9 @@ class Metrics:
             'F': 'gradient_covariance_trace'
         }
         
+        if metric_name.startswith('-'):
+            metric_name = metric_name[1:]
+        
         try:
             if '/' in metric_name:
                 parts = metric_name.split('/')
@@ -466,7 +469,10 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
  
         # New Loss Formula: (x_start / (x_value + 1e-10)) * ce_start
         # We want to MAXIMIZE x_value (disequilibrium).
-        metric_loss_normalized = (metric_start / (metric_value + 1e-10)) * ce_start
+        if config.METRIC_NAME.startswith('-'):
+            metric_loss_normalized = (metric_value / (metric_start + 1e-10)) * ce_start
+        else:
+            metric_loss_normalized = (metric_start / (metric_value + 1e-10)) * ce_start
         
         ce_weight = 1.0 - lmc_weight
         lmc_weight_actual = lmc_weight
@@ -749,13 +755,13 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config = Config()
     
-    # List of experiments: (Control_Mode, Metric_Name, Folder_Name)
+    # List of experiments
     experiments_list = [
         "Control",
-        "H", "H.A", "H.A.B", "H.A.B.C",
-        "A", "A.B", "A.B.C",
-        "B", "B.C",
-        "C",
+        "-H", "-H.A", "-H.A.B", "-H.A.B.C",
+        "-A", "-A.B", "-A.B.C",
+        "-B", "-B.C",
+        "-C",
         "D", "D.E", "D.E.F",
         "E", "E.F",
         "F",
@@ -819,7 +825,7 @@ def main():
             experiments.append((False, exp_name, folder_name))
     
     for control_mode, metric_name, folder_name in experiments:
-        output_dir = os.path.join(script_dir, f'output_max/{folder_name}')
+        output_dir = os.path.join(script_dir, f'output_mix/{folder_name}')
         
         if os.path.exists(output_dir):
             print(f"Skipping {folder_name} (already exists)")
