@@ -1674,7 +1674,7 @@ class Metrics:
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
             
-            neg_mass = 0.0
+            neg_mass = torch.tensor(0.0, device=device)
             n_probes = 5
             for _ in range(n_probes):
                 v = [torch.randn_like(p) for p in params]
