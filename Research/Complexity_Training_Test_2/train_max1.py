@@ -763,8 +763,21 @@ class Metrics:
             # Cond(Cov(logits))
             if logits is None: return torch.tensor(0.0, device=device)
             l = logits.view(-1, logits.size(-1))
-            cov = l.t() @ l
-            return torch.linalg.cond(cov + 1e-6*torch.eye(cov.size(0), device=device))
+            n = l.size(0)
+            v = l.size(1)
+            
+            if n < v:
+                # Use Gram matrix G = L @ L.T which has same non-zero eigenvalues as L.T @ L
+                # Size [N, N] (e.g. 8192x8192) vs [V, V] (50000x50000)
+                cov = l @ l.t()
+                # Eigenvalues of (L.T @ L + eps I) are (lambda_i + eps) and (eps)
+                # Max is max(lambda) + eps
+                # Min is eps (since rank <= N < V, there are zero eigenvalues)
+                lambda_max = torch.linalg.eigvalsh(cov)[-1]
+                return (lambda_max + 1e-6) / 1e-6
+            else:
+                cov = l.t() @ l
+                return torch.linalg.cond(cov + 1e-6*torch.eye(cov.size(0), device=device))
 
         # 47. MDL Surrogate
         elif metric_name == 'mdl_surrogate':
