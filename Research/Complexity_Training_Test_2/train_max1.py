@@ -511,8 +511,21 @@ class Metrics:
         elif metric_name == 'hessian_trace':
             # Tr(H) approx E[v^T H v]
             if logits is None or labels is None: return torch.tensor(0.0, device=device)
+            
+            # Subsample batch to reduce memory usage (Hessian is expensive)
+            # Use a small subset of the batch for the trace estimation
+            batch_size = logits.size(0)
+            max_samples = 2
+            if batch_size > max_samples:
+                indices = torch.randperm(batch_size, device=device)[:max_samples]
+                logits_sub = logits[indices]
+                labels_sub = labels[indices]
+            else:
+                logits_sub = logits
+                labels_sub = labels
+
             # Need create_graph=True for double backprop
-            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits.view(-1, logits.size(-1)), labels.view(-1))
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_sub.view(-1, logits_sub.size(-1)), labels_sub.view(-1))
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
             
@@ -530,7 +543,19 @@ class Metrics:
         # 30. Hessian Spectral Radius (Power Iteration)
         elif metric_name == 'hessian_spectral_radius':
             if logits is None or labels is None: return torch.tensor(0.0, device=device)
-            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits.view(-1, logits.size(-1)), labels.view(-1))
+            
+            # Subsample batch to reduce memory usage
+            batch_size = logits.size(0)
+            max_samples = 2
+            if batch_size > max_samples:
+                indices = torch.randperm(batch_size, device=device)[:max_samples]
+                logits_sub = logits[indices]
+                labels_sub = labels[indices]
+            else:
+                logits_sub = logits
+                labels_sub = labels
+
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_sub.view(-1, logits_sub.size(-1)), labels_sub.view(-1))
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
             
