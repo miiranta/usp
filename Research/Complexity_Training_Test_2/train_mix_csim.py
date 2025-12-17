@@ -702,7 +702,7 @@ def run_training_single(output_dir, config, run_num):
             current_slope = normalize_slope_arctan(raw_slope)
             slope_magnitude = abs(current_slope)
             if current_slope < 0:
-                lmc_weight = max(0.0, lmc_weight - slope_magnitude)
+                lmc_weight = max(0.001, lmc_weight - slope_magnitude)
             else:
                 lmc_weight = min(1.0, lmc_weight + slope_magnitude)
         else:
