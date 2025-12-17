@@ -1,4 +1,6 @@
 import os
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
 import csv
 import math
 import torch
@@ -217,7 +219,19 @@ class Metrics:
 
         elif metric_name == 'gradient_direction_entropy':
             if logits is None or labels is None: return torch.tensor(0.0, device=device)
-            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits.view(-1, logits.size(-1)), labels.view(-1))
+            
+            # Subsample batch to reduce memory usage
+            batch_size = logits.size(0)
+            max_samples = 2
+            if batch_size > max_samples:
+                indices = torch.randperm(batch_size, device=device)[:max_samples]
+                logits_sub = logits[indices]
+                labels_sub = labels[indices]
+            else:
+                logits_sub = logits
+                labels_sub = labels
+
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_sub.view(-1, logits_sub.size(-1)), labels_sub.view(-1))
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
             all_grads = torch.cat([g.view(-1) for g in grads])
@@ -228,7 +242,19 @@ class Metrics:
         elif metric_name == 'gradient_covariance_trace':
             # ||g||^2 as proxy for trace of covariance if mean g is small
             if logits is None or labels is None: return torch.tensor(0.0, device=device)
-            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits.view(-1, logits.size(-1)), labels.view(-1))
+            
+            # Subsample batch to reduce memory usage
+            batch_size = logits.size(0)
+            max_samples = 2
+            if batch_size > max_samples:
+                indices = torch.randperm(batch_size, device=device)[:max_samples]
+                logits_sub = logits[indices]
+                labels_sub = labels[indices]
+            else:
+                logits_sub = logits
+                labels_sub = labels
+
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_sub.view(-1, logits_sub.size(-1)), labels_sub.view(-1))
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
             grad_norm_sq = sum([(g**2).sum() for g in grads])
