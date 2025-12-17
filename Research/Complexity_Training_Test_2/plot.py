@@ -15,6 +15,11 @@ import re
 BASE_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output_mix')
 PLOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots_mix')
 
+# Limits for plotting
+# Set to 0 to disable limiting
+TOP_X_LOWEST_VAL_LOSS = 10
+TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE = 10
+
 # Set Seaborn Theme
 # "paper" context makes elements smaller/finer. "whitegrid" gives a clean look.
 # Switching to "talk" for larger, more readable plots as requested.
@@ -134,6 +139,66 @@ def load_source_data(folder_path, label):
 # ==========================================
 # Plotting Functions
 # ==========================================
+
+def filter_data(df):
+    """
+    Filters the master dataframe based on configuration limits.
+    """
+    if df is None: return None
+    
+    # If no filters are set, return original
+    if TOP_X_LOWEST_VAL_LOSS == 0 and TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE == 0:
+        return df
+
+    allowed_sources_sets = []
+    
+    # Filter by Validation Loss
+    if TOP_X_LOWEST_VAL_LOSS > 0:
+        if 'Validation Loss' in df.columns:
+            # Get final epoch per run
+            final_epochs = df.loc[df.groupby('Run_ID')['Epoch'].idxmax()]
+            # Group by Source and mean
+            source_val_loss = final_epochs.groupby('Source')['Validation Loss'].mean()
+            # Get top X smallest
+            top_val_sources = set(source_val_loss.nsmallest(TOP_X_LOWEST_VAL_LOSS).index)
+            allowed_sources_sets.append(top_val_sources)
+            print(f"Filtering by Top {TOP_X_LOWEST_VAL_LOSS} Val Loss. Kept: {top_val_sources}")
+        else:
+            print("Warning: 'Validation Loss' column not found. Skipping Val Loss filter.")
+
+    # Filter by Test Loss Shakespeare
+    if TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE > 0:
+        test_col = 'Test Loss Shakespeare'
+        if test_col in df.columns:
+            # Get final epoch per run
+            final_epochs = df.loc[df.groupby('Run_ID')['Epoch'].idxmax()]
+            # Group by Source and mean
+            source_test_loss = final_epochs.groupby('Source')[test_col].mean()
+            # Get top X smallest
+            top_test_sources = set(source_test_loss.nsmallest(TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE).index)
+            allowed_sources_sets.append(top_test_sources)
+            print(f"Filtering by Top {TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE} Test Loss Shakespeare. Kept: {top_test_sources}")
+        else:
+            print(f"Warning: '{test_col}' column not found. Skipping Shakespeare filter.")
+
+    if not allowed_sources_sets:
+        print("Warning: No sources selected by filters (or columns missing). Returning all.")
+        return df
+
+    # Union of all sets
+    final_allowed_sources = set().union(*allowed_sources_sets)
+
+    # Always include 'control' if it exists in the original data
+    if 'control' in df['Source'].unique():
+        final_allowed_sources.add('control')
+        print("Added 'control' to plot sources.")
+
+    if not final_allowed_sources:
+        print("Warning: No sources left after filtering!")
+        return None
+
+    print(f"Final sources to plot: {final_allowed_sources}")
+    return df[df['Source'].isin(final_allowed_sources)]
 
 def load_all_data(sources):
     """Loads data from all sources into a single DataFrame."""
@@ -267,28 +332,7 @@ def plot_scatter_phase_space(master_df, x_metric, y_metric):
     
 
 
-def plot_correlation_heatmaps(master_df):
-    """Plots correlation heatmaps for each source."""
-    if master_df is None: return
-    
-    numeric_cols = master_df.select_dtypes(include=[np.number]).columns
-    cols_to_corr = [c for c in numeric_cols if c not in ['Epoch']]
-    
-    for source in master_df['Source'].unique():
-        source_df = master_df[master_df['Source'] == source]
-        corr = source_df[cols_to_corr].corr()
-        
-        plt.figure(figsize=(12, 10))
-        mask = np.triu(np.ones_like(corr, dtype=bool))
-        sns.heatmap(corr, mask=mask, annot=True, fmt=".2f", cmap='coolwarm', vmin=-1, vmax=1)
-        plt.title(f'Correlation Matrix - {source}', fontweight='bold')
-        
-        safe_source = re.sub(r'[^\w\s-]', '', source).strip().replace(' ', '_')
-        output_path = os.path.join(PLOTS_DIR, f'heatmap_correlation_{safe_source}.png')
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        plt.close()
-        print(f"Saved plot: {output_path}")
-        
+
 
 
 def plot_train_vs_val_loss(master_df):
@@ -394,11 +438,15 @@ def plot_test_loss_barplot(master_df):
     stats = df_melted.groupby(['Source', 'Dataset'])['Loss'].agg(['mean', 'sem']).reset_index()
     stats['ci'] = stats['sem'] * 1.96
     
+    # Calculate order
+    order = df_melted.groupby('Dataset')['Loss'].mean().sort_values().index.tolist()
+
     ax = sns.barplot(
         data=df_melted,
         x='Dataset',
         y='Loss',
         hue='Source',
+        order=order,
         palette=SOURCE_PALETTE, # Use consistent palette
         edgecolor='.2',
         capsize=.1,
@@ -503,6 +551,9 @@ def plot_global_best_metrics_barplot(master_df):
         stats = best_per_run.groupby(['Source'])['Best Value'].agg(['mean', 'sem']).reset_index()
         stats['ci'] = stats['sem'] * 1.96
         
+        # Calculate order
+        order = best_per_run.groupby('Source')['Best Value'].mean().sort_values().index.tolist()
+
         # Use hue='Source' to ensure consistent coloring with other plots
         # dodge=False because x and hue are the same
         ax = sns.barplot(
@@ -510,6 +561,7 @@ def plot_global_best_metrics_barplot(master_df):
             x='Source',
             y='Best Value',
             hue='Source',
+            order=order,
             palette=SOURCE_PALETTE,
             edgecolor='.2',
             errorbar=('se', 1.96), # Match lineplot error bars
@@ -568,6 +620,9 @@ def plot_final_metrics_barplot(master_df):
         stats = final_epochs_df.groupby(['Source'])[metric].agg(['mean', 'sem']).reset_index()
         stats['ci'] = stats['sem'] * 1.96
         
+        # Calculate order
+        order = final_epochs_df.groupby('Source')[metric].mean().sort_values().index.tolist()
+
         # Use hue='Source' to ensure consistent coloring with other plots
         # dodge=False because x and hue are the same
         ax = sns.barplot(
@@ -575,6 +630,7 @@ def plot_final_metrics_barplot(master_df):
             x='Source',
             y=metric,
             hue='Source',
+            order=order,
             palette=SOURCE_PALETTE, # Use consistent palette
             edgecolor='.2',
             errorbar=('se', 1.96), # Match lineplot error bars
@@ -1125,6 +1181,9 @@ def main():
 
     # Load all data once
     master_df = load_all_data(SOURCES)
+    
+    # Filter data based on config
+    master_df = filter_data(master_df)
 
     # 1. Plot Metrics
     plot_all_metrics(master_df)
@@ -1132,7 +1191,6 @@ def main():
     # 3. New Plots
     plot_generalization_gap(master_df)
     plot_scatter_phase_space(master_df, 'Model LMC', 'Validation Loss')
-    plot_correlation_heatmaps(master_df)
     plot_train_vs_val_loss(master_df)
     plot_test_loss_barplot(master_df)
     plot_complexity_performance_path(master_df)
