@@ -58,8 +58,7 @@ class Config:
     # Performance optimizations
     USE_COMPILE = False  
     
-    # DONT CHANGE
-    LMC_WEIGHT = 0.01         
+    # DONT CHANGE    
     LEARNING_RATE = 1e-4
 
 # ============================================================================
@@ -687,7 +686,7 @@ def run_training_single(output_dir, config, run_num):
     
     prev_val_loss = None
     current_slope = 0.0
-    lmc_weight = 0.0
+    lmc_weight = 0.001
     
     for epoch in range(config.EPOCHS):
         print(f"\nEpoch {epoch + 1}/{config.EPOCHS}")
