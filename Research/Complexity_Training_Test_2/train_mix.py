@@ -1,5 +1,6 @@
 import os
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+os.environ['PYTORCH_ALLOC_CONF'] = 'expandable_segments:True'
 
 import csv
 import math
@@ -154,19 +155,21 @@ class Metrics:
             return -(probs * torch.log(probs)).sum()
 
         elif metric_name == 'hessian_spectral_radius':
-            if logits is None or labels is None: return torch.tensor(0.0, device=device)
+            if input_ids is None or labels is None: return torch.tensor(0.0, device=device)
             
-            # Subsample batch to reduce memory usage
-            batch_size = logits.size(0)
+            # Subsample batch to reduce memory usage and use fresh forward pass
+            batch_size = input_ids.size(0)
             max_samples = 2
             if batch_size > max_samples:
                 indices = torch.randperm(batch_size, device=device)[:max_samples]
-                logits_sub = logits[indices]
+                input_ids_sub = input_ids[indices]
                 labels_sub = labels[indices]
             else:
-                logits_sub = logits
+                input_ids_sub = input_ids
                 labels_sub = labels
 
+            # Fresh forward pass
+            logits_sub = model(input_ids_sub)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_sub.view(-1, logits_sub.size(-1)), labels_sub.view(-1))
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
@@ -218,19 +221,21 @@ class Metrics:
             return ((probs - uniform_prob) ** 2).sum()
 
         elif metric_name == 'gradient_direction_entropy':
-            if logits is None or labels is None: return torch.tensor(0.0, device=device)
+            if input_ids is None or labels is None: return torch.tensor(0.0, device=device)
             
-            # Subsample batch to reduce memory usage
-            batch_size = logits.size(0)
+            # Subsample batch to reduce memory usage and use fresh forward pass
+            batch_size = input_ids.size(0)
             max_samples = 2
             if batch_size > max_samples:
                 indices = torch.randperm(batch_size, device=device)[:max_samples]
-                logits_sub = logits[indices]
+                input_ids_sub = input_ids[indices]
                 labels_sub = labels[indices]
             else:
-                logits_sub = logits
+                input_ids_sub = input_ids
                 labels_sub = labels
 
+            # Fresh forward pass
+            logits_sub = model(input_ids_sub)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_sub.view(-1, logits_sub.size(-1)), labels_sub.view(-1))
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
@@ -241,19 +246,21 @@ class Metrics:
 
         elif metric_name == 'gradient_covariance_trace':
             # ||g||^2 as proxy for trace of covariance if mean g is small
-            if logits is None or labels is None: return torch.tensor(0.0, device=device)
+            if input_ids is None or labels is None: return torch.tensor(0.0, device=device)
             
-            # Subsample batch to reduce memory usage
-            batch_size = logits.size(0)
+            # Subsample batch to reduce memory usage and use fresh forward pass
+            batch_size = input_ids.size(0)
             max_samples = 2
             if batch_size > max_samples:
                 indices = torch.randperm(batch_size, device=device)[:max_samples]
-                logits_sub = logits[indices]
+                input_ids_sub = input_ids[indices]
                 labels_sub = labels[indices]
             else:
-                logits_sub = logits
+                input_ids_sub = input_ids
                 labels_sub = labels
 
+            # Fresh forward pass
+            logits_sub = model(input_ids_sub)
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_sub.view(-1, logits_sub.size(-1)), labels_sub.view(-1))
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
