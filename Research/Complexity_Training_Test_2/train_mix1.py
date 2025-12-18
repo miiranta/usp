@@ -740,7 +740,7 @@ def run_training_single(output_dir, config, run_num):
                 lmc_weight = min(1.0, lmc_weight + slope_magnitude)
         else:
             current_slope = 0.0
-            lmc_weight = 0.0
+            lmc_weight = 1.0
         
         prev_val_loss = val_loss
         
