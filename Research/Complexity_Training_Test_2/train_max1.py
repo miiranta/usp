@@ -142,7 +142,7 @@ class Metrics:
         return probs, num_bins
 
     @staticmethod
-    def calculate_metric(model, metric_name, logits=None, labels=None, input_ids=None):
+    def calculate_metric(model, metric_name, logits=None, labels=None, input_ids=None, features=None, hidden_states=None):
         weights = Metrics.get_all_weights(model)
         device = weights.device
         
@@ -276,20 +276,31 @@ class Metrics:
             gini = (2 * index - n - 1) * probs_sorted
             return gini.sum(dim=-1).mean() / n
 
-        # 12. Theil Index (Inequality)
-        elif metric_name == 'theil_index':
-            # T = (1/N) sum (x_i / mu) log (x_i / mu)
-            # For probs, mu = 1/N.
-            # T = (1/N) sum (N p_i) log (N p_i)
-            #   = sum p_i (log p_i + log N)
-            #   = -H(p) + log N
-            # This is exactly KL(p || u) or Energy Distance.
-            # Let's implement it explicitly as Theil.
+        # 12. Semantic Diversity (Rao's Q with Embeddings)
+        elif metric_name == 'semantic_diversity':
             if logits is None: return torch.tensor(0.0, device=device)
             probs = torch.softmax(logits, dim=-1)
-            n = probs.size(-1)
-            theil = (probs * (torch.log(probs + 1e-10) + math.log(n))).sum(dim=-1)
-            return theil.mean()
+            # Top-k for efficiency
+            k = 5
+            topk_probs, topk_indices = probs.topk(k, dim=-1)
+            # Normalize top-k probs
+            topk_probs = topk_probs / topk_probs.sum(dim=-1, keepdim=True)
+            
+            # Get embeddings
+            E = model.embedding.weight
+            vecs = E[topk_indices] # [B, S, k, D]
+            
+            # Pairwise distances [B, S, k, k]
+            # Flatten B, S -> N
+            vecs = vecs.view(-1, k, vecs.size(-1))
+            topk_probs = topk_probs.view(-1, k)
+            
+            dists = torch.cdist(vecs, vecs)
+            
+            # Weighted sum: sum_ij p_i p_j d_ij
+            weights = topk_probs.unsqueeze(2) * topk_probs.unsqueeze(1)
+            diversity = (weights * dists).sum(dim=(1, 2))
+            return diversity.mean()
 
         # 13. Inverse Spectral Flatness
         elif metric_name == 'inverse_spectral_flatness':
@@ -304,27 +315,30 @@ class Metrics:
             gm = torch.exp(log_gm)
             return (am / (gm + 1e-10)).mean()
 
-        # 14. Renyi Divergence (Alpha=2)
-        elif metric_name == 'renyi_divergence':
-            # D_a(p||u) = 1/(a-1) log( sum p^a / u^(a-1) )
-            # alpha = 2
-            # log( sum p^2 / (1/N) ) = log( N * sum p^2 )
-            if logits is None: return torch.tensor(0.0, device=device)
-            probs = torch.softmax(logits, dim=-1)
-            n = probs.size(-1)
-            sum_sq = (probs ** 2).sum(dim=-1)
-            return torch.log(n * sum_sq + 1e-10).mean()
+        # 14. Hoyer Sparsity
+        elif metric_name == 'hoyer_sparsity':
+            if features is None: return torch.tensor(0.0, device=device)
+            # features: [B, S, D]
+            x = features.view(-1, features.size(-1))
+            n = x.size(1)
+            sqrt_n = math.sqrt(n)
+            
+            l1 = x.norm(p=1, dim=1)
+            l2 = x.norm(p=2, dim=1)
+            
+            # (sqrt(n) - L1/L2) / (sqrt(n) - 1)
+            sparsity = (sqrt_n - l1 / (l2 + 1e-10)) / (sqrt_n - 1 + 1e-10)
+            return sparsity.mean()
 
-        # 15. Tsallis Divergence (Alpha=2)
-        elif metric_name == 'tsallis_divergence':
-            # D_q(p||u) = 1/(q-1) (1 - sum p^q u^(1-q)) ? No, standard definition:
-            # 1/(q-1) ( sum(p^q / u^(q-1)) - 1 )
-            # q=2: sum(p^2 / (1/N)) - 1 = N * sum(p^2) - 1
+        # 15. Varentropy (Variance of Information)
+        elif metric_name == 'varentropy':
             if logits is None: return torch.tensor(0.0, device=device)
             probs = torch.softmax(logits, dim=-1)
-            n = probs.size(-1)
-            sum_sq = (probs ** 2).sum(dim=-1)
-            return (n * sum_sq - 1.0).mean()
+            log_p = torch.log(probs + 1e-10)
+            entropy = -(probs * log_p).sum(dim=-1, keepdim=True)
+            # V(p) = sum p (log p + H)^2
+            varentropy = (probs * (log_p + entropy)**2).sum(dim=-1)
+            return varentropy.mean()
 
         # 16. Jensen-Shannon Divergence to Uniform
         elif metric_name == 'jensen_shannon':
@@ -622,11 +636,35 @@ class Metrics:
             term2 = 0.5 * (epsilon**2) * gHg / (grad_norm**2 + 1e-10)
             return term1 + term2
 
-        # 33. PAC-Bayes Flatness
-        elif metric_name == 'pac_bayes_flatness':
-            # Trace(H) * sigma^2
-            trace = Metrics.calculate_metric(model, 'hessian_trace', logits, labels, input_ids)
-            return trace * 0.001
+        # 33. Curvature Energy (Hessian Frobenius Norm)
+        elif metric_name == 'curvature_energy':
+            # Tr(H^2) approx E[||Hv||^2]
+            if logits is None or labels is None: return torch.tensor(0.0, device=device)
+            
+            batch_size = logits.size(0)
+            max_samples = 2
+            if batch_size > max_samples:
+                indices = torch.randperm(batch_size, device=device)[:max_samples]
+                logits_sub = logits[indices]
+                labels_sub = labels[indices]
+            else:
+                logits_sub = logits
+                labels_sub = labels
+
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_sub.view(-1, logits_sub.size(-1)), labels_sub.view(-1))
+            params = [p for p in model.parameters() if p.requires_grad]
+            grads = torch.autograd.grad(loss, params, create_graph=True)
+            
+            # Random v
+            v = [torch.randint_like(p, high=2) * 2 - 1 for p in params]
+            
+            # Hv
+            grad_v = sum([(g * vi).sum() for g, vi in zip(grads, v)])
+            Hv = torch.autograd.grad(grad_v, params, create_graph=True)
+            
+            # ||Hv||^2
+            norm_sq = sum([(h**2).sum() for h in Hv])
+            return norm_sq
 
         # 34. Gradient Covariance Trace
         elif metric_name == 'gradient_covariance_trace':
@@ -802,6 +840,1184 @@ class Metrics:
                 except: pass
             return torch.tensor(val, device=device)
 
+        # 49. Kernel Target Alignment (KTA)
+        elif metric_name == 'kernel_target_alignment':
+            if features is None or labels is None: return torch.tensor(0.0, device=device)
+            
+            mask = labels != -100
+            z = features.view(-1, features.size(-1))[mask.view(-1)]
+            y = labels.view(-1)[mask.view(-1)]
+            
+            if len(y) > 2000: # Subsample if too large
+                idx = torch.randperm(len(y))[:2000]
+                z = z[idx]
+                y = y[idx]
+            
+            z = F.normalize(z, p=2, dim=1)
+            K = z @ z.t()
+            
+            # Y matrix
+            y_mat = (y.unsqueeze(0) == y.unsqueeze(1)).float()
+            
+            num = (K * y_mat).sum()
+            den = torch.norm(K) * torch.norm(y_mat)
+            return num / (den + 1e-10)
+
+        # 50. Classifier-Feature Alignment (NC4)
+        elif metric_name == 'classifier_feature_alignment':
+            if features is None or labels is None: return torch.tensor(0.0, device=device)
+            mask = labels != -100
+            z = features.view(-1, features.size(-1))[mask.view(-1)]
+            y = labels.view(-1)[mask.view(-1)]
+            
+            W = model.lm_head.weight # [Vocab, H]
+            
+            classes = torch.unique(y)
+            if len(classes) < 1: return torch.tensor(0.0, device=device)
+            
+            sim_sum = 0.0
+            count = 0
+            for c in classes:
+                zc = z[y==c]
+                if len(zc) > 0:
+                    mu_c = zc.mean(dim=0)
+                    w_c = W[c]
+                    sim = F.cosine_similarity(mu_c.unsqueeze(0), w_c.unsqueeze(0))
+                    sim_sum += sim
+                    count += 1
+            return sim_sum / (count + 1e-10)
+
+        # 51. Simplex Equiangularity (NC2)
+        elif metric_name == 'simplex_equiangularity':
+            if features is None or labels is None: return torch.tensor(0.0, device=device)
+            mask = labels != -100
+            z = features.view(-1, features.size(-1))[mask.view(-1)]
+            y = labels.view(-1)[mask.view(-1)]
+            
+            classes = torch.unique(y)
+            if len(classes) < 2: return torch.tensor(0.0, device=device)
+            
+            means = []
+            for c in classes:
+                zc = z[y==c]
+                if len(zc) > 0:
+                    means.append(zc.mean(dim=0))
+            
+            if len(means) < 2: return torch.tensor(0.0, device=device)
+            means = torch.stack(means)
+            means = F.normalize(means, p=2, dim=1)
+            
+            G = means @ means.t()
+            K = len(means)
+            target = -1.0 / (K - 1.0)
+            
+            mask_off = ~torch.eye(K, dtype=torch.bool, device=device)
+            off_diag = G[mask_off]
+            
+            mse = ((off_diag - target) ** 2).mean()
+            return 1.0 / (mse + 1e-10)
+
+        # 52. Minimum Margin
+        elif metric_name == 'minimum_margin':
+            if logits is None: return torch.tensor(0.0, device=device)
+            probs = torch.softmax(logits, dim=-1)
+            top2 = probs.topk(2, dim=-1).values
+            margins = top2[:, :, 0] - top2[:, :, 1] # [B, S]
+            return margins.min()
+
+        # 53. Thermodynamic Susceptibility (Fisher Info Trace)
+        elif metric_name == 'thermodynamic_susceptibility':
+            if logits is None or labels is None: return torch.tensor(0.0, device=device)
+            # Re-compute loss with create_graph=True
+            # Subsample for speed
+            batch_size = logits.size(0)
+            max_samples = 4
+            if batch_size > max_samples:
+                indices = torch.randperm(batch_size, device=device)[:max_samples]
+                logits_sub = logits[indices]
+                labels_sub = labels[indices]
+            else:
+                logits_sub = logits
+                labels_sub = labels
+                
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_sub.view(-1, logits_sub.size(-1)), labels_sub.view(-1))
+            params = [p for p in model.parameters() if p.requires_grad]
+            grads = torch.autograd.grad(loss, params, create_graph=True)
+            susceptibility = sum([(g**2).sum() for g in grads])
+            return susceptibility
+
+        # 54. Algebraic Connectivity (Fiedler Value)
+        elif metric_name == 'algebraic_connectivity':
+            # Use the largest weight matrix (usually embedding or first layer)
+            # Or average over layers. Let's use the first transformer layer's linear1
+            w = model.transformer.layers[0].linear1.weight
+            # Construct bipartite adjacency: [0, |W|; |W|^T, 0]
+            # Size: (Out+In) x (Out+In)
+            w_abs = w.abs()
+            n_out, n_in = w_abs.shape
+            size = n_out + n_in
+            
+            # Block matrix construction
+            # A = torch.zeros(size, size, device=device)
+            # A[:n_out, n_out:] = w_abs
+            # A[n_out:, :n_out] = w_abs.t()
+            
+            # Degree matrix D is diagonal. D_ii = sum(A_ij)
+            # Row sums:
+            # For first n_out rows: sum(|W|, dim=1)
+            # For last n_in rows: sum(|W|^T, dim=1) = sum(|W|, dim=0)
+            d_out = w_abs.sum(dim=1)
+            d_in = w_abs.sum(dim=0)
+            d = torch.cat([d_out, d_in])
+            
+            # Laplacian L = D - A
+            # We want 2nd smallest eigenvalue.
+            # L is symmetric.
+            # L = [diag(d_out), -|W|; -|W|^T, diag(d_in)]
+            
+            # To save memory, we can try to compute it for a smaller matrix if possible,
+            # but 768+3072 = 3840, 3840^2 is ~14M elements, feasible.
+            
+            # Construct L explicitly
+            L = torch.diag(d)
+            L[:n_out, n_out:] -= w_abs
+            L[n_out:, :n_out] -= w_abs.t()
+            
+            try:
+                # eigvalsh for symmetric
+                eigvals = torch.linalg.eigvalsh(L)
+                # Sorted ascending. 0 is first.
+                return eigvals[1]
+            except:
+                return torch.tensor(0.0, device=device)
+
+        # 55. Persistent Entropy (Proxy)
+        elif metric_name == 'persistent_entropy':
+            if features is None: return torch.tensor(0.0, device=device)
+            # Use features from the batch
+            # Subsample
+            z = features.view(-1, features.size(-1))
+            if z.size(0) > 500:
+                idx = torch.randperm(z.size(0))[:500]
+                z = z[idx]
+            
+            # Pairwise distances
+            dists = torch.cdist(z, z)
+            # Normalize to prob
+            probs = dists / (dists.sum() + 1e-10)
+            # Entropy
+            # Filter zeros
+            mask = probs > 1e-10
+            p = probs[mask]
+            entropy = -(p * torch.log(p)).sum()
+            return entropy
+
+        # 56. Level Spacing Ratio
+        elif metric_name == 'level_spacing_ratio':
+            # Use embedding weight
+            w = model.embedding.weight
+            try:
+                s = torch.linalg.svdvals(w)
+                s, _ = torch.sort(s)
+                deltas = s[1:] - s[:-1]
+                ratios = torch.minimum(deltas[1:], deltas[:-1]) / (torch.maximum(deltas[1:], deltas[:-1]) + 1e-10)
+                return ratios.mean()
+            except:
+                return torch.tensor(0.0, device=device)
+
+        # 57. Effective Information
+        elif metric_name == 'effective_information':
+            # Use first layer
+            w = model.transformer.layers[0].linear1.weight # [Out, In]
+            # Softmax over output (dim 0) to get P(out|in)
+            # W_norm[i, j] = P(out_i | in_j)
+            w_norm = torch.softmax(w, dim=0)
+            
+            # 1. Entropy of average output
+            # P(out) = sum_j P(out|in_j) P(in_j)
+            # Assume P(in_j) = 1/N
+            avg_out = w_norm.mean(dim=1)
+            h_avg = -(avg_out * torch.log(avg_out + 1e-10)).sum()
+            
+            # 2. Average entropy of outputs
+            # H(out|in_j) = -sum_i P(out_i|in_j) log P(out_i|in_j)
+            h_cond = -(w_norm * torch.log(w_norm + 1e-10)).sum(dim=0)
+            avg_h_cond = h_cond.mean()
+            
+            return h_avg - avg_h_cond
+
+        # 58. Ollivier-Ricci Curvature (Proxy)
+        elif metric_name == 'ollivier_ricci_curvature':
+            if features is None: return torch.tensor(0.0, device=device)
+            # Subsample
+            z = features.view(-1, features.size(-1))
+            if z.size(0) > 200:
+                idx = torch.randperm(z.size(0))[:200]
+                z = z[idx]
+            
+            # 1. Adjacency (Correlation)
+            # Normalize z
+            z_norm = F.normalize(z, p=2, dim=1)
+            adj = torch.mm(z_norm, z_norm.t()).abs() # [N, N]
+            # Remove self-loops
+            adj.fill_diagonal_(0)
+            
+            # 2. Distributions (Softmax of adjacency)
+            m = F.softmax(adj * 10, dim=1) # Sharpen
+            
+            # 3. Geodesic distance (1 - adj)
+            d = 1.0 - adj
+            
+            # 4. Wasserstein Proxy (Overlap)
+            # W1(m_i, m_j) is hard.
+            # Proxy: 1 - Overlap(m_i, m_j)
+            # ORC(i, j) = 1 - W1 / d
+            # We want to MAXIMIZE ORC.
+            # Let's use a simpler proxy: Average Clustering Coefficient of the weighted graph
+            # C_i = sum(w_ij * w_jk * w_ki) / ...
+            # Or just maximize the "Triangle Density"
+            
+            # Let's implement the actual ORC proxy:
+            # W1 approx ||m_i - m_j||_1 / 2 (for disjoint support)
+            # But here they overlap.
+            # Let's use Total Variation Distance as lower bound for W1
+            # W1 >= TV = 0.5 * ||m_i - m_j||_1
+            
+            # Compute pairwise TV
+            # m: [N, N]
+            # m_i: [1, N], m_j: [N, 1] -> [N, N, N] too big.
+            
+            # Let's use a very simple proxy for "Positive Curvature":
+            # High clustering.
+            # Trace(A^3) / Trace(A^2) ?
+            
+            # Let's use Trace(A^3) (Number of triangles)
+            # Normalize A
+            A = adj / (adj.sum(dim=1, keepdim=True) + 1e-10)
+            A3 = torch.mm(torch.mm(A, A), A)
+            return torch.trace(A3)
+
+        # 59. Von Neumann Entropy (Spectral Entropy)
+        elif metric_name == 'von_neumann_entropy':
+            if features is None: return torch.tensor(0.0, device=device)
+            z = features.view(-1, features.size(-1))
+            # Center
+            z = z - z.mean(dim=0)
+            # Covariance
+            cov = (z.t() @ z) / (z.size(0) - 1)
+            # Normalize to density matrix
+            rho = cov / (torch.trace(cov) + 1e-10)
+            # Eigenvalues
+            try:
+                e = torch.linalg.eigvalsh(rho)
+                e = torch.clamp(e, min=1e-10)
+                return -(e * torch.log(e)).sum()
+            except:
+                return torch.tensor(0.0, device=device)
+
+        # 60. Interaction Information (Synergy Proxy)
+        elif metric_name == 'interaction_information':
+            # We want to MAXIMIZE Synergy (which is usually negative O-info).
+            # Or minimize Redundancy.
+            # Let's maximize: H(Joint) - Sum(H(Marginals)) (This is -Total Correlation)
+            # Maximizing this means minimizing Total Correlation (Independence).
+            # Wait, Synergy is different.
+            # Synergy = Info(Whole) > Sum Info(Parts).
+            # Let's use "O-Information" formula.
+            # Omega = (N-2)H(X) + Sum[H(Xi) - H(X-i)]
+            # If Omega < 0, Synergy dominates.
+            # So we want to MINIMIZE Omega.
+            # Since the code maximizes the metric, we return -Omega.
+            
+            if features is None: return torch.tensor(0.0, device=device)
+            z = features.view(-1, features.size(-1))
+            
+            # Use Gaussian Entropy proxy
+            # H(X) = 0.5 * logdet(Cov) + const
+            
+            # Subsample neurons (features) if too many
+            if z.size(1) > 100:
+                idx = torch.randperm(z.size(1))[:100]
+                z = z[:, idx]
+            
+            N = z.size(1)
+            cov = torch.cov(z.t())
+            sign, logdet = torch.linalg.slogdet(cov + 1e-6 * torch.eye(N, device=device))
+            if sign <= 0: return torch.tensor(0.0, device=device)
+            h_joint = 0.5 * logdet
+            
+            # Sum of marginal entropies (diagonal)
+            h_marginals = 0.5 * torch.log(torch.diag(cov) + 1e-6).sum()
+            
+            # Total Correlation = Sum(H_marginals) - H_joint
+            # We want to minimize TC (maximize independence) OR maximize Synergy?
+            # Let's return -Total Correlation (Maximize Independence)
+            # This is a good proxy for "Disentanglement"
+            return -(h_marginals - h_joint)
+
+        # 61. Local Lyapunov Exponent (Expansion Rate)
+        elif metric_name == 'local_lyapunov_exponent':
+            # Proxy: Mean Log Singular Value of Layer Weights
+            # If > 0, expansion. If < 0, contraction.
+            # We want to maximize it (up to a point, usually 0).
+            # But here we just return the value.
+            val = 0.0
+            count = 0
+            for layer in model.transformer.layers:
+                w = layer.linear1.weight
+                try:
+                    s = torch.linalg.svdvals(w)
+                    val += torch.log(s.max() + 1e-10)
+                    count += 1
+                except: pass
+            return torch.tensor(val / count, device=device)
+
+        # 62. Multifractal Spectrum Width
+        elif metric_name == 'multifractal_spectrum_width':
+            if features is None: return torch.tensor(0.0, device=device)
+            z = features.view(-1, features.size(-1))
+            # Normalize
+            z = (z - z.mean()) / (z.std() + 1e-8)
+            
+            # Coarse graining at scales 1, 2, 4
+            scales = [1, 2, 4]
+            moments = torch.tensor([0.5, 1.0, 2.0, 4.0], device=device)
+            partition_functions = []
+            
+            for s in scales:
+                if s == 1:
+                    coarse = torch.abs(z)
+                else:
+                    # Avg pool 1d on flattened features
+                    # Reshape to [B, L] -> [1, 1, B*L]
+                    flat = torch.abs(z).view(1, 1, -1)
+                    coarse = F.avg_pool1d(flat, kernel_size=s, stride=s).view(-1)
+                
+                # Z(q) = sum |x|^q
+                Z_q = torch.stack([(coarse ** q).sum() for q in moments])
+                partition_functions.append(torch.log(Z_q + 1e-8))
+            
+            # Tau(q) slope
+            # log2(4) - log2(1) = 2.0
+            tau_q = (partition_functions[-1] - partition_functions[0]) / 2.0
+            
+            # Alpha(q) = dTau/dq
+            alpha = (tau_q[1:] - tau_q[:-1]) / (moments[1:] - moments[:-1])
+            
+            return alpha.max() - alpha.min()
+
+        # 63. Predictive V-Information (Linear Probe Utility)
+        elif metric_name == 'predictive_v_information':
+            if features is None or labels is None: return torch.tensor(0.0, device=device)
+            mask = labels != -100
+            H = features.view(-1, features.size(-1))[mask.view(-1)]
+            y = labels.view(-1)[mask.view(-1)]
+            
+            # Subsample
+            if H.size(0) > 1000:
+                idx = torch.randperm(H.size(0))[:1000]
+                H = H[idx]
+                y = y[idx]
+            
+            # One-hot targets
+            num_classes = model.lm_head.out_features
+            Y = F.one_hot(y, num_classes=num_classes).float()
+            
+            # Center
+            H = H - H.mean(dim=0, keepdim=True)
+            Y = Y - Y.mean(dim=0, keepdim=True)
+            
+            # Ridge Regression
+            lambda_reg = 1e-3
+            cov_H = H.t() @ H / H.size(0)
+            cov_HY = H.t() @ Y / H.size(0)
+            
+            identity = torch.eye(H.size(1), device=device)
+            try:
+                W_opt = torch.linalg.solve(cov_H + lambda_reg * identity, cov_HY)
+                Y_pred = H @ W_opt
+                mse = ((Y - Y_pred) ** 2).mean()
+                return -mse # Maximize negative MSE
+            except:
+                return torch.tensor(0.0, device=device)
+
+        # 64. Log-Det Controllability Gramian
+        elif metric_name == 'log_det_controllability':
+            # Use first layer weight
+            w = model.transformer.layers[0].linear1.weight
+            G = w @ w.t()
+            G = G / (G.norm() + 1e-8)
+            G = G + 1e-6 * torch.eye(G.size(0), device=device)
+            return torch.logdet(G)
+
+        # 65. Trajectory Complexity (Logical Depth)
+        elif metric_name == 'trajectory_complexity':
+            if hidden_states is None: return torch.tensor(0.0, device=device)
+            
+            # hidden_states is a list of tensors [Batch, Seq, Dim]
+            # We want to measure the path length in the activation space.
+            
+            # Stack layers: [Layers, Batch, Seq, Dim]
+            # We can average over Batch and Seq, or compute per sample.
+            
+            # Let's compute per token and average.
+            # Flatten Batch and Seq: [Layers, N, Dim]
+            layers_stack = torch.stack(hidden_states)
+            L, B, S, D = layers_stack.shape
+            layers_flat = layers_stack.view(L, -1, D)
+            
+            # Subsample if too large
+            if layers_flat.size(1) > 1000:
+                idx = torch.randperm(layers_flat.size(1))[:1000]
+                layers_flat = layers_flat[:, idx, :]
+            
+            # 1. Step lengths: ||h_{l+1} - h_l||
+            steps = layers_flat[1:] - layers_flat[:-1]
+            step_lengths = torch.norm(steps, dim=2).sum(dim=0) # Sum over layers -> [N]
+            
+            # 2. Displacement: ||h_L - h_0||
+            displacement = layers_flat[-1] - layers_flat[0]
+            disp_length = torch.norm(displacement, dim=1) # [N]
+            
+            # 3. Ratio
+            ratio = step_lengths / (disp_length + 1e-6)
+            
+            # We want to MAXIMIZE this (more complex trajectory)
+            return ratio.mean()
+
+        # 66. Lempel-Ziv Complexity (Binarized)
+        elif metric_name == 'lempel_ziv_complexity':
+            if features is None: return torch.tensor(0.0, device=device)
+            # Binarize features
+            z = features.view(-1, features.size(-1))
+            # Subsample
+            if z.size(0) > 500:
+                idx = torch.randperm(z.size(0))[:500]
+                z = z[idx]
+            
+            threshold = z.mean()
+            binary = (z > threshold).float()
+            
+            # Differentiable proxy: Entropy of soft binarization
+            # sigmoid(beta * (z - threshold))
+            beta = 10.0
+            probs = torch.sigmoid(beta * (z - threshold))
+            # Entropy of Bernoulli
+            entropy = -(probs * torch.log(probs + 1e-10) + (1-probs) * torch.log(1-probs + 1e-10))
+            return entropy.mean()
+
+        # 67. Gradient Diversity
+        elif metric_name == 'gradient_diversity':
+            if logits is None or labels is None: return torch.tensor(0.0, device=device)
+            # Requires per-sample gradients.
+            # Very expensive without functorch.
+            # Let's use a "Batch Split" proxy.
+            # Split batch into 4 mini-batches, compute gradients, measure diversity.
+            
+            batch_size = logits.size(0)
+            if batch_size < 4: return torch.tensor(0.0, device=device)
+            
+            splits = 4
+            split_size = batch_size // splits
+            
+            grads_list = []
+            params = [p for p in model.parameters() if p.requires_grad]
+            
+            for i in range(splits):
+                l_sub = logits[i*split_size : (i+1)*split_size]
+                y_sub = labels[i*split_size : (i+1)*split_size]
+                loss = nn.CrossEntropyLoss(ignore_index=-100)(l_sub.view(-1, l_sub.size(-1)), y_sub.view(-1))
+                
+                gs = torch.autograd.grad(loss, params, retain_graph=True)
+                # Flatten
+                g_flat = torch.cat([g.view(-1) for g in gs])
+                grads_list.append(g_flat)
+            
+            grads_tensor = torch.stack(grads_list) # [4, P]
+            
+            sum_sq_norms = (grads_tensor.norm(dim=1) ** 2).sum()
+            norm_sum_sq = grads_tensor.sum(dim=0).norm() ** 2
+            
+            return sum_sq_norms / (norm_sum_sq + 1e-10)
+
+        # 68. Bi-Lipschitz Lower Bound (Min Singular Value)
+        elif metric_name == 'bi_lipschitz_lower_bound':
+            val = 0.0
+            count = 0
+            for layer in model.transformer.layers:
+                w = layer.linear1.weight
+                try:
+                    # SVD is slow, use small proxy or just compute for one layer
+                    # Or use power iteration for min SV?
+                    # Let's use full SVD on just one layer to be safe on time
+                    if count > 0: break 
+                    s = torch.linalg.svdvals(w)
+                    val += s.min()
+                    count += 1
+                except: pass
+            return torch.tensor(val, device=device)
+
+        # 69. Graph Modularity (Spectral)
+        elif metric_name == 'graph_modularity':
+            # Use first layer weights
+            w = model.transformer.layers[0].linear1.weight
+            # Symmetrize: W^T W
+            adj = torch.abs(w.t() @ w)
+            k = adj.sum(dim=1, keepdim=True)
+            m = k.sum()
+            if m < 1e-6: return torch.tensor(0.0, device=device)
+            
+            # Modularity Matrix B = A - k k^T / m
+            # We want leading eigenvalue of B
+            # Power iteration
+            v = torch.randn(adj.size(0), 1, device=device)
+            v = v / v.norm()
+            
+            # B v = A v - k (k^T v) / m
+            for _ in range(5):
+                Av = adj @ v
+                kTv = (k.t() @ v).item()
+                Bv = Av - k * (kTv / m)
+                v = Bv / (Bv.norm() + 1e-10)
+            
+            # Rayleigh quotient: v^T B v
+            Av = adj @ v
+            kTv = (k.t() @ v).item()
+            Bv = Av - k * (kTv / m)
+            score = (v.t() @ Bv).squeeze()
+            return score / m
+
+        # 70. Graph Assortativity
+        elif metric_name == 'graph_assortativity':
+            w = model.transformer.layers[0].linear1.weight
+            adj = torch.abs(w.t() @ w)
+            k = adj.sum(dim=1)
+            M = adj.sum()
+            if M < 1e-6: return torch.tensor(0.0, device=device)
+            
+            # Pearson correlation of degrees of connected nodes
+            # Numerator: sum_ij A_ij (k_i - mu)(k_j - mu)
+            # Denom: sum_ij A_ij (k_i - mu)^2
+            
+            # Expected degree (weighted)
+            mu = (k * k).sum() / M
+            
+            # Centered degrees
+            k_centered = k - mu
+            
+            # Num = k_c^T A k_c
+            num = k_centered @ adj @ k_centered
+            
+            # Denom = sum_i k_i * k_c_i^2 ? No.
+            # Standard formula for weighted assortativity is complex.
+            # Simplified: Correlation of k_source and k_target over edges.
+            # Let's use the implementation from research:
+            # term1 = sum(A * k_out * k_in) / M
+            term1 = (adj * (k.unsqueeze(1) @ k.unsqueeze(0))).sum() / M
+            term2 = (k * k).sum() / M # E[k] ? No, this is sum(k^2)/M
+            # Actually term2 should be (sum(A * k) / M)^2 ?
+            # Let's use the simplified Pearson form:
+            # r = (Tr(K A K) - Tr(A K)^2 / M) / ...
+            
+            # Let's use a simpler proxy: Variance of degrees / Mean degree (Dispersion)
+            # High assortativity often correlates with high variance?
+            # No, let's stick to the correlation.
+            
+            # E[XY]
+            exy = term1
+            # E[X]
+            ex = (adj @ k).sum() / M
+            # E[X^2]
+            ex2 = (adj @ (k**2)).sum() / M
+            
+            cov = exy - ex**2
+            var = ex2 - ex**2
+            return cov / (var + 1e-10)
+
+        # 71. Small-Worldness (Sigma)
+        elif metric_name == 'small_worldness':
+            w = model.transformer.layers[0].linear1.weight
+            adj = torch.abs(w.t() @ w)
+            # Normalize
+            adj = adj / (adj.max() + 1e-10)
+            
+            # Clustering Coefficient C
+            # Onnela formula: Trace(A^(1/3)^3) / ...
+            adj_cuberoot = torch.pow(adj, 1.0/3.0)
+            # Trace(A^3)
+            # A @ A @ A
+            # Too expensive for 768x768? 768^3 is 450M ops, fine.
+            A3 = adj_cuberoot @ adj_cuberoot @ adj_cuberoot
+            triangles = torch.diagonal(A3).sum()
+            
+            k = adj.sum(dim=1)
+            denom = (k * (k - 1)).sum()
+            C = triangles / (denom + 1e-10)
+            
+            # Path length L proxy: 1 / Global Efficiency
+            # E = 1/N(N-1) sum 1/d_ij
+            # For dense graphs, L ~ 1.
+            # So Sigma ~ C.
+            return C
+
+        # 72. Hurst Exponent (Rescaled Range)
+        elif metric_name == 'hurst_exponent':
+            if features is None: return torch.tensor(0.0, device=device)
+            # features: [B, S, D]
+            # Treat as time series of length S
+            x = features # [B, S, D]
+            # Mean over batch and dim? Or compute per series.
+            # Let's compute for a subset of neurons
+            if x.size(2) > 50:
+                x = x[:, :, :50]
+            
+            # R/S Analysis
+            # Y = cumsum(X - mean)
+            # R = max(Y) - min(Y)
+            # S = std(X)
+            
+            # We need to do this for different lags (window sizes)
+            # But S is fixed (Seq Length).
+            # Let's just compute R/S for the full sequence and return log(R/S) / log(S)
+            # This is a point estimate of H.
+            
+            mean = x.mean(dim=1, keepdim=True)
+            y = torch.cumsum(x - mean, dim=1)
+            r_val = y.max(dim=1).values - y.min(dim=1).values
+            s_val = x.std(dim=1)
+            
+            rs = r_val / (s_val + 1e-10)
+            # H ~ log(RS) / log(N)
+            n = x.size(1)
+            h = torch.log(rs + 1e-10) / math.log(n)
+            return h.mean()
+
+        # 73. Approximate Entropy (ApEn)
+        elif metric_name == 'approximate_entropy':
+            if features is None: return torch.tensor(0.0, device=device)
+            # [B, S, D] -> [B, S] (Mean over D)
+            seq = features.mean(dim=2)
+            # Subsample batch
+            if seq.size(0) > 10: seq = seq[:10]
+            
+            m = 2
+            r = 0.2 * seq.std(dim=1, keepdim=True)
+            
+            def phi(u, m, r):
+                # u: [B, S]
+                B, S = u.shape
+                # Unfold to [B, S-m+1, m]
+                if S < m: return torch.zeros(B, device=device)
+                x = u.unfold(1, m, 1)
+                # Pairwise distances (Chebyshev)
+                # [B, N, 1, m] - [B, 1, N, m]
+                dist = torch.abs(x.unsqueeze(2) - x.unsqueeze(1)).max(dim=-1).values
+                # Count < r
+                count = (dist < r.unsqueeze(2)).float().mean(dim=2)
+                return torch.log(count + 1e-10).mean(dim=1)
+            
+            p2 = phi(seq, m, r)
+            p3 = phi(seq, m+1, r)
+            return (p2 - p3).mean()
+
+        # 74. Binding Information (Total Correlation)
+        elif metric_name == 'binding_information':
+            if features is None: return torch.tensor(0.0, device=device)
+            z = features.view(-1, features.size(-1))
+            if z.size(0) > 1000:
+                idx = torch.randperm(z.size(0))[:1000]
+                z = z[idx]
+            
+            # TC = Sum H(Xi) - H(X)
+            # Gaussian proxy
+            cov = torch.cov(z.t())
+            cov = cov + 1e-6 * torch.eye(cov.size(0), device=device)
+            
+            # H(X)
+            sign, logdet = torch.linalg.slogdet(cov)
+            h_joint = 0.5 * logdet
+            
+            # Sum H(Xi)
+            h_marginals = 0.5 * torch.log(torch.diag(cov)).sum()
+            
+            return h_marginals - h_joint
+
+        # 75. Weight Quantum Discord (Spectral Entropy of Correlation)
+        elif metric_name == 'weight_quantum_discord':
+            w = model.embedding.weight
+            c = w @ w.t()
+            # Normalize to density matrix
+            rho = c / (torch.trace(c) + 1e-10)
+            # Eigenvalues
+            try:
+                e = torch.linalg.eigvalsh(rho)
+                e = torch.clamp(e, min=1e-12)
+                return -(e * torch.log(e)).sum()
+            except: return torch.tensor(0.0, device=device)
+
+        # 76. Specific Heat (Spectrum Variance)
+        elif metric_name == 'specific_heat':
+            w = model.embedding.weight
+            try:
+                s = torch.linalg.svdvals(w)
+                # Normalize
+                s = s / s.sum()
+                # Variance
+                var = torch.var(s)
+                return var
+            except: return torch.tensor(0.0, device=device)
+
+        # 77. Synaptic Homeostasis
+        elif metric_name == 'synaptic_homeostasis':
+            # Negative variance of weight norms
+            w = model.transformer.layers[0].linear1.weight
+            norms = w.norm(dim=1)
+            return -torch.var(norms)
+
+        # 78. Topological Entropy (Spectral Radius)
+        elif metric_name == 'topological_entropy':
+            # Log of spectral radius of transition matrix
+            w = model.transformer.layers[0].linear1.weight
+            # Make square if not
+            if w.size(0) != w.size(1):
+                m = min(w.size(0), w.size(1))
+                w = w[:m, :m]
+            
+            try:
+                # Power iteration for spectral radius
+                v = torch.randn(w.size(0), 1, device=device)
+                v = v / v.norm()
+                for _ in range(5):
+                    v = w @ v
+                    v = v / v.norm()
+                
+                rho = (v.t() @ (w @ v)).abs()
+                return torch.log(rho + 1e-10).squeeze()
+            except: return torch.tensor(0.0, device=device)
+
+        # 79. Network Motif Count (Triangles)
+        elif metric_name == 'motif_count':
+            w = model.transformer.layers[0].linear1.weight
+            adj = torch.abs(w.t() @ w)
+            # Normalize
+            adj = adj / (adj.max() + 1e-10)
+            # Threshold to make sparse? Or weighted count.
+            # Weighted: Trace(A^3)
+            # Subsample if too large
+            if adj.size(0) > 500:
+                adj = adj[:500, :500]
+            
+            A3 = torch.mm(adj, torch.mm(adj, adj))
+            triangles = torch.trace(A3) / 6.0
+            return triangles
+
+        # 80. Rich-Club Coefficient
+        elif metric_name == 'rich_club_coefficient':
+            w = model.transformer.layers[0].linear1.weight
+            adj = torch.abs(w.t() @ w)
+            k = adj.sum(dim=1)
+            
+            # Define rich nodes as top 10% degree
+            threshold = torch.quantile(k, 0.9)
+            rich_mask = k > threshold
+            
+            if rich_mask.sum() < 2: return torch.tensor(0.0, device=device)
+            
+            # Subgraph of rich nodes
+            rich_adj = adj[rich_mask][:, rich_mask]
+            phi = rich_adj.mean() # Density of rich club
+            
+            # Normalize by overall density
+            rho = adj.mean()
+            return phi / (rho + 1e-10)
+
+        # 81. Percolation Threshold (Molloy-Reed)
+        elif metric_name == 'percolation_threshold':
+            w = model.transformer.layers[0].linear1.weight
+            adj = torch.abs(w.t() @ w)
+            # Binarize for standard definition? Or weighted degrees.
+            # Let's use weighted degrees.
+            k = adj.sum(dim=1)
+            
+            k_mean = k.mean()
+            k2_mean = (k**2).mean()
+            
+            kappa = k2_mean / (k_mean + 1e-10)
+            # Robustness ~ kappa.
+            return kappa
+
+        # 82. Kuramoto Order Parameter (Synchronization)
+        elif metric_name == 'kuramoto_order':
+            if features is None: return torch.tensor(0.0, device=device)
+            # Map activations to phases [0, 2pi]
+            z = features.view(-1, features.size(-1))
+            if z.size(0) > 1000: z = z[:1000]
+            
+            min_val = z.min(dim=1, keepdim=True)[0]
+            max_val = z.max(dim=1, keepdim=True)[0]
+            phases = 2 * math.pi * (z - min_val) / (max_val - min_val + 1e-10)
+            
+            # Order parameter r = |mean(e^i theta)|
+            real = torch.cos(phases).mean(dim=1)
+            imag = torch.sin(phases).mean(dim=1)
+            r = torch.sqrt(real**2 + imag**2)
+            return r.mean()
+
+        # 83. Avalanche Size Distribution (Activity Bursts)
+        elif metric_name == 'avalanche_size':
+            if features is None: return torch.tensor(0.0, device=device)
+            # features: [B, S, D]
+            # Activity: sum of activations per time step
+            activity = features.abs().mean(dim=2) # [B, S]
+            
+            # Define avalanche as continuous region above threshold
+            threshold = activity.mean()
+            active = (activity > threshold).float()
+            
+            # We want distribution of avalanche sizes (durations)
+            # This is hard to vectorize perfectly.
+            # Proxy: Variance of activity (Burstiness)
+            return torch.var(activity)
+
+        # 84. Sample Entropy (SampEn)
+        elif metric_name == 'sample_entropy':
+            if features is None: return torch.tensor(0.0, device=device)
+            seq = features.mean(dim=2) # [B, S]
+            if seq.size(0) > 10: seq = seq[:10]
+            
+            m = 2
+            r = 0.2 * seq.std(dim=1, keepdim=True)
+            
+            def get_matches(u, m, r):
+                B, S = u.shape
+                if S < m: return torch.zeros(B, device=device)
+                x = u.unfold(1, m, 1)
+                # Pairwise dists
+                dist = torch.abs(x.unsqueeze(2) - x.unsqueeze(1)).max(dim=-1).values
+                # Count matches (excluding self if we were strict, but here we include)
+                count = (dist < r.unsqueeze(2)).float().sum(dim=2) - 1.0 # Exclude self
+                return count.mean(dim=1) # Average count per template
+            
+            B_count = get_matches(seq, m, r)
+            A_count = get_matches(seq, m+1, r)
+            
+            return -torch.log((A_count + 1e-10) / (B_count + 1e-10)).mean()
+
+        # 85. Permutation Entropy
+        elif metric_name == 'permutation_entropy':
+            if features is None: return torch.tensor(0.0, device=device)
+            seq = features.mean(dim=2) # [B, S]
+            m = 3
+            if seq.size(1) < m: return torch.tensor(0.0, device=device)
+            
+            windows = seq.unfold(1, m, 1) # [B, N, m]
+            # Argsort to get permutations
+            perms = torch.argsort(windows, dim=2)
+            
+            # Hash permutations: sum(idx * m^k)
+            scale = torch.tensor([m**i for i in range(m)], device=device)
+            hashes = (perms * scale).sum(dim=2) # [B, N]
+            
+            # Entropy per batch item
+            ent_sum = 0.0
+            for i in range(hashes.size(0)):
+                u, c = torch.unique(hashes[i], return_counts=True)
+                p = c.float() / c.sum()
+                ent_sum += -(p * torch.log(p + 1e-10)).sum()
+            
+            return ent_sum / hashes.size(0)
+
+        # 86. Erasure Entropy (ReLU Information Loss)
+        elif metric_name == 'erasure_entropy':
+            if features is None: return torch.tensor(0.0, device=device)
+            # Fraction of dead neurons (<= 0)
+            # Assuming ReLU-like activation
+            dead = (features <= 0).float()
+            p_dead = dead.mean(dim=0) # Prob of being dead per neuron
+            
+            # Entropy of binary state
+            h = -p_dead * torch.log(p_dead + 1e-10) - (1-p_dead) * torch.log(1-p_dead + 1e-10)
+            return h.mean()
+
+        # 87. Global Efficiency (Inverse Path Length)
+        elif metric_name == 'global_efficiency':
+            w = model.transformer.layers[0].linear1.weight
+            adj = torch.abs(w.t() @ w)
+            # Subsample
+            if adj.size(0) > 200: adj = adj[:200, :200]
+            
+            # Invert weights to get "distances" (strong weight = short distance)
+            dist = 1.0 / (adj + 1e-6)
+            
+            # Floyd-Warshall is O(N^3), too slow.
+            # Use simple proxy: Mean of 1/dist (which is just Mean of adj)
+            # Real Global Efficiency requires shortest paths.
+            # Let's use "Communicability" (Exp(A))
+            # G_eff ~ sum(exp(A)_ij)
+            
+            # Let's use Communicability
+            # expA = U exp(S) U^T
+            try:
+                s = torch.linalg.svdvals(adj)
+                comm = torch.exp(s).sum()
+                return torch.log(comm)
+            except: return adj.mean()
+
+        # 88. Causal Emergence (Psi)
+        elif metric_name == 'causal_emergence':
+            w = model.transformer.layers[0].linear1.weight
+            # Normalize to transition matrix
+            P = torch.softmax(w, dim=1)
+            
+            # Micro EI
+            avg_out = P.mean(dim=0)
+            h_avg = -(avg_out * torch.log(avg_out + 1e-10)).sum()
+            row_ent = -(P * torch.log(P + 1e-10)).sum(dim=1).mean()
+            ei_micro = h_avg - row_ent
+            
+            # Macro: Coarse grain 2x2
+            # Reshape [Out, In] -> [Out/2, 2, In/2, 2]
+            if P.size(0) % 2 == 0 and P.size(1) % 2 == 0:
+                P_macro = P.view(P.size(0)//2, 2, P.size(1)//2, 2).sum(dim=(1, 3))
+                # Renormalize
+                P_macro = P_macro / (P_macro.sum(dim=1, keepdim=True) + 1e-10)
+                
+                avg_out_m = P_macro.mean(dim=0)
+                h_avg_m = -(avg_out_m * torch.log(avg_out_m + 1e-10)).sum()
+                row_ent_m = -(P_macro * torch.log(P_macro + 1e-10)).sum(dim=1).mean()
+                ei_macro = h_avg_m - row_ent_m
+                
+                return ei_macro - ei_micro
+            else:
+                return torch.tensor(0.0, device=device)
+
+        # 89. Higuchi Fractal Dimension
+        elif metric_name == 'higuchi_fractal_dimension':
+            if features is None: return torch.tensor(0.0, device=device)
+            # [B, S, D] -> [B, S]
+            x = features.mean(dim=2)
+            if x.size(0) > 10: x = x[:10] # Subsample batch
+            
+            N = x.size(1)
+            k_max = 10
+            L_k = []
+            k_values = []
+            
+            for k in range(1, k_max + 1):
+                Lk_m = []
+                for m in range(k):
+                    # Construct series: x[m], x[m+k], ...
+                    idxs = torch.arange(m, N, k, device=device)
+                    if len(idxs) < 2: continue
+                    
+                    series = x[:, idxs]
+                    # Sum of absolute differences
+                    diffs = torch.abs(series[:, 1:] - series[:, :-1]).sum(dim=1)
+                    norm = (N - 1) / (len(idxs) - 1) / k
+                    Lk_m.append(diffs * norm)
+                
+                if len(Lk_m) > 0:
+                    L_k.append(torch.stack(Lk_m).mean(dim=0)) # Mean over m, keep batch
+                    k_values.append(k)
+            
+            if len(L_k) < 2: return torch.tensor(0.0, device=device)
+            
+            L_k = torch.stack(L_k).mean(dim=1) # Mean over batch -> [K]
+            log_L = torch.log(L_k + 1e-10)
+            log_k = torch.log(torch.tensor(k_values, device=device).float())
+            log_1_k = -log_k
+            
+            # Slope of log_L vs log_1_k
+            mean_x = log_1_k.mean()
+            mean_y = log_L.mean()
+            num = ((log_1_k - mean_x) * (log_L - mean_y)).sum()
+            den = ((log_1_k - mean_x)**2).sum()
+            return num / (den + 1e-10)
+
+        # 90. Petrosian Fractal Dimension
+        elif metric_name == 'petrosian_fractal_dimension':
+            if features is None: return torch.tensor(0.0, device=device)
+            x = features.mean(dim=2) # [B, S]
+            if x.size(0) > 50: x = x[:50]
+            
+            # Binarize based on diff
+            diff = x[:, 1:] - x[:, :-1]
+            # Sign changes
+            sign_changes = (diff[:, 1:] * diff[:, :-1] < 0).float().sum(dim=1)
+            
+            N = x.size(1)
+            D = torch.log10(torch.tensor(N, device=device).float()) / (torch.log10(torch.tensor(N, device=device).float()) + torch.log10(N / (N + 0.4 * sign_changes + 1e-10)))
+            return D.mean()
+
+        # 91. Estrada Index (Graph Folding)
+        elif metric_name == 'estrada_index':
+            w = model.transformer.layers[0].linear1.weight
+            adj = torch.abs(w.t() @ w)
+            # Subsample
+            if adj.size(0) > 500: adj = adj[:500, :500]
+            
+            # EE = Trace(exp(A))
+            # exp(A) = U exp(D) U^T
+            try:
+                s = torch.linalg.eigvalsh(adj)
+                ee = torch.exp(s).sum()
+                return torch.log(ee) # Return log to keep scale reasonable
+            except: return torch.tensor(0.0, device=device)
+
+        # 92. Weight Stable Rank
+        elif metric_name == 'weight_stable_rank':
+            w = model.embedding.weight
+            # ||W||_F^2 / ||W||_2^2
+            frob = (w**2).sum()
+            try:
+                # Spectral norm (max singular value)
+                # Power iteration for speed
+                u = torch.randn(w.size(0), device=device)
+                u = u / u.norm()
+                v = torch.randn(w.size(1), device=device)
+                v = v / v.norm()
+                for _ in range(5):
+                    v = (u @ w) / (u @ w).norm()
+                    u = (w @ v) / (w @ v).norm()
+                spectral = (u @ w @ v)
+                return frob / (spectral**2 + 1e-10)
+            except: return torch.tensor(0.0, device=device)
+
+        # 93. Local Intrinsic Dimension (LID)
+        elif metric_name == 'local_intrinsic_dimension':
+            if features is None: return torch.tensor(0.0, device=device)
+            z = features.view(-1, features.size(-1))
+            if z.size(0) > 1000:
+                idx = torch.randperm(z.size(0))[:1000]
+                z = z[idx]
+            
+            # k-NN
+            k = 20
+            dists = torch.cdist(z, z)
+            # Top k+1 (including self)
+            topk = dists.topk(k+1, largest=False).values
+            
+            # MLE estimator: LID = -1 / ( 1/k * sum log(d_i / d_k) )
+            # d_k is the k-th neighbor distance (last col of topk)
+            d_k = topk[:, -1:]
+            d_i = topk[:, 1:-1] # Exclude self (0) and k-th
+            
+            ratio = d_i / (d_k + 1e-10)
+            log_ratio = torch.log(ratio + 1e-10)
+            lid = -1.0 / (log_ratio.mean(dim=1) + 1e-10)
+            return lid.mean()
+
+        # 94. Quantum Coherence (L1)
+        elif metric_name == 'quantum_coherence':
+            if features is None: return torch.tensor(0.0, device=device)
+            z = features.view(-1, features.size(-1))
+            if z.size(0) > 200: z = z[:200]
+            
+            # Density matrix
+            z = z - z.mean(dim=0)
+            rho = z @ z.t()
+            rho = rho / (torch.trace(rho) + 1e-10)
+            
+            # Sum of off-diagonal magnitudes
+            off_diag = torch.abs(rho).sum() - torch.trace(torch.abs(rho))
+            return off_diag
+
+        # 95. Spectral Gap
+        elif metric_name == 'spectral_gap':
+            w = model.transformer.layers[0].linear1.weight
+            adj = torch.abs(w.t() @ w)
+            if adj.size(0) > 500: adj = adj[:500, :500]
+            
+            # Laplacian
+            d = adj.sum(dim=1)
+            L = torch.diag(d) - adj
+            
+            try:
+                e = torch.linalg.eigvalsh(L)
+                # Sorted: 0, lambda_2, ...
+                if len(e) > 1:
+                    return e[1] # Fiedler value is the gap from 0
+                return torch.tensor(0.0, device=device)
+            except: return torch.tensor(0.0, device=device)
+
+        # 96. Inverse Participation Ratio (IPR)
+        elif metric_name == 'inverse_participation_ratio':
+            if features is None: return torch.tensor(0.0, device=device)
+            # Localization of activity
+            z = features.view(-1, features.size(-1))
+            # Normalize per neuron (column)
+            z_norm = F.normalize(z, p=2, dim=0)
+            ipr = (z_norm ** 4).sum(dim=0)
+            return ipr.mean()
+
+        # 97. Gradient Signal-to-Noise Ratio
+        elif metric_name == 'gradient_snr':
+            if logits is None or labels is None: return torch.tensor(0.0, device=device)
+            # Compute per-sample gradients (expensive) or batch split
+            # Let's use batch split (4 splits)
+            batch_size = logits.size(0)
+            if batch_size < 4: return torch.tensor(0.0, device=device)
+            
+            splits = 4
+            split_size = batch_size // splits
+            grads_list = []
+            params = [p for p in model.parameters() if p.requires_grad]
+            
+            for i in range(splits):
+                l_sub = logits[i*split_size : (i+1)*split_size]
+                y_sub = labels[i*split_size : (i+1)*split_size]
+                loss = nn.CrossEntropyLoss(ignore_index=-100)(l_sub.view(-1, l_sub.size(-1)), y_sub.view(-1))
+                gs = torch.autograd.grad(loss, params, retain_graph=True)
+                g_flat = torch.cat([g.view(-1) for g in gs])
+                grads_list.append(g_flat)
+            
+            grads = torch.stack(grads_list) # [4, P]
+            mean_grad = grads.mean(dim=0)
+            std_grad = grads.std(dim=0)
+            
+            # SNR = mean / std
+            # Average SNR across parameters
+            snr = mean_grad.abs() / (std_grad + 1e-10)
+            return snr.mean()
+
+        # 98. Cross-Layer Entropy
+        elif metric_name == 'cross_layer_entropy':
+            if hidden_states is None: return torch.tensor(0.0, device=device)
+            # Joint entropy of first and last layer
+            h0 = hidden_states[0].view(-1, hidden_states[0].size(-1))
+            hL = hidden_states[-1].view(-1, hidden_states[-1].size(-1))
+            
+            if h0.size(0) > 500:
+                idx = torch.randperm(h0.size(0))[:500]
+                h0 = h0[idx]
+                hL = hL[idx]
+            
+            # Concat
+            joint = torch.cat([h0, hL], dim=1)
+            
+            def get_entropy(x):
+                cov = torch.cov(x.t())
+                sign, logdet = torch.linalg.slogdet(cov + 1e-6 * torch.eye(cov.size(0), device=device))
+                return 0.5 * logdet
+            
+            return get_entropy(joint)
+
+        # 99. Weight Skewness
+        elif metric_name == 'weight_skewness':
+            w = model.embedding.weight.view(-1)
+            mean = w.mean()
+            std = w.std()
+            skew = ((w - mean)**3).mean() / (std**3 + 1e-10)
+            return torch.abs(skew)
+
+        # 100. Weight Kurtosis
+        elif metric_name == 'weight_kurtosis':
+            w = model.embedding.weight.view(-1)
+            mean = w.mean()
+            std = w.std()
+            kurt = ((w - mean)**4).mean() / (std**4 + 1e-10)
+            return kurt
+
         return torch.tensor(0.0, device=device)
 
 # ============================================================================
@@ -926,7 +2142,7 @@ class TransformerLLM(nn.Module):
         self.efficient_attention_enabled = enable_efficient_attention
         self.attention_backend = attention_backend
     
-    def forward(self, input_ids):
+    def forward(self, input_ids, return_features=False, return_all_layers=False):
         seq_length = input_ids.size(1)
         positions = torch.arange(seq_length, device=input_ids.device).unsqueeze(0)
         
@@ -937,12 +2153,27 @@ class TransformerLLM(nn.Module):
             diagonal=1
         ).bool()
     
-        transformer_out = self.transformer(
-            embeddings,
-            mask=causal_mask
-        )
+        if return_all_layers:
+            hidden_states = [embeddings]
+            out = embeddings
+            for layer in self.transformer.layers:
+                out = layer(out, src_mask=causal_mask)
+                hidden_states.append(out)
+            transformer_out = out
+        else:
+            transformer_out = self.transformer(
+                embeddings,
+                mask=causal_mask
+            )
         
         logits = self.lm_head(transformer_out)
+        
+        if return_all_layers:
+            return logits, hidden_states
+            
+        if return_features:
+            return logits, transformer_out
+            
         return logits
 
 # ============================================================================
@@ -974,13 +2205,19 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         input_ids = batch['input_ids'].to(device, non_blocking=True)
         labels = batch['labels'].to(device, non_blocking=True)
         
-        logits = model(input_ids)
+        hidden_states = None
+        if config.METRIC_NAME == 'trajectory_complexity':
+            logits, hidden_states = model(input_ids, return_all_layers=True)
+            features = hidden_states[-1]
+        else:
+            logits, features = model(input_ids, return_features=True)
+        
         logits_flat = logits.view(-1, vocab_size)
         labels_flat = labels.view(-1)
         ce_loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_flat, labels_flat)
         
         if metric_value is None or batch_idx % config.COMPLEXITY_UPDATE_INTERVAL == 0:
-            metric_tensor = Metrics.calculate_metric(model, config.METRIC_NAME, logits, labels, input_ids)
+            metric_tensor = Metrics.calculate_metric(model, config.METRIC_NAME, logits, labels, input_ids, features, hidden_states=hidden_states)
             metric_value = metric_tensor 
             metric_value_scalar = metric_tensor.item()
  
@@ -1193,8 +2430,14 @@ def run_training_single(output_dir, config, run_num):
     # Initial Metric Calculation
     # Re-compute logits with gradients enabled for metrics that require it (e.g. gradient_entropy)
     with torch.enable_grad():
-        metric_logits = model(metric_input_ids)
-        start_metric = Metrics.calculate_metric(model, config.METRIC_NAME, metric_logits, metric_labels, metric_input_ids).item()
+        hidden_states = None
+        if config.METRIC_NAME == 'trajectory_complexity':
+            metric_logits, hidden_states = model(metric_input_ids, return_all_layers=True)
+            metric_features = hidden_states[-1]
+        else:
+            metric_logits, metric_features = model(metric_input_ids, return_features=True)
+            
+        start_metric = Metrics.calculate_metric(model, config.METRIC_NAME, metric_logits, metric_labels, metric_input_ids, metric_features, hidden_states=hidden_states).item()
     print(f"Initial CE loss: {start_ce:.16f}")
     print(f"Initial Metric ({config.METRIC_NAME}): {start_metric:.16f}")
     model.train()
@@ -1284,10 +2527,10 @@ def main():
         (False, 'fisher_rao_distance', '9_fisher_rao_distance'),
         (False, 'wasserstein_uniform', '10_wasserstein_uniform'),
         (False, 'gini_index', '11_gini_index'),
-        (False, 'theil_index', '12_theil_index'),
+        (False, 'semantic_diversity', '12_semantic_diversity'),
         (False, 'inverse_spectral_flatness', '13_inverse_spectral_flatness'),
-        (False, 'renyi_divergence', '14_renyi_divergence'),
-        (False, 'tsallis_divergence', '15_tsallis_divergence'),
+        (False, 'hoyer_sparsity', '14_hoyer_sparsity'),
+        (False, 'varentropy', '15_varentropy'),
         (False, 'jensen_shannon', '16_jensen_shannon'),
         (False, 'hellinger', '17_hellinger'),
         (False, 'total_variation', '18_total_variation'),
@@ -1305,7 +2548,7 @@ def main():
         (False, 'hessian_spectral_radius', '30_hessian_spectral_radius'),
         (False, 'fisher_info_condition_number', '31_fisher_info_condition_number'),
         (False, 'sharpness_perturbation', '32_sharpness_perturbation'),
-        (False, 'pac_bayes_flatness', '33_pac_bayes_flatness'),
+        (False, 'curvature_energy', '33_curvature_energy'),
         (False, 'gradient_covariance_trace', '34_gradient_covariance_trace'),
         (False, 'gradient_direction_entropy', '35_gradient_direction_entropy'),
         (False, 'gradient_cosine_drift', '36_gradient_cosine_drift'),
@@ -1321,6 +2564,58 @@ def main():
         (False, 'output_jacobian_condition_number', '46_output_jacobian_condition_number'),
         (False, 'mdl_surrogate', '47_mdl_surrogate'),
         (False, 'kolmogorov_complexity_proxy', '48_kolmogorov_complexity_proxy'),
+        (False, 'kernel_target_alignment', '49_kernel_target_alignment'),
+        (False, 'classifier_feature_alignment', '50_classifier_feature_alignment'),
+        (False, 'simplex_equiangularity', '51_simplex_equiangularity'),
+        (False, 'minimum_margin', '52_minimum_margin'),
+        (False, 'thermodynamic_susceptibility', '53_thermodynamic_susceptibility'),
+        (False, 'algebraic_connectivity', '54_algebraic_connectivity'),
+        (False, 'persistent_entropy', '55_persistent_entropy'),
+        (False, 'level_spacing_ratio', '56_level_spacing_ratio'),
+        (False, 'effective_information', '57_effective_information'),
+        (False, 'ollivier_ricci_curvature', '58_ollivier_ricci_curvature'),
+        (False, 'von_neumann_entropy', '59_von_neumann_entropy'),
+        (False, 'interaction_information', '60_interaction_information'),
+        (False, 'local_lyapunov_exponent', '61_local_lyapunov_exponent'),
+        (False, 'multifractal_spectrum_width', '62_multifractal_spectrum_width'),
+        (False, 'predictive_v_information', '63_predictive_v_information'),
+        (False, 'log_det_controllability', '64_log_det_controllability'),
+        (False, 'trajectory_complexity', '65_trajectory_complexity'),
+        (False, 'lempel_ziv_complexity', '66_lempel_ziv_complexity'),
+        (False, 'gradient_diversity', '67_gradient_diversity'),
+        (False, 'bi_lipschitz_lower_bound', '68_bi_lipschitz_lower_bound'),
+        (False, 'graph_modularity', '69_graph_modularity'),
+        (False, 'graph_assortativity', '70_graph_assortativity'),
+        (False, 'small_worldness', '71_small_worldness'),
+        (False, 'hurst_exponent', '72_hurst_exponent'),
+        (False, 'approximate_entropy', '73_approximate_entropy'),
+        (False, 'binding_information', '74_binding_information'),
+        (False, 'weight_quantum_discord', '75_weight_quantum_discord'),
+        (False, 'specific_heat', '76_specific_heat'),
+        (False, 'synaptic_homeostasis', '77_synaptic_homeostasis'),
+        (False, 'topological_entropy', '78_topological_entropy'),
+        (False, 'motif_count', '79_motif_count'),
+        (False, 'rich_club_coefficient', '80_rich_club_coefficient'),
+        (False, 'percolation_threshold', '81_percolation_threshold'),
+        (False, 'kuramoto_order', '82_kuramoto_order'),
+        (False, 'avalanche_size', '83_avalanche_size'),
+        (False, 'sample_entropy', '84_sample_entropy'),
+        (False, 'permutation_entropy', '85_permutation_entropy'),
+        (False, 'erasure_entropy', '86_erasure_entropy'),
+        (False, 'global_efficiency', '87_global_efficiency'),
+        (False, 'causal_emergence', '88_causal_emergence'),
+        (False, 'higuchi_fractal_dimension', '89_higuchi_fractal_dimension'),
+        (False, 'petrosian_fractal_dimension', '90_petrosian_fractal_dimension'),
+        (False, 'estrada_index', '91_estrada_index'),
+        (False, 'weight_stable_rank', '92_weight_stable_rank'),
+        (False, 'local_intrinsic_dimension', '93_local_intrinsic_dimension'),
+        (False, 'quantum_coherence', '94_quantum_coherence'),
+        (False, 'spectral_gap', '95_spectral_gap'),
+        (False, 'inverse_participation_ratio', '96_inverse_participation_ratio'),
+        (False, 'gradient_snr', '97_gradient_snr'),
+        (False, 'cross_layer_entropy', '98_cross_layer_entropy'),
+        (False, 'weight_skewness', '99_weight_skewness'),
+        (False, 'weight_kurtosis', '100_weight_kurtosis'),
     ]
     
     for control_mode, metric_name, folder_name in experiments:
