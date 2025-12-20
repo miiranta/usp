@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from transformers import RobertaTokenizer
 from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 # Disable efficient attention backend to allow second-order derivatives
 # This is necessary for metrics that require double backward (e.g. gradient_entropy)
@@ -140,6 +141,16 @@ class Metrics:
         probs = probs / probs.sum()
         
         return probs, num_bins
+
+    @staticmethod
+    def _varentropy_func(logits_chunk):
+        probs = torch.softmax(logits_chunk, dim=-1)
+        log_p = torch.log(probs + 1e-10)
+        entropy = -(probs * log_p).sum(dim=-1, keepdim=True)
+        # V(p) = sum p (log p)^2 - H^2
+        term1 = (probs * log_p**2).sum(dim=-1)
+        v_chunk = term1 - entropy.squeeze(-1)**2
+        return v_chunk
 
     @staticmethod
     def calculate_metric(model, metric_name, logits=None, labels=None, input_ids=None, features=None, hidden_states=None):
@@ -333,12 +344,25 @@ class Metrics:
         # 15. Varentropy (Variance of Information)
         elif metric_name == 'varentropy':
             if logits is None: return torch.tensor(0.0, device=device)
-            probs = torch.softmax(logits, dim=-1)
-            log_p = torch.log(probs + 1e-10)
-            entropy = -(probs * log_p).sum(dim=-1, keepdim=True)
-            # V(p) = sum p (log p + H)^2
-            varentropy = (probs * (log_p + entropy)**2).sum(dim=-1)
-            return varentropy.mean()
+            
+            # Memory efficient implementation with checkpointing
+            batch_size, seq_len, vocab_size = logits.shape
+            logits_flat = logits.view(-1, vocab_size)
+            
+            # Chunk size for processing
+            chunk_size = 1024 
+            chunks = torch.split(logits_flat, chunk_size, dim=0)
+            
+            vals = []
+            for chunk in chunks:
+                # Use checkpoint to save memory during backward
+                if chunk.requires_grad:
+                    v_chunk = checkpoint(Metrics._varentropy_func, chunk, use_reentrant=False)
+                else:
+                    v_chunk = Metrics._varentropy_func(chunk)
+                vals.append(v_chunk)
+            
+            return torch.cat(vals).mean()
 
         # 16. Jensen-Shannon Divergence to Uniform
         elif metric_name == 'jensen_shannon':
