@@ -17,8 +17,8 @@ PLOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots_min'
 
 # Limits for plotting
 # Set to 0 to disable limiting
-TOP_X_LOWEST_VAL_LOSS = 10
-TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE = 10
+TOP_X_LOWEST_VAL_LOSS = 30
+TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE = 0
 
 # Set Seaborn Theme
 # "paper" context makes elements smaller/finer. "whitegrid" gives a clean look.
@@ -155,10 +155,10 @@ def filter_data(df):
     # Filter by Validation Loss
     if TOP_X_LOWEST_VAL_LOSS > 0:
         if 'Validation Loss' in df.columns:
-            # Get final epoch per run
-            final_epochs = df.loc[df.groupby('Run_ID')['Epoch'].idxmax()]
+            # Get best (min) value per run
+            best_per_run = df.groupby(['Source', 'Run_ID'])['Validation Loss'].min()
             # Group by Source and mean
-            source_val_loss = final_epochs.groupby('Source')['Validation Loss'].mean()
+            source_val_loss = best_per_run.groupby('Source').mean()
             # Get top X smallest
             top_val_sources = set(source_val_loss.nsmallest(TOP_X_LOWEST_VAL_LOSS).index)
             allowed_sources_sets.append(top_val_sources)
@@ -170,10 +170,10 @@ def filter_data(df):
     if TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE > 0:
         test_col = 'Test Loss Shakespeare'
         if test_col in df.columns:
-            # Get final epoch per run
-            final_epochs = df.loc[df.groupby('Run_ID')['Epoch'].idxmax()]
+            # Get best (min) value per run
+            best_per_run = df.groupby(['Source', 'Run_ID'])[test_col].min()
             # Group by Source and mean
-            source_test_loss = final_epochs.groupby('Source')[test_col].mean()
+            source_test_loss = best_per_run.groupby('Source').mean()
             # Get top X smallest
             top_test_sources = set(source_test_loss.nsmallest(TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE).index)
             allowed_sources_sets.append(top_test_sources)
@@ -215,6 +215,9 @@ def load_all_data(sources):
 
     combined = pd.concat(all_data)
     
+    # Reset index to avoid duplicates which cause issues in seaborn
+    combined.reset_index(drop=True, inplace=True)
+
     # Rename metrics as requested
     combined.rename(columns={
         'Weights Entropy': 'Entropy',
