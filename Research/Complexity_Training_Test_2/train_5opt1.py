@@ -54,7 +54,7 @@ class Config:
     COMPLEXITY_UPDATE_INTERVAL = 1 
     
     # Device configuration
-    GPU_INDEX = 0
+    GPU_INDEX = 1
     DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
     NUM_WORKERS = 0
     
