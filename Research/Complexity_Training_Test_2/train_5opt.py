@@ -480,19 +480,34 @@ class TextDataset(Dataset):
         return input_ids, labels
 
 class SimpleTransformer(nn.Module):
-    def __init__(self, vocab_size, hidden_dim, num_layers, num_heads):
+    def __init__(self, vocab_size, hidden_dim, num_layers, num_heads, seq_length):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, hidden_dim)
-        self.transformer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads, batch_first=True),
-            num_layers=num_layers
+        self.position_embedding = nn.Embedding(seq_length, hidden_dim)
+        
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim, 
+            nhead=num_heads, 
+            dim_feedforward=hidden_dim * 4,
+            batch_first=True,
+            dropout=0.1,
+            activation='gelu'
         )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.lm_head = nn.Linear(hidden_dim, vocab_size)
         self.last_features = None
         
     def forward(self, x):
-        x = self.embedding(x)
-        x = self.transformer(x)
+        seq_length = x.size(1)
+        positions = torch.arange(seq_length, device=x.device).unsqueeze(0)
+        x = self.embedding(x) + self.position_embedding(positions)
+        
+        causal_mask = torch.triu(
+            torch.ones(seq_length, seq_length, device=x.device), 
+            diagonal=1
+        ).bool()
+        
+        x = self.transformer(x, mask=causal_mask)
         self.last_features = x 
         x = self.lm_head(x)
         return x
@@ -619,9 +634,15 @@ def main():
         else:
             Config.CONTROL_MODE = False
         
-        model = SimpleTransformer(vocab_size, Config.HIDDEN_DIM, Config.NUM_LAYERS, Config.NUM_ATTENTION_HEADS).to(Config.DEVICE)
+        # Set seed for reproducibility
+        seed = 42
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        
+        model = SimpleTransformer(vocab_size, Config.HIDDEN_DIM, Config.NUM_LAYERS, Config.NUM_ATTENTION_HEADS, Config.SEQ_LENGTH).to(Config.DEVICE)
         optimizer = torch.optim.AdamW(model.parameters(), lr=Config.LEARNING_RATE)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=Config.EPOCHS * len(train_loader))
+        total_steps = len(train_loader) * Config.EPOCHS
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=Config.LEARNING_RATE, total_steps=total_steps, pct_start=0.1)
         
         model.eval()
         with torch.no_grad():
