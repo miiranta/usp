@@ -603,6 +603,8 @@ def main():
         if os.path.exists(output_dir):
             print(f"Skipping {metric_name} ({direction}) - already exists.")
             continue
+        
+        os.makedirs(output_dir, exist_ok=True)
 
         print(f"\nRunning experiment: {metric_name} ({direction})")
         Config.METRIC_NAME = metric_name
