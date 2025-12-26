@@ -599,6 +599,11 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS)
     
     for metric_name, direction in METRICS_TO_RUN:
+        output_dir = f"output_5opt/{metric_name}_{direction}"
+        if os.path.exists(output_dir):
+            print(f"Skipping {metric_name} ({direction}) - already exists.")
+            continue
+
         print(f"\nRunning experiment: {metric_name} ({direction})")
         Config.METRIC_NAME = metric_name
         
@@ -627,7 +632,7 @@ def main():
         print(f"Start CE: {ce_start:.4f}, Start Metric: {metric_start:.4f}")
         
         results = []
-        output_dir = f"results/{metric_name}_{direction}"
+        # output_dir = f"output_5opt/{metric_name}_{direction}"
         
         for epoch in range(Config.EPOCHS):
             train_loss, train_ce, train_metric = train_epoch(model, train_loader, optimizer, scheduler, Config.DEVICE, Config, vocab_size, metric_start, ce_start, epoch, direction)
