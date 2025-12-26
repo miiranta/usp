@@ -523,7 +523,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     total_metric_loss = 0
     
     # 5-epoch schedule
-    if epoch < 5:
+    if epoch < 10:
         lmc_weight = 1.0
     else:
         lmc_weight = 0.0
