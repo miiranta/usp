@@ -67,39 +67,35 @@ class Config:
 
 METRICS_TO_RUN = [
     # Control
-    ('control', 'min'),
+    'control',
     # MIN
-    ('controllability_gramian_trace', 'min'),
-    ('total_variation', 'min'),
-    ('third_order_curvature_norm', 'min'),
-    ('hosoya_index', 'min'),
-    ('dyn_topological_pressure', 'min'),
-    ('multifractal_spectrum_width', 'min'),
-    ('arithmetic_derivative', 'min'),
-    ('renyi_entropy', 'min'),
-    ('persistent_landscape_norm', 'min'),
-    ('schmidt_rank_proxy', 'min'),
-    ('empirical_covering_number', 'min'),
-    ('born_infeld_action', 'min'),
-    ('graph_spectral_gap_normalized', 'min'),
-    ('shannon', 'min'),
-    ('tsallis_divergence_q', 'min'),
-    ('multi_scale_entropy', 'min'),
-    ('amari_alpha_divergence', 'min'),
-    ('weight_distribution_entropy', 'min'),
-    ('tsallis_entropy', 'min'),
-    ('gradient_entropy', 'min'),
-    ('output_bimodality_coefficient', 'min'),
-    ('varentropy', 'min'),
-    ('fisher_info_entropy', 'min'),
-    ('hessian_eigenvalue_entropy', 'min'),
-    ('structural_entropy', 'min'),
-    ('graph_cheeger_constant_proxy', 'min'),
-    ('spectral_entropy', 'min'),
+    '-A',
+    '-B',
+    '-C',
+    '-E',
+    '-F',
+    '-G',
+    '-I',
+    '-J',
+    '-K',
+    '-L',
+    '-M',
+    '-N',
+    '-H',
+    '-O',
+    '-P',
+    '-Q',
+    '-R',
+    '-S',
+    '-T',
+    '-U',
+    '-V',
+    '-W',
+    '-X',
     # MAX
-    ('disequilibrium', 'max'),
-    ('varentropy', 'max'),
-    ('information_compression_ratio', 'max')
+    'D',
+    'U',
+    'Y'
 ]
 
 # ============================================================================
@@ -179,6 +175,75 @@ class Metrics:
 
     @staticmethod
     def calculate_metric(model, metric_name, logits=None, labels=None, input_ids=None, features=None, hidden_states=None):
+        mapping = {
+            'A': 'total_variation',
+            'B': 'third_order_curvature_norm',
+            'C': 'hosoya_index',
+            'D': 'disequilibrium',
+            'E': 'dyn_topological_pressure',
+            'F': 'multifractal_spectrum_width',
+            'G': 'arithmetic_derivative',
+            'H': 'shannon',
+            'I': 'renyi_entropy',
+            'J': 'persistent_landscape_norm',
+            'K': 'schmidt_rank_proxy',
+            'L': 'empirical_covering_number',
+            'M': 'born_infeld_action',
+            'N': 'graph_spectral_gap_normalized',
+            'O': 'tsallis_divergence_q',
+            'P': 'multi_scale_entropy',
+            'Q': 'amari_alpha_divergence',
+            'R': 'weight_distribution_entropy',
+            'S': 'tsallis_entropy',
+            'T': 'output_bimodality_coefficient',
+            'U': 'varentropy',
+            'V': 'fisher_info_entropy',
+            'W': 'hessian_eigenvalue_entropy',
+            'X': 'spectral_entropy',
+            'Y': 'information_compression_ratio'
+        }
+        
+        if metric_name.startswith('-'):
+            metric_name = metric_name[1:]
+        
+        try:
+            if '/' in metric_name:
+                parts = metric_name.split('/')
+                if len(parts) != 2: raise ValueError("Only one division allowed")
+                num_str, den_str = parts
+                
+                num_val = 1.0
+                for code in num_str.split('.'):
+                    code = code.strip()
+                    if not code: continue
+                    real_name = mapping.get(code, code)
+                    val = Metrics._calculate_primitive_metric(model, real_name, logits, labels, input_ids, features, hidden_states)
+                    num_val = num_val * val
+                    
+                den_val = 1.0
+                for code in den_str.split('.'):
+                    code = code.strip()
+                    if not code: continue
+                    real_name = mapping.get(code, code)
+                    val = Metrics._calculate_primitive_metric(model, real_name, logits, labels, input_ids, features, hidden_states)
+                    den_val = den_val * val
+                    
+                return num_val / (den_val + 1e-10)
+            else:
+                val = 1.0
+                for code in metric_name.split('.'):
+                    code = code.strip()
+                    if not code: continue
+                    real_name = mapping.get(code, code)
+                    v = Metrics._calculate_primitive_metric(model, real_name, logits, labels, input_ids, features, hidden_states)
+                    val = val * v
+                return val
+        except Exception as e:
+            print(f"Error calculating metric {metric_name}: {e}")
+            return torch.tensor(0.0, device=Config.DEVICE)
+
+    @staticmethod
+    def _calculate_primitive_metric(model, metric_name, logits=None, labels=None, input_ids=None, features=None, hidden_states=None):
         weights = Metrics.get_all_weights(model)
         device = weights.device
         
@@ -531,7 +596,7 @@ class SimpleTransformer(nn.Module):
 # TRAINING & EVALUATION
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, metric_start, ce_start, epoch, direction='min'):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, metric_start, ce_start, epoch):
     model.train()
     total_loss = 0
     total_ce_loss = 0
@@ -559,9 +624,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         # Metric Loss
         metric_val = Metrics.calculate_metric(model, config.METRIC_NAME, logits, labels, input_ids)
         
-        if direction == 'min':
+        if config.METRIC_NAME.startswith('-'):
             metric_loss_normalized = (metric_val / (metric_start + 1e-10)) * ce_start
-        else: # max
+        else:
             metric_loss_normalized = (metric_start / (metric_val + 1e-10)) * ce_start
             
         if config.CONTROL_MODE:
@@ -628,8 +693,20 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=Config.BATCH_SIZE, shuffle=True, num_workers=Config.NUM_WORKERS)
     val_loader = DataLoader(val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS)
     
-    for metric_name, direction in METRICS_TO_RUN:
-        output_dir = f"output_5opt/{metric_name}_{direction}"
+    for metric_name in METRICS_TO_RUN:
+        # Determine direction for folder naming
+        if metric_name == 'control':
+             direction = 'min' 
+        elif metric_name.startswith('-'):
+             direction = 'min'
+        else:
+             direction = 'max'
+             
+        # Clean metric name for folder
+        clean_name = metric_name.replace('/', '_over_')
+        if clean_name.startswith('-'): clean_name = clean_name[1:]
+        
+        output_dir = f"output_5opt/{clean_name}_{direction}"
         if os.path.exists(output_dir):
             print(f"Skipping {metric_name} ({direction}) - already exists.")
             continue
@@ -667,7 +744,7 @@ def main():
         # Calculate metric start (enable grad as some metrics require it)
         with torch.enable_grad():
             logits = model(input_ids)
-            metric_start = Metrics.calculate_metric(model, metric_name, logits, labels, input_ids).item()
+            metric_start = Metrics.calculate_metric(model, Config.METRIC_NAME, logits, labels, input_ids).item()
             
         # Calculate CE start
         with torch.no_grad():
@@ -679,7 +756,7 @@ def main():
         # output_dir = f"output_5opt/{metric_name}_{direction}"
         
         for epoch in range(Config.EPOCHS):
-            train_loss, train_ce, train_metric = train_epoch(model, train_loader, optimizer, scheduler, Config.DEVICE, Config, vocab_size, metric_start, ce_start, epoch, direction)
+            train_loss, train_ce, train_metric = train_epoch(model, train_loader, optimizer, scheduler, Config.DEVICE, Config, vocab_size, metric_start, ce_start, epoch)
             val_loss = evaluate(model, val_loader, Config.DEVICE, vocab_size)
             
             print(f"Epoch {epoch+1}: Train Loss {train_loss:.4f}, Val Loss {val_loss:.4f}, Metric {train_metric:.4f}")
