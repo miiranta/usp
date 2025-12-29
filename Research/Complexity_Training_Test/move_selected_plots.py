@@ -5,7 +5,7 @@ import shutil
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Source directory where the plots are currently located
-source_dir = os.path.join(base_dir, "plots")
+source_dir = os.path.join(base_dir, "plots_50")
 
 # Destination directory for the selected plots
 destination_folder = os.path.join(base_dir, "selected_plots")

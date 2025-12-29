@@ -497,34 +497,52 @@ def plot_test_loss_barplot(master_df):
     stats = df_melted.groupby(['Source', 'Dataset'])['Loss'].agg(['mean', 'sem']).reset_index()
     stats['ci'] = stats['sem'] * 1.96
     
+    hue_order = ['Control', 'Optimized']
     ax = sns.barplot(
         data=df_melted,
         x='Dataset',
         y='Loss',
         hue='Source',
+        hue_order=hue_order,
         palette=SOURCE_PALETTE, # Use consistent palette
         edgecolor='.2',
         capsize=.1,
         err_kws={'linewidth': 3, 'color': 'black'}
     )
     
-    # Add numeric labels
-    for p in ax.patches:
-        height = p.get_height()
-        if np.isfinite(height) and height != 0:
-            # Find corresponding CI based on height (mean)
-            # We need to filter stats by the correct Source and Dataset
-            # This is tricky with barplot patches.
-            # Simplified approach: just show height
-            
-            ax.annotate(f'{height:.4f}', 
-                        (p.get_x() + p.get_width() / 2., height / 2), 
-                        ha='center', va='center', 
-                        xytext=(0, 0), 
-                        textcoords='offset points',
-                        fontsize=16, # Increased font size
-                        color='black',
-                        fontweight='bold')
+    # Calculate stats for annotation
+    stats = df_melted.groupby(['Dataset', 'Source'])['Loss'].agg(['mean', 'std'])
+    
+    # Add numeric labels with SD
+    for i, container in enumerate(ax.containers):
+        if i >= len(hue_order): break
+        source_label = hue_order[i]
+        
+        for j, bar in enumerate(container):
+            # Get dataset label from x-axis (assuming sorted order if not available, but try getting from ax)
+            # Seaborn sorts x-axis alphabetically by default for strings
+            datasets = sorted(df_melted['Dataset'].unique())
+            if j < len(datasets):
+                dataset_label = datasets[j]
+                
+                try:
+                    mean_val = stats.loc[(dataset_label, source_label), 'mean']
+                    std_val = stats.loc[(dataset_label, source_label), 'std']
+                    
+                    height = bar.get_height()
+                    if np.isfinite(height) and height != 0:
+                        label = f'{mean_val:.4f}\n±{std_val:.4f}'
+                        
+                        ax.annotate(label, 
+                                    (bar.get_x() + bar.get_width() / 2., height / 2), 
+                                    ha='center', va='center', 
+                                    xytext=(0, 0), 
+                                    textcoords='offset points',
+                                    fontsize=14, # Slightly smaller to fit SD
+                                    color='black',
+                                    fontweight='bold')
+                except KeyError:
+                    pass
     
     # plt.title('Final Test Loss Comparison', fontweight='bold', fontsize=22)
     plt.ylabel('Loss', fontsize=18, fontweight='bold')
@@ -1000,11 +1018,11 @@ def plot_adaptive_mechanism_faceted(master_df):
         ax1.fill_between(mean_weight.index, mean_weight - ci_weight, mean_weight + ci_weight, 
                          color=color_weight, alpha=0.2)
         
-        ax1.set_xlabel('Epoch', fontsize=18, fontweight='bold')
-        ax1.set_ylabel('λ', color=color_weight, fontsize=18, fontweight='bold')
-        ax1.tick_params(axis='y', labelcolor=color_weight, labelsize=16)
-        ax1.tick_params(axis='x', labelsize=16)
-        ax1.set_title(f'{source}', fontsize=20, fontweight='bold', pad=20) # Added padding
+        ax1.set_xlabel('Epoch', fontsize=24, fontweight='bold')
+        ax1.set_ylabel('λ', color=color_weight, fontsize=24, fontweight='bold', labelpad=15)
+        ax1.tick_params(axis='y', labelcolor=color_weight, labelsize=22)
+        ax1.tick_params(axis='x', labelsize=22)
+        ax1.set_title(f'{source}', fontsize=26, fontweight='bold', pad=30) # Added padding
         ax1.grid(True, alpha=0.3)
         
         # Plot Slope (Right Axis)
@@ -1020,8 +1038,8 @@ def plot_adaptive_mechanism_faceted(master_df):
         ax2.fill_between(mean_slope.index, mean_slope - ci_slope, mean_slope + ci_slope,
                          color=color_slope, alpha=0.2)
                  
-        ax2.set_ylabel('∆Lval', color=color_slope, fontsize=18, fontweight='bold')
-        ax2.tick_params(axis='y', labelcolor=color_slope, labelsize=16)
+        ax2.set_ylabel('∆Lval', color=color_slope, fontsize=24, fontweight='bold', labelpad=15)
+        ax2.tick_params(axis='y', labelcolor=color_slope, labelsize=22)
         
         # Add zero line for slope
         ax2.axhline(0, color='gray', linestyle=':', alpha=0.5)
@@ -1036,14 +1054,14 @@ def plot_adaptive_mechanism_faceted(master_df):
 
     # Common title
     # fig.suptitle('Adaptive Mechanism by Source', fontsize=24, fontweight='bold', y=0.98) # Adjusted y position
-    fig.subplots_adjust(top=0.85, wspace=0.4, bottom=0.15, left=0.1, right=0.9) # Adjusted margins
+    fig.subplots_adjust(top=0.80, wspace=0.7, bottom=0.20, left=0.15, right=0.85) # Adjusted margins
     
     # Legend
     legend_elements = [
         Line2D([0], [0], color=color_weight, lw=4.0, label='λ'),
         Line2D([0], [0], color=color_slope, lw=4.0, linestyle='--', label='∆Lval')
     ]
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.92), ncol=2, frameon=False, fontsize=18)
+    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.92), ncol=2, frameon=False, fontsize=24)
 
     output_path = os.path.join(PLOTS_DIR, 'mechanism_adaptive_control_faceted.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -1329,13 +1347,13 @@ def plot_train_val_test_loss_faceted(master_df):
     g = sns.FacetGrid(df_melted, col="Loss Type", hue="Source", col_wrap=2, 
                       height=6, aspect=1.4, sharey=False, palette=SOURCE_PALETTE)
     g.map(sns.lineplot, "Epoch", "Loss", errorbar=('se', 1.96), linewidth=4.0)
-    g.add_legend(title=r'$\bf{Source}$', fontsize=18, title_fontsize=20)
-    g.set_titles("{col_name}", size=20, fontweight='bold')
-    g.set_axis_labels("Epoch", "Loss", fontsize=18, fontweight='bold')
+    g.add_legend(title=r'$\bf{Source}$', fontsize=24, title_fontsize=26)
+    g.set_titles("{col_name}", size=26, fontweight='bold')
+    g.set_axis_labels("Epoch", "Loss", fontsize=24, fontweight='bold')
     
     # Improve tick readability
     for ax in g.axes.flat:
-        ax.tick_params(labelsize=16)
+        ax.tick_params(labelsize=22)
 
     # g.fig.suptitle('Loss Comparison by Type', fontsize=24, fontweight='bold')
     g.fig.subplots_adjust(top=0.9)
@@ -1363,12 +1381,12 @@ def plot_complexity_metrics_faceted(master_df):
     
     g = sns.FacetGrid(df_melted, col="Metric", hue="Source", height=6, aspect=1.4, sharey=False, palette=SOURCE_PALETTE)
     g.map(sns.lineplot, "Epoch", "Value", errorbar=('se', 1.96), linewidth=4.0)
-    g.add_legend(title=r'$\bf{Source}$', fontsize=18, title_fontsize=20)
-    g.set_titles("{col_name}", size=20, fontweight='bold')
-    g.set_axis_labels("Epoch", "Value", fontsize=18, fontweight='bold')
+    g.add_legend(title=r'$\bf{Source}$', fontsize=24, title_fontsize=26)
+    g.set_titles("{col_name}", size=26, fontweight='bold')
+    g.set_axis_labels("Epoch", "Value", fontsize=24, fontweight='bold')
     
     for ax in g.axes.flat:
-        ax.tick_params(labelsize=16)
+        ax.tick_params(labelsize=22)
 
     # g.fig.suptitle('Complexity Metrics Comparison', fontsize=24, fontweight='bold')
     g.fig.subplots_adjust(top=0.85)
