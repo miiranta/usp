@@ -214,10 +214,25 @@ class Metrics:
             return -(probs * torch.log(probs)).sum()
 
         elif metric_name == 'gradient_entropy':
-            if logits is None or labels is None:
+            if input_ids is None or labels is None:
                 probs, _ = Metrics.soft_histogram(weights)
                 return -(probs * torch.log(probs)).sum()
-            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits.view(-1, logits.size(-1)), labels.view(-1))
+            
+            # Use fresh forward pass to ensure graph connectivity
+            # Subsample batch to reduce memory usage
+            batch_size = input_ids.size(0)
+            max_samples = 2
+            if batch_size > max_samples:
+                indices = torch.randperm(batch_size, device=device)[:max_samples]
+                input_ids_sub = input_ids[indices]
+                labels_sub = labels[indices]
+            else:
+                input_ids_sub = input_ids
+                labels_sub = labels
+
+            logits_sub = model(input_ids_sub)
+            loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_sub.view(-1, logits_sub.size(-1)), labels_sub.view(-1))
+            
             params = [p for p in model.parameters() if p.requires_grad]
             grads = torch.autograd.grad(loss, params, create_graph=True)
             all_grads = torch.cat([g.view(-1) for g in grads])
@@ -645,12 +660,18 @@ def main():
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=Config.LEARNING_RATE, total_steps=total_steps, pct_start=0.1)
         
         model.eval()
-        with torch.no_grad():
-            input_ids, labels = next(iter(train_loader))
-            input_ids, labels = input_ids.to(Config.DEVICE), labels.to(Config.DEVICE)
+        
+        input_ids, labels = next(iter(train_loader))
+        input_ids, labels = input_ids.to(Config.DEVICE), labels.to(Config.DEVICE)
+        
+        # Calculate metric start (enable grad as some metrics require it)
+        with torch.enable_grad():
             logits = model(input_ids)
-            ce_start = nn.CrossEntropyLoss()(logits.view(-1, vocab_size), labels.view(-1)).item()
             metric_start = Metrics.calculate_metric(model, metric_name, logits, labels, input_ids).item()
+            
+        # Calculate CE start
+        with torch.no_grad():
+            ce_start = nn.CrossEntropyLoss()(logits.detach().view(-1, vocab_size), labels.view(-1)).item()
         
         print(f"Start CE: {ce_start:.4f}, Start Metric: {metric_start:.4f}")
         
