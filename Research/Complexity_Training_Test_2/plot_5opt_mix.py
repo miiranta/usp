@@ -12,8 +12,8 @@ import re
 # ==========================================
 
 # Define the base output directory relative to this script
-BASE_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output_5opt')
-PLOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots_5opt')
+BASE_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output_5opt_mix')
+PLOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots_5opt_mix')
 
 # Limits for plotting
 # Set to 0 to disable limiting
