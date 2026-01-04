@@ -19,7 +19,8 @@ PLOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots_5opt
 # Set to 0 to disable limiting
 TOP_X_LOWEST_VAL_LOSS = 30
 TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE = 0
-EPOCH_OFFSET = 9 # Start epochs at 10 (1 + 9)
+EPOCH_OFFSET = 10 # Start epochs at 11 (1 + 10)
+CONTROL_KEYWORD = 'control min'
 
 # Set Seaborn Theme
 # "paper" context makes elements smaller/finer. "whitegrid" gives a clean look.
@@ -58,18 +59,28 @@ else:
 
 # Generate palette dynamically based on found sources
 _source_order = [s[0] for s in SOURCES]
-n_sources = len(_source_order)
 
-if n_sources > 0:
+# Separate control and others to assign RED to control
+_control_sources = [s for s in _source_order if CONTROL_KEYWORD in s.lower()]
+_other_sources = [s for s in _source_order if s not in _control_sources]
+
+n_others = len(_other_sources)
+
+if n_others > 0:
     # Use husl to spread colors evenly across the spectrum for the number of sources we have
     # This ensures maximum distinctness between sources
-    _colors = sns.color_palette('husl', n_sources)
+    _colors = sns.color_palette('husl', n_others)
 else:
     _colors = []
 
-SOURCE_PALETTE = {name: color for name, color in zip(_source_order, _colors)}
+SOURCE_PALETTE = {name: color for name, color in zip(_other_sources, _colors)}
+
+# Add control sources as RED
+for cs in _control_sources:
+    SOURCE_PALETTE[cs] = RED
+
 # Fallback list if dict doesn't work in some seaborn versions (though it should for hue)
-SOURCE_COLORS_LIST = list(_colors)
+SOURCE_COLORS_LIST = list(SOURCE_PALETTE.values())
 
 # Create plots directory if it doesn't exist
 os.makedirs(PLOTS_DIR, exist_ok=True)
@@ -115,7 +126,7 @@ def load_source_data(folder_path, label):
     combined = pd.concat(run_dfs)
     combined['Source'] = label
     
-    if EPOCH_OFFSET > 0 and 'control min' in label:
+    if EPOCH_OFFSET > 0 and CONTROL_KEYWORD in label.lower():
         combined['Epoch'] += EPOCH_OFFSET
         
     return combined
@@ -175,9 +186,11 @@ def filter_data(df):
     final_allowed_sources = set().union(*allowed_sources_sets)
 
     # Always include 'control' if it exists in the original data
-    if 'control' in df['Source'].unique():
-        final_allowed_sources.add('control')
-        print("Added 'control' to plot sources.")
+    control_sources = [s for s in df['Source'].unique() if CONTROL_KEYWORD in s.lower()]
+    if control_sources:
+        for cs in control_sources:
+            final_allowed_sources.add(cs)
+        print(f"Added control sources to plot: {control_sources}")
 
     if not final_allowed_sources:
         print("Warning: No sources left after filtering!")
@@ -217,6 +230,64 @@ def load_all_data(sources):
     
     return combined
 
+def get_starred_df_and_palette(df, metric):
+    """
+    Returns a new dataframe with starred source names if they are consistently
+    below the control source for the given metric, and a corresponding palette.
+    """
+    # Identify control source(s)
+    sources = df['Source'].unique()
+    control_sources = [s for s in sources if CONTROL_KEYWORD in s.lower()]
+    
+    if not control_sources:
+        return df, SOURCE_PALETTE
+        
+    # Use the first control found for comparison
+    control_source = control_sources[0]
+    
+    # Calculate means per epoch for control
+    control_data = df[df['Source'] == control_source].groupby('Epoch')[metric].mean()
+    
+    rename_map = {}
+    
+    for source in sources:
+        if source in control_sources:
+            rename_map[source] = source
+            continue
+            
+        source_data = df[df['Source'] == source].groupby('Epoch')[metric].mean()
+        
+        # Align indices (epochs)
+        common_epochs = control_data.index.intersection(source_data.index)
+        
+        if len(common_epochs) == 0:
+            rename_map[source] = source
+            continue
+            
+        # Check condition: source < control for ALL common epochs
+        # Using a small tolerance for float comparison if needed, but strict < requested
+        is_below = (source_data.loc[common_epochs] < control_data.loc[common_epochs]).all()
+        
+        if is_below:
+            rename_map[source] = f"{source} *"
+        else:
+            rename_map[source] = source
+            
+    # Create new DF
+    new_df = df.copy()
+    new_df['Source'] = new_df['Source'].map(rename_map)
+    
+    # Create new Palette
+    new_palette = {}
+    for old_name, new_name in rename_map.items():
+        if old_name in SOURCE_PALETTE:
+            new_palette[new_name] = SOURCE_PALETTE[old_name]
+        else:
+            # Fallback
+            new_palette[new_name] = '#333333'
+            
+    return new_df, new_palette
+
 def plot_all_metrics(master_df):
     """
     Generates plots for each metric comparing all sources using Seaborn.
@@ -229,17 +300,20 @@ def plot_all_metrics(master_df):
     metrics = [c for c in numeric_cols if c not in ['Epoch']]
     
     for metric in metrics:
+        # Apply star logic
+        plot_df, plot_palette = get_starred_df_and_palette(master_df, metric)
+        
         plt.figure(figsize=(12, 8))
         
         sns.lineplot(
-            data=master_df,
+            data=plot_df,
             x='Epoch',
             y=metric,
             hue='Source',
             style='Source',
             dashes=False,
             errorbar=('se', 1.96),
-            palette=SOURCE_PALETTE,
+            palette=plot_palette,
             linewidth=1.5,
             alpha=0.85
         )
@@ -264,16 +338,19 @@ def plot_generalization_gap(master_df):
         df = master_df.copy()
         df['Generalization Gap'] = df['Validation Loss'] - df['Training Loss']
         
+        # Apply star logic
+        plot_df, plot_palette = get_starred_df_and_palette(df, 'Generalization Gap')
+        
         plt.figure(figsize=(12, 8))
         sns.lineplot(
-            data=df,
+            data=plot_df,
             x='Epoch',
             y='Generalization Gap',
             hue='Source',
             style='Source',
             dashes=False,
             errorbar=('se', 1.96),
-            palette=SOURCE_PALETTE,
+            palette=plot_palette,
             linewidth=1.5,
             alpha=0.85
         )
