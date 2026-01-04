@@ -76,10 +76,28 @@ METRICS_TO_RUN = [
     '-G',
     '-J',
     
+    # MIN COMBINATIONS
+    '-A.B',
+    '-A.B.C',
+    '-A.B.C.G',
+    '-A.B.C.G.J',
+    '-B.C',
+    '-B.C.G',
+    '-B.C.G.J',
+    '-C.G',
+    '-C.G.J',
+    '-G.J',
+    
     # # MAX
     # 'D',
     # 'U',
     # 'Y',
+    
+    # MAX COMBINATIONS
+    'D.U',
+    'D.Y',
+    'U.Y',
+    'D.U.Y',
     
     # COMBINATIONS
     'D', 
