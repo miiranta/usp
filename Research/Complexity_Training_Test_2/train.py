@@ -36,14 +36,14 @@ class Config:
     METRIC_NAME = 'shannon' 
     
     # Model hyperparameters
-    HIDDEN_DIM = 256
+    HIDDEN_DIM = 128
     NUM_LAYERS = 4
     NUM_ATTENTION_HEADS = 4 
     
     # Training hyperparameters
     BATCH_SIZE = 64 
     EPOCHS = 30 
-    SEQ_LENGTH = 128
+    SEQ_LENGTH = 64
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 0 
     
