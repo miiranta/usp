@@ -534,7 +534,7 @@ class TextDataset(Dataset):
         
         self.input_ids = encodings['input_ids'][0]
         
-        if max_samples is not None:
+        if max_samples is not None and max_samples > 0:
             max_length = max_samples * seq_length
             self.input_ids = self.input_ids[:max_length]
     
