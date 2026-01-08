@@ -45,10 +45,10 @@ class Config:
     EPOCHS = 30 
     SEQ_LENGTH = 128
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 100 
+    MAX_SAMPLES = 0 
     
     # Number of runs
-    NUM_OF_RUN_PER_CALL = 2
+    NUM_OF_RUN_PER_CALL = 3
     
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1 
