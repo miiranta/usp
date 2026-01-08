@@ -644,7 +644,7 @@ def evaluate(model, val_loader, device, vocab_size):
     total_loss = 0
     total_samples = 0
     with torch.no_grad():
-        for input_ids, labels in val_loader:
+        for input_ids, labels in tqdm(val_loader, desc="Validation"):
             input_ids, labels = input_ids.to(device), labels.to(device)
             logits = model(input_ids)
             loss = nn.CrossEntropyLoss()(logits.view(-1, vocab_size), labels.view(-1))
@@ -657,7 +657,7 @@ def test(model, test_loader, device, vocab_size):
     total_loss = 0
     total_samples = 0
     with torch.no_grad():
-        for input_ids, labels in test_loader:
+        for input_ids, labels in tqdm(test_loader, desc="Testing"):
             input_ids, labels = input_ids.to(device), labels.to(device)
             logits = model(input_ids)
             loss = nn.CrossEntropyLoss()(logits.view(-1, vocab_size), labels.view(-1))
