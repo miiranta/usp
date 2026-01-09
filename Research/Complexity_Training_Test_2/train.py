@@ -691,7 +691,7 @@ def save_results_to_csv(output_dir, train_losses, val_losses, metric_values, lmc
         writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 'Test Loss Wiki', 'Test Loss Shakespeare', 'Metric Value', 'Weight'])
         for epoch in range(len(train_losses)):
             writer.writerow([
-                epoch + 1,
+                epoch,
                 f'{train_losses[epoch]:.16f}',
                 f'{val_losses[epoch]:.16f}',
                 f'{test_losses_wiki[epoch]:.16f}',
@@ -729,12 +729,20 @@ def run_training_single(output_dir, config, run_num, tokenizer, vocab_size, trai
     
     print(f"Start CE: {ce_start:.4f}, Start Metric: {metric_start:.4f}")
     
-    train_losses = []
-    val_losses = []
-    metric_values = []
-    lmc_weight_values = []
-    test_losses_wiki = []
-    test_losses_shakespeare = []
+    # Evaluate initial model (epoch 0)
+    initial_val_loss = evaluate(model, val_loader, config.DEVICE, vocab_size)
+    initial_test_loss_wiki = test(model, test_loader_wiki, config.DEVICE, vocab_size)
+    initial_test_loss_shakespeare = test(model, test_loader_shakespeare, config.DEVICE, vocab_size)
+    
+    print(f"Epoch 0 (Initial): Train Loss {ce_start:.4f}, Val Loss {initial_val_loss:.4f}, Metric {metric_start:.4f}, Wiki Test {initial_test_loss_wiki:.4f}, Shake Test {initial_test_loss_shakespeare:.4f}")
+    
+    # Initialize lists with epoch 0 values
+    train_losses = [ce_start]
+    val_losses = [initial_val_loss]
+    metric_values = [metric_start]
+    lmc_weight_values = [1.0]  # No training weight at epoch 0
+    test_losses_wiki = [initial_test_loss_wiki]
+    test_losses_shakespeare = [initial_test_loss_shakespeare]
     
     for epoch in range(config.EPOCHS):
         train_loss, train_ce, train_metric = train_epoch(model, train_loader, optimizer, scheduler, config.DEVICE, config, vocab_size, metric_start, ce_start, epoch)
