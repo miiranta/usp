@@ -305,6 +305,9 @@ def plot_optimizer_cost_fraction(df):
                   labels=['Model Forward/Backward', 'Optimizer (AdamW)', 'Metric Calculation'],
                   colors=['#3498db', '#95a5a6', '#e74c3c'], alpha=0.8)
     
+    # Phase transition line
+    plt.axvline(x=4.5, color='black', linestyle='--', linewidth=2, label='End of Optimization Phase')
+
     plt.xlabel('Epoch')
     plt.ylabel('FLOPs per Epoch')
     plt.title(f'Compute Breakdown: {metric_name} (Largest Model)')
@@ -323,6 +326,9 @@ def plot_optimizer_cost_fraction(df):
                   labels=['Model', 'Optimizer', 'Metric'],
                   colors=['#3498db', '#95a5a6', '#e74c3c'], alpha=0.8)
     
+    # Phase transition line
+    plt.axvline(x=4.5, color='black', linestyle='--', linewidth=2, label='Phase Transition')
+
     plt.xlabel('Epoch')
     plt.ylabel('Percentage of Compute (%)')
     plt.title(f'Compute Cost Distribution: {metric_name}')

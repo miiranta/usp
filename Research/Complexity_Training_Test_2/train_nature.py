@@ -43,7 +43,7 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 64 
-    EPOCHS = 25 
+    EPOCHS = 20 
     SEQ_LENGTH = 64
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 100
@@ -458,8 +458,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     total_metric_flops = 0
     total_opt_flops = 0
     
-    # 5-epoch schedule
-    if epoch < 10:
+    # 5-epoch schedule (Optimization Phase)
+    if epoch < 5:
         lmc_weight = 1.0
     else:
         lmc_weight = 0.0
@@ -483,7 +483,8 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             ce_loss = loss_fn(logits.view(-1, vocab_size), labels.view(-1))
             
             # Metric Loss
-            if config.CONTROL_MODE:
+            # CRITICAL: Do not calculate metric if weight is 0 to save FLOPs for scaling law
+            if config.CONTROL_MODE or lmc_weight == 0:
                 metric_val = torch.tensor(0.0, device=device)
             else:
                 metric_val = Metrics.calculate_metric(model, config.METRIC_NAME, logits, labels, input_ids)
@@ -684,7 +685,7 @@ def run_training_single(output_dir, config, run_num, tokenizer, vocab_size, trai
         
         # Values for logging
         # (Note: train_epoch here hardcodes weight schedule, so we replicate it for logging)
-        if epoch < 10:
+        if epoch < 5:
             lmc_weight = 1.0
         else:
             lmc_weight = 0.0
