@@ -737,7 +737,6 @@ def main():
         (64, 2),
         (128, 4),
         (256, 8),
-        (512, 12)
     ]
     
     for metric_name in METRICS_TO_RUN:
