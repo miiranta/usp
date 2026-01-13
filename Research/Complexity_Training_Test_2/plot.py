@@ -20,6 +20,7 @@ PLOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots')
 TOP_X_LOWEST_VAL_LOSS = 30
 TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE = 0
 EPOCH_OFFSET = 10 # Start epochs at 11 (1 + 10)
+MAX_EPOCH = 30 # Maximum epoch to plot (set to 0 to disable)
 CONTROL_KEYWORD = 'control min'
 
 # Set Seaborn Theme
@@ -84,6 +85,39 @@ SOURCE_COLORS_LIST = list(SOURCE_PALETTE.values())
 
 # Create plots directory if it doesn't exist
 os.makedirs(PLOTS_DIR, exist_ok=True)
+
+# ==========================================
+# Utility Functions
+# ==========================================
+
+def calculate_ci_stats(df, group_cols, metric_col, ci_level=1.96):
+    """
+    Centralized function to calculate mean and confidence interval for a metric.
+    
+    Parameters:
+    - df: DataFrame with the data
+    - group_cols: Column(s) to group by (e.g., ['Source', 'Epoch'] or 'Epoch')
+    - metric_col: The metric column to calculate statistics for
+    - ci_level: Multiplier for SEM (1.96 for 95% CI, 2.576 for 99% CI)
+    
+    Returns:
+    - DataFrame with mean, sem, and ci columns
+    """
+    if isinstance(group_cols, str):
+        group_cols = [group_cols]
+    
+    grouped = df.groupby(group_cols)[metric_col]
+    stats = pd.DataFrame({
+        'mean': grouped.mean(),
+        'sem': grouped.sem(),
+    }).reset_index()
+    
+    stats['ci'] = stats['sem'] * ci_level
+    # Replace NaN with 0 for single-run cases
+    stats['ci'].fillna(0, inplace=True)
+    stats['sem'].fillna(0, inplace=True)
+    
+    return stats
 
 # ==========================================
 # Data Loading and Aggregation
@@ -161,6 +195,11 @@ def filter_data(df):
     Filters the master dataframe based on configuration limits.
     """
     if df is None: return None
+    
+    # Filter by maximum epoch if set
+    if MAX_EPOCH > 0:
+        df = df[df['Epoch'] <= MAX_EPOCH]
+        print(f"Filtering by Max Epoch: {MAX_EPOCH}")
     
     # If no filters are set, return original
     if TOP_X_LOWEST_VAL_LOSS == 0 and TOP_X_LOWEST_TEST_LOSS_SHAKESPEARE == 0:
@@ -336,6 +375,10 @@ def plot_all_metrics(master_df):
             alpha=0.85
         )
         
+        # Add preoptimization shaded region
+        if EPOCH_OFFSET > 0:
+            plt.axvspan(plot_df['Epoch'].min(), EPOCH_OFFSET, alpha=0.15, color='gray', label='Preoptimization')
+        
         plt.title(f'{metric} Comparison', fontweight='normal', fontsize=16)
         plt.xlabel('Epoch', fontsize=12)
         plt.ylabel(metric, fontsize=12)
@@ -372,6 +415,10 @@ def plot_generalization_gap(master_df):
             linewidth=1.5,
             alpha=0.85
         )
+        # Add preoptimization shaded region
+        if EPOCH_OFFSET > 0:
+            plt.axvspan(plot_df['Epoch'].min(), EPOCH_OFFSET + 1, alpha=0.15, color='gray', label='Preoptimization')
+        
         plt.title('Generalization Gap (Val - Train Loss)', fontweight='normal', fontsize=16)
         plt.xlabel('Epoch', fontsize=12)
         plt.ylabel('Generalization Gap', fontsize=12)
@@ -463,11 +510,22 @@ def plot_train_vs_val_loss(master_df):
         legend=False # Disable default legend
     )
     
+    # Add preoptimization shaded region
+    if EPOCH_OFFSET > 0:
+        plt.axvspan(df_melted['Epoch'].min(), EPOCH_OFFSET, alpha=0.15, color='gray', zorder=0)
+    
     plt.title('Training vs Validation Loss', fontweight='normal', fontsize=16)
     plt.ylabel('Loss', fontsize=12)
     
     # Custom Legend
     legend_elements = []
+    
+    # Preoptimization section
+    if EPOCH_OFFSET > 0:
+        legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Region}$'))
+        from matplotlib.patches import Rectangle
+        legend_elements.append(Rectangle((0, 0), 1, 1, fc='gray', alpha=0.15, label='Preoptimization'))
+        legend_elements.append(Line2D([0], [0], color='none', label=''))
     
     # Source Section (Color)
     legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Source}$'))
@@ -577,12 +635,9 @@ def plot_complexity_performance_path(master_df):
     
     if 'Model LMC' not in master_df.columns or 'Validation Loss' not in master_df.columns: return
 
-    # Aggregate mean per epoch per source
-    agg_df = master_df.groupby(['Source', 'Epoch'])[['Model LMC', 'Validation Loss']].mean().reset_index()
-    
     plt.figure(figsize=(12, 8))
     sns.lineplot(
-        data=agg_df,
+        data=master_df,
         x='Model LMC',
         y='Validation Loss',
         hue='Source',
@@ -590,6 +645,7 @@ def plot_complexity_performance_path(master_df):
         palette=SOURCE_PALETTE,
         linewidth=2,
         alpha=0.8,
+        errorbar=('se', 1.96),
         marker='o',
         markevery=10 # Mark every 10th epoch to show direction/speed
     )
@@ -795,13 +851,19 @@ def plot_complexity_metrics_comparison(master_df):
         
         for source in sources:
             subset = master_df[master_df['Source'] == source]
-            # Group by epoch to get mean (if multiple runs)
-            subset_mean = subset.groupby('Epoch')[metric].mean()
+            # Calculate statistics using centralized function
+            stats = calculate_ci_stats(subset, 'Epoch', metric)
             
-            # Plot
-            ax.plot(subset_mean.index, subset_mean.values, 
+            # Plot mean line
+            ax.plot(stats['Epoch'], stats['mean'], 
                     color=color, linestyle=source_styles.get(source, '-'),
                     linewidth=2, alpha=0.8)
+            
+            # Add confidence interval shading
+            ax.fill_between(stats['Epoch'], 
+                          stats['mean'] - stats['ci'], 
+                          stats['mean'] + stats['ci'],
+                          color=color, alpha=0.15)
             
         ax.set_ylabel(metric, color=color, fontsize=12)
         ax.tick_params(axis='y', labelcolor=color)
@@ -815,10 +877,22 @@ def plot_complexity_metrics_comparison(master_df):
             ax.spines['right'].set_linewidth(2)
 
     ax1.set_xlabel('Epoch', fontsize=12)
+    
+    # Add preoptimization shaded region
+    if EPOCH_OFFSET > 0:
+        ax1.axvspan(master_df['Epoch'].min(), EPOCH_OFFSET, alpha=0.15, color='gray', zorder=0)
+    
     plt.title('Complexity Metrics Comparison', fontweight='normal', fontsize=16)
     
     # Custom Legend
     legend_elements = []
+    
+    # Preoptimization section
+    if EPOCH_OFFSET > 0:
+        from matplotlib.patches import Rectangle
+        legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Region}$'))
+        legend_elements.append(Rectangle((0, 0), 1, 1, fc='gray', alpha=0.15, label='Preoptimization'))
+        legend_elements.append(Line2D([0], [0], color='none', label=''))
     
     # Metric Section
     # legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Metric}$'))
@@ -874,15 +948,15 @@ def plot_adaptive_mechanism(master_df):
     for source in sources:
         subset = master_df[master_df['Source'] == source]
         
-        # Calculate mean and CI
-        grouped = subset.groupby('Epoch')['LMC Weight']
-        mean = grouped.mean()
-        sem = grouped.sem()
-        ci = sem * 1.96
+        # Calculate statistics using centralized function
+        stats_weight = calculate_ci_stats(subset, 'Epoch', 'LMC Weight')
         
-        ax1.plot(mean.index, mean.values, 
+        ax1.plot(stats_weight['Epoch'], stats_weight['mean'], 
                  color=color_weight, linestyle=source_styles[source], linewidth=2, label=f"{source}")
-        ax1.fill_between(mean.index, mean - ci, mean + ci, color=color_weight, alpha=0.2)
+        ax1.fill_between(stats_weight['Epoch'], 
+                        stats_weight['mean'] - stats_weight['ci'], 
+                        stats_weight['mean'] + stats_weight['ci'], 
+                        color=color_weight, alpha=0.2)
                  
     ax1.set_xlabel('Epoch', fontsize=12)
     ax1.set_ylabel('LMC Weight', color=color_weight, fontsize=12)
@@ -895,15 +969,15 @@ def plot_adaptive_mechanism(master_df):
     for source in sources:
         subset = master_df[master_df['Source'] == source]
         
-        # Calculate mean and CI
-        grouped = subset.groupby('Epoch')['Val Error Slope']
-        mean = grouped.mean()
-        sem = grouped.sem()
-        ci = sem * 1.96
+        # Calculate statistics using centralized function
+        stats_slope = calculate_ci_stats(subset, 'Epoch', 'Val Error Slope')
         
-        ax2.plot(mean.index, mean.values, 
+        ax2.plot(stats_slope['Epoch'], stats_slope['mean'], 
                  color=color_slope, linestyle=source_styles[source], linewidth=2, alpha=0.8)
-        ax2.fill_between(mean.index, mean - ci, mean + ci, color=color_slope, alpha=0.2)
+        ax2.fill_between(stats_slope['Epoch'], 
+                        stats_slope['mean'] - stats_slope['ci'], 
+                        stats_slope['mean'] + stats_slope['ci'], 
+                        color=color_slope, alpha=0.2)
                  
     ax2.set_ylabel('Val Error Slope', color=color_slope, fontsize=12)
     ax2.tick_params(axis='y', labelcolor=color_slope)
@@ -913,11 +987,22 @@ def plot_adaptive_mechanism(master_df):
     
     # Add zero line for slope
     ax2.axhline(0, color='gray', linestyle=':', alpha=0.5)
+    
+    # Add preoptimization shaded region
+    if EPOCH_OFFSET > 0:
+        ax1.axvspan(master_df['Epoch'].min(), EPOCH_OFFSET, alpha=0.15, color='gray', zorder=0)
 
     plt.title('Adaptive Mechanism: LMC Weight vs Val Error Slope', fontweight='normal', fontsize=16)
     
     # Custom Legend
     legend_elements = []
+    
+    # Preoptimization section
+    if EPOCH_OFFSET > 0:
+        from matplotlib.patches import Rectangle
+        legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Region}$'))
+        legend_elements.append(Rectangle((0, 0), 1, 1, fc='gray', alpha=0.15, label='Preoptimization'))
+        legend_elements.append(Line2D([0], [0], color='none', label=''))
     
     # Metric Section
     # legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Metric}$'))
@@ -973,14 +1058,13 @@ def plot_adaptive_mechanism_faceted(master_df):
         # subset_mean = subset.groupby('Epoch')[required].mean()
         
         # Plot LMC Weight (Left Axis)
-        grouped_weight = subset.groupby('Epoch')['LMC Weight']
-        mean_weight = grouped_weight.mean()
-        sem_weight = grouped_weight.sem()
-        ci_weight = sem_weight * 1.96
+        stats_weight = calculate_ci_stats(subset, 'Epoch', 'LMC Weight')
         
-        ax1.plot(mean_weight.index, mean_weight.values, 
+        ax1.plot(stats_weight['Epoch'], stats_weight['mean'], 
                  color=color_weight, linewidth=4.0, label='LMC Weight')
-        ax1.fill_between(mean_weight.index, mean_weight - ci_weight, mean_weight + ci_weight, 
+        ax1.fill_between(stats_weight['Epoch'], 
+                         stats_weight['mean'] - stats_weight['ci'], 
+                         stats_weight['mean'] + stats_weight['ci'], 
                          color=color_weight, alpha=0.2)
         
         ax1.set_xlabel('Epoch', fontsize=18, fontweight='bold')
@@ -993,14 +1077,13 @@ def plot_adaptive_mechanism_faceted(master_df):
         # Plot Slope (Right Axis)
         ax2 = ax1.twinx()
         
-        grouped_slope = subset.groupby('Epoch')['Val Error Slope']
-        mean_slope = grouped_slope.mean()
-        sem_slope = grouped_slope.sem()
-        ci_slope = sem_slope * 1.96
+        stats_slope = calculate_ci_stats(subset, 'Epoch', 'Val Error Slope')
         
-        ax2.plot(mean_slope.index, mean_slope.values, 
+        ax2.plot(stats_slope['Epoch'], stats_slope['mean'], 
                  color=color_slope, linewidth=4.0, linestyle='--', alpha=1.0, label='Val Error Slope')
-        ax2.fill_between(mean_slope.index, mean_slope - ci_slope, mean_slope + ci_slope,
+        ax2.fill_between(stats_slope['Epoch'], 
+                         stats_slope['mean'] - stats_slope['ci'], 
+                         stats_slope['mean'] + stats_slope['ci'],
                          color=color_slope, alpha=0.2)
                  
         ax2.set_ylabel('Val Error Slope', color=color_slope, fontsize=18, fontweight='bold')
@@ -1008,6 +1091,10 @@ def plot_adaptive_mechanism_faceted(master_df):
         
         # Add zero line for slope
         ax2.axhline(0, color='gray', linestyle=':', alpha=0.5)
+        
+        # Add preoptimization shaded region
+        if EPOCH_OFFSET > 0:
+            ax1.axvspan(subset['Epoch'].min(), EPOCH_OFFSET, alpha=0.15, color='gray', zorder=0)
         
         # Spines
         ax1.spines['left'].set_color(color_weight)
@@ -1022,11 +1109,15 @@ def plot_adaptive_mechanism_faceted(master_df):
     fig.subplots_adjust(top=0.85, wspace=0.4, bottom=0.15, left=0.1, right=0.9) # Adjusted margins
     
     # Legend
-    legend_elements = [
+    legend_elements = []
+    if EPOCH_OFFSET > 0:
+        from matplotlib.patches import Rectangle
+        legend_elements.append(Rectangle((0, 0), 1, 1, fc='gray', alpha=0.15, label='Preoptimization'))
+    legend_elements.extend([
         Line2D([0], [0], color=color_weight, lw=4.0, label='LMC Weight'),
         Line2D([0], [0], color=color_slope, lw=4.0, linestyle='--', label='Val Error Slope')
-    ]
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.92), ncol=2, frameon=False, fontsize=18)
+    ])
+    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.92), ncol=3, frameon=False, fontsize=18)
 
     output_path = os.path.join(PLOTS_DIR, 'mechanism_adaptive_control_faceted.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -1157,11 +1248,22 @@ def plot_train_val_test_loss_comparison(master_df):
         legend=False
     )
     
+    # Add preoptimization shaded region
+    if EPOCH_OFFSET > 0:
+        plt.axvspan(df_melted['Epoch'].min(), EPOCH_OFFSET, alpha=0.15, color='gray', zorder=0)
+    
     plt.title('Training vs Validation vs Test Loss', fontweight='normal', fontsize=16)
     plt.ylabel('Loss', fontsize=12)
     
     # Custom Legend
     legend_elements = []
+    
+    # Preoptimization section
+    if EPOCH_OFFSET > 0:
+        from matplotlib.patches import Rectangle
+        legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Region}$'))
+        legend_elements.append(Rectangle((0, 0), 1, 1, fc='gray', alpha=0.15, label='Preoptimization'))
+        legend_elements.append(Line2D([0], [0], color='none', label=''))
     
     # Source Section (Color)
     legend_elements.append(Line2D([0], [0], color='none', label=r'$\bf{Source}$'))
@@ -1212,9 +1314,15 @@ def plot_train_val_test_loss_faceted(master_df):
     g.set_titles("{col_name}", size=20, fontweight='bold')
     g.set_axis_labels("Epoch", "Loss", fontsize=18, fontweight='bold')
     
-    # Improve tick readability
+    # Improve tick readability and add preoptimization shade
     for ax in g.axes.flat:
         ax.tick_params(labelsize=16)
+        # Add preoptimization shaded region
+        if EPOCH_OFFSET > 0:
+            ax.axvspan(df_melted['Epoch'].min(), EPOCH_OFFSET, alpha=0.15, color='gray', zorder=0)
+        # Add preoptimization shaded region
+        if EPOCH_OFFSET > 0:
+            ax.axvspan(df_melted['Epoch'].min(), EPOCH_OFFSET, alpha=0.15, color='gray', zorder=0)
 
     # g.fig.suptitle('Loss Comparison by Type', fontsize=24, fontweight='bold')
     g.fig.subplots_adjust(top=0.9)
@@ -1246,8 +1354,12 @@ def plot_complexity_metrics_faceted(master_df):
     g.set_titles("{col_name}", size=20, fontweight='bold')
     g.set_axis_labels("Epoch", "Value", fontsize=18, fontweight='bold')
     
+    # Add preoptimization shade and improve tick readability
     for ax in g.axes.flat:
         ax.tick_params(labelsize=16)
+        # Add preoptimization shaded region
+        if EPOCH_OFFSET > 0:
+            ax.axvspan(df_melted['Epoch'].min(), EPOCH_OFFSET, alpha=0.15, color='gray', zorder=0)
 
     # g.fig.suptitle('Complexity Metrics Comparison', fontsize=24, fontweight='bold')
     g.fig.subplots_adjust(top=0.85)
