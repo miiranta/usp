@@ -43,10 +43,10 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 64 
-    EPOCHS = 30 
+    EPOCHS = 25 
     SEQ_LENGTH = 64
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 0 
+    MAX_SAMPLES = 100
     
     # Number of runs
     NUM_OF_RUN_PER_CALL = 3
