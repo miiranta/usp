@@ -49,7 +49,7 @@ class Config:
     MAX_SAMPLES = 100
     
     # Number of runs
-    NUM_OF_RUN_PER_CALL = 3
+    NUM_OF_RUN_PER_CALL = 1
     
     # Complexity calculation interval
     COMPLEXITY_UPDATE_INTERVAL = 1 
