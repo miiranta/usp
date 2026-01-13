@@ -46,8 +46,10 @@ class Config:
     EPOCHS = 20 
     SEQ_LENGTH = 64
     MAX_GRAD_NORM = 1.0
-    MAX_SAMPLES = 100
-    
+    MAX_SAMPLES = 100    
+    MAX_VAL_SAMPLES = 500
+    MAX_TEST_SAMPLES = 500  
+      
     # Number of runs
     NUM_OF_RUN_PER_CALL = 1
     
@@ -724,9 +726,9 @@ def main():
         return
         
     train_dataset = TextDataset(train_path, tokenizer, Config.SEQ_LENGTH, Config.MAX_SAMPLES)
-    val_dataset = TextDataset(val_path, tokenizer, Config.SEQ_LENGTH, None)
-    test_dataset_wiki = TextDataset(test_path_wiki, tokenizer, Config.SEQ_LENGTH, None)
-    test_dataset_shakespeare = TextDataset(test_path_shakespeare, tokenizer, Config.SEQ_LENGTH, None)
+    val_dataset = TextDataset(val_path, tokenizer, Config.SEQ_LENGTH, Config.MAX_VAL_SAMPLES)
+    test_dataset_wiki = TextDataset(test_path_wiki, tokenizer, Config.SEQ_LENGTH, Config.MAX_TEST_SAMPLES)
+    test_dataset_shakespeare = TextDataset(test_path_shakespeare, tokenizer, Config.SEQ_LENGTH, Config.MAX_TEST_SAMPLES)
     
     train_loader = DataLoader(train_dataset, batch_size=Config.BATCH_SIZE, shuffle=True, num_workers=Config.NUM_WORKERS)
     val_loader = DataLoader(val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS)
