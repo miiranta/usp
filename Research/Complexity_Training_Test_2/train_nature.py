@@ -821,13 +821,14 @@ def main():
             Config.NUM_LAYERS = L
             
             output_dir = os.path.join(base_output_dir, f"H{H}_L{L}")
-            if os.path.exists(output_dir):
-                print(f"Skipping {metric_name} ({direction}) H{H} L{L} - already exists.")
-                continue
-            
             os.makedirs(output_dir, exist_ok=True)
             
             for run_num in range(1, Config.NUM_OF_RUN_PER_CALL + 1):
+                csv_path = os.path.join(output_dir, f'results_run_{run_num}.csv')
+                if os.path.exists(csv_path):
+                    print(f"Skipping {metric_name} H{H} L{L} Run {run_num} - already exists.")
+                    continue
+
                 print(f"    Run {run_num}/{Config.NUM_OF_RUN_PER_CALL}")
                 run_training_single(output_dir, Config, run_num, tokenizer, vocab_size, train_loader, val_loader, test_loader_wiki, test_loader_shakespeare)
 
