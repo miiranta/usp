@@ -29,6 +29,27 @@ except AttributeError:
 # CONFIGURATION
 # ============================================================================
 
+def get_best_gpu():
+    """Checks for all available GPUs and selects the one with the most free memory."""
+    if not torch.cuda.is_available():
+        return 0
+    
+    max_free = 0
+    best_gpu = 0
+    
+    for i in range(torch.cuda.device_count()):
+        try:
+            # torch.cuda.mem_get_info returns (free, total) in bytes
+            free, _ = torch.cuda.mem_get_info(i)
+            if free > max_free:
+                max_free = free
+                best_gpu = i
+        except Exception:
+            pass
+            
+    print(f"Auto-selecting GPU {best_gpu} with {max_free/1024**3:.2f}GB free memory")
+    return best_gpu
+
 class Config:
     # Control Mode: If True, runs CE only (Baseline). If False, runs CE + Metric
     CONTROL_MODE = False  
@@ -57,7 +78,7 @@ class Config:
     COMPLEXITY_UPDATE_INTERVAL = 1 
     
     # Device configuration
-    GPU_INDEX = 0
+    GPU_INDEX = get_best_gpu()
     DEVICE = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
     NUM_WORKERS = 0
     
@@ -65,7 +86,7 @@ class Config:
     USE_COMPILE = False  
     
     # DONT CHANGE
-    LMC_WEIGHT = 0.0         
+    LMC_WEIGHT = 0.01         
     LEARNING_RATE = 1e-4
 
 METRICS_TO_RUN = [
@@ -460,32 +481,33 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
     total_metric_flops = 0
     total_opt_flops = 0
     
-    # 5-epoch schedule (Optimization Phase)
-    if epoch < 5:
-        lmc_weight = 1.0
-    else:
-        lmc_weight = 0.0
+    # Constant weight
+    lmc_weight = config.LMC_WEIGHT
         
     progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{config.EPOCHS}")
     
     for batch_idx, (input_ids, labels) in enumerate(progress_bar):
+        input_ids, labels = input_ids.to(device), labels.to(device)
+        optimizer.zero_grad()
+
+        # --- MODEL FORWARD ---
         with profile(
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            with_flops=True,
+            with_flops=True, 
             record_shapes=False
-        ) as prof:
-            input_ids, labels = input_ids.to(device), labels.to(device)
-            
-            optimizer.zero_grad()
-            
+        ) as prof_model:
             logits = model(input_ids)
             
             # CE Loss
             loss_fn = nn.CrossEntropyLoss()
             ce_loss = loss_fn(logits.view(-1, vocab_size), labels.view(-1))
             
-            # Metric Loss
-            # CRITICAL: Do not calculate metric if weight is 0 to save FLOPs for scaling law
+        # --- METRIC CALCULATION ---
+        with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            with_flops=True,
+            record_shapes=False
+        ) as prof_metric:
             if config.CONTROL_MODE or lmc_weight == 0:
                 metric_val = torch.tensor(0.0, device=device)
             else:
@@ -495,38 +517,57 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
                 metric_loss_normalized = (metric_val / (metric_start + 1e-10)) * ce_start
             else:
                 metric_loss_normalized = (metric_start / (metric_val + 1e-10)) * ce_start
-                
-            if config.CONTROL_MODE:
+
+        # --- COMBINED BACKWARD ---
+        with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            with_flops=True,
+            record_shapes=False
+        ) as prof_backward:
+            if config.CONTROL_MODE or lmc_weight == 0:
                 combined_loss = ce_loss
             else:
+                # Combined loss to ensure single backward pass (no double-counting FLOPs)
                 combined_loss = (1.0 - lmc_weight) * ce_loss + lmc_weight * metric_loss_normalized
             
             combined_loss.backward()
+
+        # --- OPTIMIZER ---
+        with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            with_flops=True,
+            record_shapes=False
+        ) as prof_opt:
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
             optimizer.step()
             scheduler.step()
         
-        # Calculate FLOPs
-        events = prof.key_averages()
-        step_flops = sum(e.flops for e in events if e.flops is not None)
+        # Calculate FLOPs from profilers
+        # Model = Forward + Backward (Model Ops)
+        # Note: Backward phase captures ALL backward ops.
+        # We assign all backward ops to "Model" because they are structurally model-dependent.
+        # The marginal cost of the metric is captured in the Metric Calculation phase.
+        
+        events_model = prof_model.key_averages()
+        step_model_flops = sum(e.flops for e in events_model if e.flops is not None)
+
+        events_backward = prof_backward.key_averages()
+        step_backward_flops = sum(e.flops for e in events_backward if e.flops is not None)
+        
+        # Metric
+        events_metric = prof_metric.key_averages()
+        step_metric_flops = sum(e.flops for e in events_metric if e.flops is not None)
+        
+        # Optimizer
+        events_opt = prof_opt.key_averages()
+        step_opt_flops = sum(e.flops for e in events_opt if e.flops is not None)
+        
+        # Total
+        step_flops = step_model_flops + step_backward_flops + step_metric_flops + step_opt_flops
         total_flops += step_flops
         
-        step_model_flops = 0
-        step_metric_flops = 0
-        step_opt_flops = 0
-        
-        for e in events:
-            if e.flops is None:
-                continue
-            name = e.key.lower()
-            if "softmax" in name or "linear" in name or "matmul" in name:
-                step_model_flops += e.flops
-            elif "svd" in name or "fft" in name or "eig" in name or "checkpoint" in name:
-                step_metric_flops += e.flops
-            else:
-                step_opt_flops += e.flops
-                
-        total_model_flops += step_model_flops
+        # Combine Forward and Backward for Model FLOPs reporting
+        total_model_flops += (step_model_flops + step_backward_flops)
         total_metric_flops += step_metric_flops
         total_opt_flops += step_opt_flops
         
@@ -538,7 +579,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
             'loss': f"{combined_loss.item():.4f}",
             'ce': f"{ce_loss.item():.4f}",
             'met': f"{metric_val.item():.4f}",
-            'w': f"{lmc_weight:.1f}",
+            'w': f"{lmc_weight:.4f}",
             'TFLOPs': f"{total_flops/1e12:.2f}"
         })
         
@@ -591,6 +632,17 @@ def save_results_to_csv(output_dir, train_losses, val_losses, metric_values, lmc
         writer.writerow(['=== Training Summary ===', ''])
         writer.writerow(['Final Training Loss', f'{train_losses[-1]:.16f}'])
         writer.writerow(['Final Validation Loss', f'{val_losses[-1]:.16f}'])
+        
+        # Kaplan-style logging: Best Valid Loss and corresponding Compute
+        best_val_idx = int(np.argmin(val_losses))
+        best_val_loss = val_losses[best_val_idx]
+        # Cumulative model flops up to the best epoch
+        limit = min(len(train_model_flops), best_val_idx + 1)
+        best_model_flops = sum(train_model_flops[:limit])
+        
+        writer.writerow(['Best Validation Loss', f'{best_val_loss:.16f}'])
+        writer.writerow(['Model FLOPs at Best Val', f'{best_model_flops:.4e}'])
+        
         writer.writerow(['Final Metric Value', f'{metric_values[-1]:.16f}'])
         writer.writerow(['Total FLOPs', f'{sum(train_flops):.4e}'])
         writer.writerow(['Run Number', f'{run_num}'])
@@ -614,7 +666,7 @@ def save_results_to_csv(output_dir, train_losses, val_losses, metric_values, lmc
                 f'{test_losses_wiki[epoch]:.16f}',
                 f'{test_losses_shakespeare[epoch]:.16f}',
                 f'{metric_values[epoch]:.16f}',
-                f'{lmc_weight_values[epoch]:.3f}',
+                f'{lmc_weight_values[epoch]:.4f}',
                 f'{tf:.4e}',
                 f'{tmod:.4e}',
                 f'{tmet:.4e}',
@@ -668,7 +720,7 @@ def run_training_single(output_dir, config, run_num, tokenizer, vocab_size, trai
     train_losses = [ce_start]
     val_losses = [initial_val_loss]
     metric_values = [metric_start]
-    lmc_weight_values = [1.0]  # No training weight at epoch 0
+    lmc_weight_values = [config.LMC_WEIGHT]
     test_losses_wiki = [initial_test_loss_wiki]
     test_losses_shakespeare = [initial_test_loss_shakespeare]
     
@@ -687,10 +739,7 @@ def run_training_single(output_dir, config, run_num, tokenizer, vocab_size, trai
         
         # Values for logging
         # (Note: train_epoch here hardcodes weight schedule, so we replicate it for logging)
-        if epoch < 5:
-            lmc_weight = 1.0
-        else:
-            lmc_weight = 0.0
+        lmc_weight = config.LMC_WEIGHT
         
         print(f"Epoch {epoch+1}: Train Loss {train_loss:.4f}, Val Loss {val_loss:.4f}, Metric {train_metric:.4f}, Wiki Test {test_loss_wiki:.4f}, Shake Test {test_loss_shakespeare:.4f}")
         

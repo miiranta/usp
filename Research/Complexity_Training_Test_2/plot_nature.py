@@ -11,11 +11,13 @@ import re
 sns.set_theme(style="whitegrid", context="paper", font_scale=1.5)
 plt.rcParams['font.family'] = 'serif'
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Output directory for plots
-PLOT_DIR = "plots_nature"
+PLOT_DIR = os.path.join(SCRIPT_DIR, "plots_nature")
 os.makedirs(PLOT_DIR, exist_ok=True)
 
-def load_data(root_dir="output_nature"):
+def load_data(root_dir=None):
     """
     Traverses the output directory structure:
     output/
@@ -23,6 +25,8 @@ def load_data(root_dir="output_nature"):
         H{hidden}_L{layers}/
           results_run_{run}.csv
     """
+    if root_dir is None:
+        root_dir = os.path.join(SCRIPT_DIR, "output_nature")
     data_list = []
     
     # Only look for first-level directories in output/
@@ -137,6 +141,14 @@ def load_data(root_dir="output_nature"):
                     if 'Step FLOPs' in df_hist.columns:
                         df_hist['Cumulative FLOPs'] = df_hist['Step FLOPs'].cumsum()
                     
+                    # Calculate Total Model FLOPs from history summing 'Model FLOPs'
+                    total_model_flops = df_hist['Model FLOPs'].sum() if 'Model FLOPs' in df_hist.columns else total_flops
+
+                    # Calculate BEST losses from history
+                    best_val_loss = df_hist['Validation Loss'].min() if 'Validation Loss' in df_hist.columns else final_val_loss
+                    best_test_loss_wiki = df_hist['Test Loss Wiki'].min() if 'Test Loss Wiki' in df_hist.columns else final_test_loss_wiki
+                    best_test_loss_shake = df_hist['Test Loss Shakespeare'].min() if 'Test Loss Shakespeare' in df_hist.columns else final_test_loss_shake
+
                     # Add to data list
                     run_data = {
                         'metric': metric_name,
@@ -145,9 +157,13 @@ def load_data(root_dir="output_nature"):
                         'params': param_proxy,
                         'run': int(os.path.basename(csv_file).split('_')[-1].split('.')[0]),
                         'total_flops': total_flops,
+                        'total_model_flops': total_model_flops,
                         'final_val_loss': final_val_loss,
                         'final_test_loss_wiki': final_test_loss_wiki,
                         'final_test_loss_shake': final_test_loss_shake,
+                        'best_val_loss': best_val_loss,
+                        'best_test_loss_wiki': best_test_loss_wiki,
+                        'best_test_loss_shake': best_test_loss_shake,
                         'is_control': 'control' in metric_name or 'shannon' in metric_name,
                         'history': df_hist
                     }
@@ -160,19 +176,19 @@ def load_data(root_dir="output_nature"):
 
 def plot_scaling_laws(df):
     """
-    1. The scaling-law plot
+    1. The scaling-law plot (System Efficiency)
     X-axis: log10(Total FLOPs)
-    Y-axis: log10(Validation loss)
+    Y-axis: log10(Best Validation loss)
     """
-    print("Plotting Scaling Laws...")
+    print("Plotting Scaling Laws (System Efficiency)...")
     plt.figure(figsize=(10, 8))
     
     # Filter valid data
-    df = df.dropna(subset=['total_flops', 'final_test_loss_wiki']) # Use wiki test loss as primary scaling metric often better
+    df = df.dropna(subset=['total_flops', 'best_val_loss']) 
     
-    # Use Validation Loss as requested
+    # Use Best Validation Loss as requested
     df['log_flops'] = np.log10(df['total_flops'])
-    df['log_val_loss'] = np.log10(df['final_val_loss'])
+    df['log_val_loss'] = np.log10(df['best_val_loss'])
     
     # Separate Control and Others
     control_df = df[df['is_control']]
@@ -187,12 +203,16 @@ def plot_scaling_laws(df):
     if not control_df.empty:
         sns.scatterplot(
             data=control_df, x='log_flops', y='log_val_loss', 
-            label='Baseline (pylance_mcp)', color='black', s=100, marker='o'
+            label='Baseline', color='black', s=100, marker='o'
         )
         # Fit Line
-        slope, intercept, r_value, p_value, std_err = stats.linregress(control_df['log_flops'], control_df['log_val_loss'])
-        x_vals = np.array([control_df['log_flops'].min(), control_df['log_flops'].max()])
-        plt.plot(x_vals, intercept + slope * x_vals, 'k--', linewidth=2, label=f'Baseline Fit (α={-slope:.3f})')
+        if control_df['log_flops'].nunique() > 1:
+            try:
+                slope, intercept, r_value, p_value, std_err = stats.linregress(control_df['log_flops'], control_df['log_val_loss'])
+                x_vals = np.array([control_df['log_flops'].min(), control_df['log_flops'].max()])
+                plt.plot(x_vals, intercept + slope * x_vals, 'k--', linewidth=2, label=f'Baseline Fit (α={-slope:.3f})')
+            except ValueError:
+                pass
     
     # Plot Metrics
     for i, metric in enumerate(unique_metrics):
@@ -205,18 +225,21 @@ def plot_scaling_laws(df):
         )
         
         # Fit Line
-        if len(m_df) > 1:
-            slope, intercept, r_value, p_value, std_err = stats.linregress(m_df['log_flops'], m_df['log_val_loss'])
-            x_vals = np.array([m_df['log_flops'].min(), m_df['log_flops'].max()])
-            plt.plot(x_vals, intercept + slope * x_vals, '-', color=color, linewidth=2, label=f'{metric} Fit (α={-slope:.3f})')
+        if m_df['log_flops'].nunique() > 1:
+            try:
+                slope, intercept, r_value, p_value, std_err = stats.linregress(m_df['log_flops'], m_df['log_val_loss'])
+                x_vals = np.array([m_df['log_flops'].min(), m_df['log_flops'].max()])
+                plt.plot(x_vals, intercept + slope * x_vals, '-', color=color, linewidth=2, label=f'{metric} Fit (α={-slope:.3f})')
+            except ValueError:
+                pass
 
     plt.xlabel(r'$\log_{10}(\text{Total FLOPs})$')
-    plt.ylabel(r'$\log_{10}(\text{Validation Loss})$')
-    plt.title('Scaling Law: Validation Loss vs Compute')
+    plt.ylabel(r'$\log_{10}(\text{Best Validation Loss})$')
+    plt.title('System Efficiency: Validation Loss vs Total Compute')
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.grid(True, which="both", ls="-", alpha=0.2)
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOT_DIR, "1_scaling_law_val.png"), dpi=300)
+    plt.savefig(os.path.join(PLOT_DIR, "1_scaling_law_system_efficiency.png"), dpi=300)
     plt.close()
 
 def plot_loss_vs_flops_trajectory(df):
@@ -269,7 +292,7 @@ def plot_loss_vs_flops_trajectory(df):
     plt.legend()
     plt.grid(True, which="both", ls="-", alpha=0.2)
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOT_DIR, "2_loss_vs_flops_trajectory.png"), dpi=300)
+    plt.savefig(os.path.join(PLOT_DIR, "3_loss_vs_flops_trajectory.png"), dpi=300)
     plt.close()
 
 def plot_optimizer_cost_fraction(df):
@@ -305,15 +328,12 @@ def plot_optimizer_cost_fraction(df):
                   labels=['Model Forward/Backward', 'Optimizer (AdamW)', 'Metric Calculation'],
                   colors=['#3498db', '#95a5a6', '#e74c3c'], alpha=0.8)
     
-    # Phase transition line
-    plt.axvline(x=4.5, color='black', linestyle='--', linewidth=2, label='End of Optimization Phase')
-
     plt.xlabel('Epoch')
     plt.ylabel('FLOPs per Epoch')
     plt.title(f'Compute Breakdown: {metric_name} (Largest Model)')
     plt.legend(loc='upper left')
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOT_DIR, "3_compute_breakdown_stacked.png"), dpi=300)
+    plt.savefig(os.path.join(PLOT_DIR, "4_compute_breakdown_stacked.png"), dpi=300)
     plt.close()
     
     # Normalized version (Percentage)
@@ -326,16 +346,13 @@ def plot_optimizer_cost_fraction(df):
                   labels=['Model', 'Optimizer', 'Metric'],
                   colors=['#3498db', '#95a5a6', '#e74c3c'], alpha=0.8)
     
-    # Phase transition line
-    plt.axvline(x=4.5, color='black', linestyle='--', linewidth=2, label='Phase Transition')
-
     plt.xlabel('Epoch')
     plt.ylabel('Percentage of Compute (%)')
     plt.title(f'Compute Cost Distribution: {metric_name}')
     plt.legend(loc='lower right')
     plt.ylim(0, 100)
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOT_DIR, "3_compute_breakdown_percent.png"), dpi=300)
+    plt.savefig(os.path.join(PLOT_DIR, "4_compute_breakdown_percent.png"), dpi=300)
     plt.close()
 
 def plot_universality(df):
@@ -346,8 +363,8 @@ def plot_universality(df):
     print("Plotting Universality...")
     
     datasets = [
-        ('final_test_loss_wiki', 'WikiText-2'),
-        ('final_test_loss_shake', 'Tiny Shakespeare')
+        ('best_val_loss', 'WikiText-2 (Best Val)'),
+        ('best_test_loss_shake', 'Tiny Shakespeare (Best Test)')
     ]
     
     for col, name in datasets:
@@ -369,9 +386,13 @@ def plot_universality(df):
                 label='Baseline', color='black', s=100, marker='o'
             )
             # Fit
-            slope, intercept, _, _, _ = stats.linregress(control_df['log_flops'], control_df['log_loss'])
-            x_vals = np.array([control_df['log_flops'].min(), control_df['log_flops'].max()])
-            plt.plot(x_vals, intercept + slope * x_vals, 'k--', label=f'Baseline α={-slope:.3f}')
+            if control_df['log_flops'].nunique() > 1:
+                try:
+                    slope, intercept, _, _, _ = stats.linregress(control_df['log_flops'], control_df['log_loss'])
+                    x_vals = np.array([control_df['log_flops'].min(), control_df['log_flops'].max()])
+                    plt.plot(x_vals, intercept + slope * x_vals, 'k--', label=f'Baseline α={-slope:.3f}')
+                except ValueError:
+                    pass
 
         # Plot Metrics
         for i, metric in enumerate(unique_metrics):
@@ -382,19 +403,198 @@ def plot_universality(df):
                 label=metric, color=color, s=80, marker='s', alpha=0.7
             )
             # Fit
-            if len(m_df) > 1:
-                slope, intercept, _, _, _ = stats.linregress(m_df['log_flops'], m_df['log_loss'])
-                x_vals = np.array([m_df['log_flops'].min(), m_df['log_flops'].max()])
-                plt.plot(x_vals, intercept + slope * x_vals, '-', color=color, label=f'{metric} α={-slope:.3f}')
+            if m_df['log_flops'].nunique() > 1:
+                try:
+                    slope, intercept, _, _, _ = stats.linregress(m_df['log_flops'], m_df['log_loss'])
+                    x_vals = np.array([m_df['log_flops'].min(), m_df['log_flops'].max()])
+                    plt.plot(x_vals, intercept + slope * x_vals, '-', color=color, label=f'{metric} α={-slope:.3f}')
+                except ValueError:
+                    pass
         
         plt.xlabel(r'$\log_{10}(\text{Total FLOPs})$')
-        plt.ylabel(r'$\log_{10}(\text{Test Loss})$')
+        plt.ylabel(r'$\log_{10}(\text{Best Loss})$')
         plt.title(f'Universality: Scaling on {name}')
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.grid(True, which="both", ls="-", alpha=0.2)
         plt.tight_layout()
-        plt.savefig(os.path.join(PLOT_DIR, f"4_universality_{name.replace(' ', '_')}.png"), dpi=300)
+        
+        # Clean name: remove parentheses and replacing spaces
+        clean_name = name.split(' (')[0].replace(' ', '_')
+        plt.savefig(os.path.join(PLOT_DIR, f"5_universality_{clean_name}.png"), dpi=300)
         plt.close()
+
+def plot_optimizer_efficiency(df):
+    """
+    2. Optimizer Efficiency
+    X-axis: log10(Total Model FLOPs) -> Effective training work
+    Y-axis: log10(Best Validation loss)
+    """
+    print("Plotting Optimizer Efficiency...")
+    plt.figure(figsize=(10, 8))
+    
+    # Filter valid data
+    df = df.dropna(subset=['total_model_flops', 'best_val_loss']) 
+    
+    df['log_model_flops'] = np.log10(df['total_model_flops'])
+    df['log_val_loss'] = np.log10(df['best_val_loss'])
+    
+    # Separate Control and Others
+    control_df = df[df['is_control']]
+    metrics_df = df[~df['is_control']]
+    
+    # Get unique metrics
+    unique_metrics = metrics_df['metric'].unique()
+    colors = sns.color_palette("muted", len(unique_metrics) + 1)
+    
+    # Plot Control
+    if not control_df.empty:
+        sns.scatterplot(
+            data=control_df, x='log_model_flops', y='log_val_loss', 
+            label='Baseline', color='black', s=100, marker='o'
+        )
+        # Fit Line
+        if control_df['log_model_flops'].nunique() > 1:
+            try:
+                slope, intercept, _, _, _ = stats.linregress(control_df['log_model_flops'], control_df['log_val_loss'])
+                x_vals = np.array([control_df['log_model_flops'].min(), control_df['log_model_flops'].max()])
+                plt.plot(x_vals, intercept + slope * x_vals, 'k--', linewidth=2, label=f'Baseline Fit (α={-slope:.3f})')
+            except ValueError:
+                pass
+    
+    # Plot Metrics
+    for i, metric in enumerate(unique_metrics):
+        m_df = metrics_df[metrics_df['metric'] == metric]
+        color = colors[i]
+        
+        sns.scatterplot(
+            data=m_df, x='log_model_flops', y='log_val_loss', 
+            label=f'{metric}', color=color, s=80, marker='s', alpha=0.7
+        )
+        
+        # Fit Line
+        if m_df['log_model_flops'].nunique() > 1:
+            try:
+                slope, intercept, _, _, _ = stats.linregress(m_df['log_model_flops'], m_df['log_val_loss'])
+                x_vals = np.array([m_df['log_model_flops'].min(), m_df['log_model_flops'].max()])
+                plt.plot(x_vals, intercept + slope * x_vals, '-', color=color, linewidth=2, label=f'{metric} Fit (α={-slope:.3f})')
+            except ValueError:
+                pass
+
+    plt.xlabel(r'$\log_{10}(\text{Model FLOPs})$')
+    plt.ylabel(r'$\log_{10}(\text{Best Validation Loss})$')
+    plt.title('Optimizer Efficiency: Loss vs Effective Training Compute')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True, which="both", ls="-", alpha=0.2)
+    plt.tight_layout()
+    plt.savefig(os.path.join(PLOT_DIR, "2_scaling_law_optimizer_efficiency.png"), dpi=300)
+    plt.close()
+
+def plot_learning_curves(df):
+    """
+    6. Learning Curves
+    X-axis: Epoch
+    Y-axis: Training and Validation Loss
+    """
+    print("Plotting Learning Curves...")
+    
+    # Pick the largest model size
+    max_params = df['params'].max()
+    large_models = df[df['params'] == max_params]
+    
+    if large_models.empty:
+        return
+
+    # Prepare data for plotting
+    control_models = large_models[large_models['is_control']]
+    metric_models = large_models[~large_models['is_control']]
+    unique_metrics = metric_models['metric'].unique()
+    colors = sns.color_palette("muted", len(unique_metrics))
+
+    # --- Training Loss ---
+    plt.figure(figsize=(10, 8))
+    
+    # Plot Control
+    if not control_models.empty:
+        all_hist = []
+        for _, row in control_models.iterrows():
+            hist = row['history'].copy()
+            all_hist.append(hist)
+        
+        if all_hist:
+            combined_hist = pd.concat(all_hist)
+            sns.lineplot(
+                data=combined_hist, x='Epoch', y='Training Loss',
+                label='Baseline', color='black', linewidth=2.5, alpha=0.8
+            )
+
+    # Plot Metrics
+    for i, metric in enumerate(unique_metrics):
+        runs = metric_models[metric_models['metric'] == metric]
+        color = colors[i]
+        
+        all_hist = []
+        for _, row in runs.iterrows():
+            hist = row['history'].copy()
+            all_hist.append(hist)
+            
+        if all_hist:
+            combined_hist = pd.concat(all_hist)
+            sns.lineplot(
+                data=combined_hist, x='Epoch', y='Training Loss',
+                label=metric, color=color, linewidth=2.5, alpha=0.8
+            )
+
+    plt.xlabel('Epoch')
+    plt.ylabel('Training Loss')
+    plt.title(f'Learning Curves: Training Loss (Model Size: Largest)')
+    plt.legend()
+    plt.grid(True, which="both", ls="-", alpha=0.2)
+    plt.tight_layout()
+    plt.savefig(os.path.join(PLOT_DIR, "6_learning_curves_train.png"), dpi=300)
+    plt.close()
+
+    # --- Validation Loss ---
+    plt.figure(figsize=(10, 8))
+    
+    # Plot Control
+    if not control_models.empty:
+        all_hist = []
+        for _, row in control_models.iterrows():
+            hist = row['history'].copy()
+            all_hist.append(hist)
+        
+        if all_hist:
+            combined_hist = pd.concat(all_hist)
+            sns.lineplot(
+                data=combined_hist, x='Epoch', y='Validation Loss',
+                label='Baseline', color='black', linewidth=2.5, alpha=0.8
+            )
+
+    # Plot Metrics
+    for i, metric in enumerate(unique_metrics):
+        runs = metric_models[metric_models['metric'] == metric]
+        color = colors[i]
+        
+        all_hist = []
+        for _, row in runs.iterrows():
+            hist = row['history'].copy()
+            all_hist.append(hist)
+            
+        if all_hist:
+            combined_hist = pd.concat(all_hist)
+            sns.lineplot(
+                data=combined_hist, x='Epoch', y='Validation Loss',
+                label=metric, color=color, linewidth=2.5, alpha=0.8
+            )
+
+    plt.xlabel('Epoch')
+    plt.ylabel('Validation Loss')
+    plt.title(f'Learning Curves: Validation Loss (Model Size: Largest)')
+    plt.legend()
+    plt.grid(True, which="both", ls="-", alpha=0.2)
+    plt.tight_layout()
+    plt.savefig(os.path.join(PLOT_DIR, "6_learning_curves_val.png"), dpi=300)
+    plt.close()
 
 def main():
     print("Loading data...")
@@ -409,14 +609,20 @@ def main():
     # 1. Scaling Law Plot
     plot_scaling_laws(df)
     
-    # 2. Trajectory Plot
+    # 2. Optimizer Efficiency
+    plot_optimizer_efficiency(df)
+    
+    # 3. Trajectory Plot
     plot_loss_vs_flops_trajectory(df)
     
-    # 3. Optimizer Cost
+    # 4. Optimizer Cost
     plot_optimizer_cost_fraction(df)
     
-    # 4. Universality
+    # 5. Universality
     plot_universality(df)
+    
+    # 6. Learning Curves
+    plot_learning_curves(df)
     
     print(f"All plots saved to {PLOT_DIR}")
 
