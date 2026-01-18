@@ -31,24 +31,30 @@ except AttributeError:
 # ============================================================================
 
 def get_best_gpu():
-    """Checks for all available GPUs and selects the one with the most free memory."""
+    """Checks for all available GPUs, prints their status, and selects the one with the most free memory."""
     if not torch.cuda.is_available():
+        print("No CUDA devices available. Using CPU.")
         return 0
     
+    print(f"\nScanning {torch.cuda.device_count()} available GPUs:")
     max_free = 0
     best_gpu = 0
     
     for i in range(torch.cuda.device_count()):
         try:
             # torch.cuda.mem_get_info returns (free, total) in bytes
-            free, _ = torch.cuda.mem_get_info(i)
+            free, total = torch.cuda.mem_get_info(i)
+            used = total - free
+            print(f"  GPU {i} ({torch.cuda.get_device_name(i)}): Free: {free/1024**3:.2f}GB | Used: {used/1024**3:.2f}GB | Total: {total/1024**3:.2f}GB")
+            
             if free > max_free:
                 max_free = free
                 best_gpu = i
         except Exception:
+            print(f"  GPU {i}: Error during memory check.")
             pass
             
-    print(f"Auto-selecting GPU {best_gpu} with {max_free/1024**3:.2f}GB free memory")
+    print(f"Auto-selecting GPU {best_gpu} with {max_free/1024**3:.2f}GB free memory\n")
     return best_gpu
 
 @dataclass
