@@ -5,6 +5,7 @@ os.environ['PYTORCH_ALLOC_CONF'] = 'expandable_segments:True'
 import csv
 import math
 from dataclasses import dataclass
+from enum import Enum
 import torch
 import torch.nn as nn
 import numpy as np
@@ -29,6 +30,23 @@ except AttributeError:
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
+
+PRECONDITION_EPOCHS = 5
+CE_EPOCHS = 15
+TOTAL_EPOCHS = PRECONDITION_EPOCHS + CE_EPOCHS
+
+class TrainingPhase(Enum):
+    METRIC = "metric"
+    CE = "ce"
+
+class ComputeTracker:
+    def __init__(self):
+        self.metric_flops = 0.0
+        self.ce_flops = 0.0
+
+    @property
+    def total(self):
+        return self.metric_flops + self.ce_flops
 
 def get_best_gpu():
     """Checks for all available GPUs, prints their status, and selects the one with the most free memory."""
@@ -57,16 +75,9 @@ def get_best_gpu():
     print(f"Auto-selecting GPU {best_gpu} with {max_free/1024**3:.2f}GB free memory\n")
     return best_gpu
 
-@dataclass
-class AuxLossSchedule:
-    type: str = "exp"
-    start_weight: float = 0.1
-    end_step: int = 25000
-    warmup_steps: int = 5000
-
 class Config:
-    # Control Mode: If True, runs CE only (Baseline). If False, runs CE + Metric
-    CONTROL_MODE = False  
+    # Control Mode: If True, runs CE only (Baseline).
+    CONTROL_MODE = False
     
     # Metric to optimize (will be set dynamically)
     METRIC_NAME = 'shannon' 
@@ -78,7 +89,7 @@ class Config:
     
     # Training hyperparameters
     BATCH_SIZE = 64 
-    EPOCHS = 20 
+    # EPOCHS will be handled by the phases
     SEQ_LENGTH = 64
     MAX_GRAD_NORM = 1.0
     MAX_SAMPLES = 1000    
@@ -105,8 +116,6 @@ class Config:
     # Performance optimizations
     USE_COMPILE = False  
     
-    # DONT CHANGE
-    AUX_SCHEDULE = AuxLossSchedule()
     LEARNING_RATE = 1e-4
 
     @staticmethod
@@ -515,163 +524,72 @@ class SimpleTransformer(nn.Module):
 # TRAINING & EVALUATION
 # ============================================================================
 
-def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, metric_start, ce_start, epoch):
+def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab_size, epoch, phase: TrainingPhase, compute_tracker: ComputeTracker):
     model.train()
     total_loss = 0
-    total_ce_loss = 0
-    total_metric_loss = 0
-    total_flops = 0
-    total_model_flops = 0
-    total_metric_flops = 0
-    total_opt_flops = 0
-    total_lmc_weight = 0
+    total_step_flops = 0
     
-    # FIX: Compute Accounting normalization
-    # To address inconsistent profiler accounting (missing fusion, backend dependency),
-    # we calibrate all profiled FLOPs to match the Theoretical Algorithmic FLOPs of the baseline.
-    # Theoretical Baseline = 6ND (Kaplan et al.)
+    # Calibration: Match Theoretical Algorithmic FLOPs (Kaplan et al.)
     theoretical_step_flops = Config.get_theoretical_model_flops(model, config.BATCH_SIZE, config.SEQ_LENGTH)
-    flops_calibration_factor = 1.0 # Will be updated in first batch
+    flops_calibration_factor = 1.0 
     
-    progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{config.EPOCHS}")
+    progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{TOTAL_EPOCHS} [{phase.value}]")
     
     for batch_idx, (input_ids, labels) in enumerate(progress_bar):
         input_ids, labels = input_ids.to(device), labels.to(device)
         optimizer.zero_grad()
-
-        # Update LMC Weight based on Global Step
-        global_step = epoch * len(train_loader) + batch_idx
-        schedule = config.AUX_SCHEDULE
-
-        # FIX: Smooth Cosine-Modulated Decay
-        # We modulate the exponential schedule with a cosine window to ensure
-        # the auxiliary weight decays to exactly zero with a continuous derivative (C1 smooth).
-        # This eliminates the "optimization discontinuity" responsible for gradient shock.
-        if global_step < schedule.end_step:
-            progress = global_step / schedule.end_step
-            cosine_decay = 0.5 * (1 + math.cos(math.pi * progress))
-            lmc_weight = schedule.start_weight * math.exp(-global_step / schedule.warmup_steps) * cosine_decay
-        else:
-            if global_step == schedule.end_step and not config.CONTROL_MODE:
-                 # FIX: Clear optimizer state to strictly isolate optimization phases.
-                 optimizer.state.clear()
-            lmc_weight = 0.0
-            
-        total_lmc_weight += lmc_weight
-
-        # --- MODEL FORWARD ---
+        
+        # One profile block for everything to ensure capture
         with profile(
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            with_flops=True, 
+            with_flops=True,
             record_shapes=False
-        ) as prof_model:
+        ) as prof:
             logits = model(input_ids)
             
-            # CE Loss
-            loss_fn = nn.CrossEntropyLoss()
-            ce_loss = loss_fn(logits.view(-1, vocab_size), labels.view(-1))
-            
-        # --- METRIC CALCULATION ---
-        with profile(
-            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            with_flops=True,
-            record_shapes=False
-        ) as prof_metric:
-            if config.CONTROL_MODE or lmc_weight == 0:
-                metric_val = torch.tensor(0.0, device=device)
+            if phase == TrainingPhase.METRIC:
+                if config.METRIC_NAME == 'control':
+                     # Random scalar loss. maximize/minimize doesn't matter as it is random. 
+                     # Using randn to simulate a scalar loss.
+                     loss = torch.randn([], device=device, requires_grad=True)
+                else:
+                     loss = Metrics.calculate_metric(model, config.METRIC_NAME, logits, labels, input_ids)
             else:
-                metric_val = Metrics.calculate_metric(model, config.METRIC_NAME, logits, labels, input_ids)
+                # CE Phase
+                loss = nn.CrossEntropyLoss()(logits.view(-1, vocab_size), labels.view(-1))
             
-            if config.METRIC_NAME.startswith('-'):
-                metric_loss_normalized = (metric_val / (metric_start + 1e-10)) * ce_start
-            else:
-                metric_loss_normalized = (metric_start / (metric_val + 1e-10)) * ce_start
-
-        # --- COMBINED BACKWARD ---
-        with profile(
-            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            with_flops=True,
-            record_shapes=False
-        ) as prof_backward:
-            if config.CONTROL_MODE or lmc_weight == 0:
-                combined_loss = ce_loss
-            else:
-                # Combined loss to ensure single backward pass (no double-counting FLOPs)
-                # FIX: Theoretical Justification for Scaling
-                # We normalize by 1/d (Hidden Dim) which corresponds to the standard Xavier/He 
-                # variance-preserving scaling (1/n). This ensures the auxiliary gradient contribution
-                # remains scale-invariant relative to the main loss foundation.
-                metric_term = metric_loss_normalized / config.HIDDEN_DIM
-                combined_loss = (1.0 - lmc_weight) * ce_loss + lmc_weight * metric_term
-            
-            combined_loss.backward()
-
-        # --- OPTIMIZER ---
-        with profile(
-            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            with_flops=True,
-            record_shapes=False
-        ) as prof_opt:
+            loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.MAX_GRAD_NORM)
-            # The auxiliary loss acts as an optimization preconditioner.
-            # To ensure strict experimental isolation, we reset the optimizer state when the auxiliary phase ends,
-            # preventing historical gradients from contaminating the baseline phase.
             optimizer.step()
             scheduler.step()
+            
+        # FLOPs Accounting
+        events = prof.key_averages()
+        step_raw_flops = sum(e.flops for e in events if e.flops is not None)
         
-        # Calculate FLOPs from profilers
-        # Backward-pass FLOPs induced by the auxiliary loss are conservatively attributed to the model FLOPs budget; 
-        # metric FLOPs therefore represent a lower bound.
-        # Auxiliary metrics involving higher-order derivatives incur additional recomputation; 
-        # their full cost is included in total FLOPs but not separable analytically.
-        events_model = prof_model.key_averages()
-        step_model_flops = sum(e.flops for e in events_model if e.flops is not None)
-
-        events_backward = prof_backward.key_averages()
-        step_backward_flops = sum(e.flops for e in events_backward if e.flops is not None)
-        
-        # Metric
-        events_metric = prof_metric.key_averages()
-        step_metric_flops = sum(e.flops for e in events_metric if e.flops is not None)
-        
-        # Optimizer
-        events_opt = prof_opt.key_averages()
-        step_opt_flops = sum(e.flops for e in events_opt if e.flops is not None)
-        
-        # Total
-        step_raw_flops = step_model_flops + step_backward_flops + step_metric_flops + step_opt_flops
-        
-        # Calibration: On first step, lock the ratio between Theoretical and Profiled Baseline cost.
-        # This forces the FLOPs unit to be "Theoretical Equivalent FLOPs", consistent with literature,
-        # while preserving the relative costs of metrics measured by the profiler.
-        if total_flops == 0:
-             # Baseline cost (Model + Backward + Opt) from profiler
-             baseline_profiled = step_model_flops + step_backward_flops + step_opt_flops
-             if baseline_profiled > 0:
-                 flops_calibration_factor = theoretical_step_flops / baseline_profiled
+        # Calibrate on first batch
+        if batch_idx == 0 and step_raw_flops > 0:
+             flops_calibration_factor = theoretical_step_flops / step_raw_flops
         
         step_flops = step_raw_flops * flops_calibration_factor
-        total_flops += step_flops
+        total_step_flops += step_flops
         
-        # Combine Forward and Backward for Model FLOPs reporting
-        # All reported FLOPs are now "Calibrated Theoretical-Equivalent"
-        total_model_flops += (step_model_flops + step_backward_flops) * flops_calibration_factor
-        total_metric_flops += step_metric_flops * flops_calibration_factor
-        total_opt_flops += step_opt_flops * flops_calibration_factor
-        
-        total_loss += combined_loss.item()
-        total_ce_loss += ce_loss.item()
-        total_metric_loss += metric_val.item()
+        # Update Global Tracker
+        if phase == TrainingPhase.METRIC:
+            compute_tracker.metric_flops += step_flops
+        else:
+            compute_tracker.ce_flops += step_flops
+            
+        total_loss += loss.item()
         
         progress_bar.set_postfix({
-            'loss': f"{combined_loss.item():.4f}",
-            'ce': f"{ce_loss.item():.4f}",
-            'met': f"{metric_val.item():.4f}",
-            'w': f"{lmc_weight:.4f}",
-            'TFLOPs': f"{total_flops/1e12:.2f}"
+            'loss': f"{loss.item():.4f}",
+            'phase': phase.value,
+            'TFLOPs': f"{compute_tracker.total/1e12:.2f}"
         })
         
-    return total_loss / len(train_loader), total_ce_loss / len(train_loader), total_metric_loss / len(train_loader), total_flops, total_model_flops, total_metric_flops, total_opt_flops, total_lmc_weight / len(train_loader)
+    avg_loss = total_loss / len(train_loader)
+    return avg_loss, total_step_flops
 
 def evaluate(model, val_loader, device, vocab_size):
     model.eval()
@@ -699,68 +617,34 @@ def test(model, test_loader, device, vocab_size):
             total_samples += 1
     return total_loss / len(test_loader)
 
-def save_results_to_csv(output_dir, train_losses, val_losses, metric_values, lmc_weight_values,
+def save_results_to_csv(output_dir, phases, train_losses, val_losses,
                        test_losses_wiki, test_losses_shakespeare, 
-                       train_flops, train_model_flops, train_metric_flops, train_opt_flops,
-                       config, run_num=1):
+                       cumulative_flops, config, run_num=1):
     csv_filename = f'results_run_{run_num}.csv'
     csv_path = os.path.join(output_dir, csv_filename)
     
     with open(csv_path, 'w', newline='') as f:
         writer = csv.writer(f)
         
-        # Header similar to train_min.py
         writer.writerow(['Metric', config.METRIC_NAME])
-        writer.writerow(['=== WikiText-2 Test Results ===', ''])
-        writer.writerow(['Test Loss (WikiText-2)', f'{test_losses_wiki[-1]:.16f}'])
-        writer.writerow([])
-        writer.writerow(['=== Tiny-Shakespeare Test Results ===', ''])
-        writer.writerow(['Test Loss (Tiny-Shakespeare)', f'{test_losses_shakespeare[-1]:.16f}'])
-        writer.writerow([])
-        writer.writerow(['=== Training Summary ===', ''])
-        writer.writerow(['Final Training Loss', f'{train_losses[-1]:.16f}'])
+        writer.writerow(['=== Summary ===', ''])
         writer.writerow(['Final Validation Loss', f'{val_losses[-1]:.16f}'])
-        
-        # Kaplan-style logging: Best Valid Loss and corresponding Compute
-        # Compute to best validation loss is approximated at epoch granularity; 
-        # auxiliary loss removal occurs within epochs but contributes negligibly at scale.
-        best_val_idx = int(np.argmin(val_losses))
-        best_val_loss = val_losses[best_val_idx]
-        # Cumulative model flops up to the best epoch
-        limit = min(len(train_model_flops), best_val_idx + 1)
-        best_model_flops = sum(train_model_flops[:limit])
-        
-        writer.writerow(['Best Validation Loss', f'{best_val_loss:.16f}'])
-        writer.writerow(['Model FLOPs at Best Val', f'{best_model_flops:.4e}'])
-        
-        writer.writerow(['Final Metric Value', f'{metric_values[-1]:.16f}'])
-        writer.writerow(['Total FLOPs', f'{sum(train_flops):.4e}'])
-        writer.writerow(['Run Number', f'{run_num}'])
+        writer.writerow(['Total FLOPs', f'{cumulative_flops[-1]:.4e}'])
         writer.writerow([])
         
-        writer.writerow(['Epoch', 'Training Loss', 'Validation Loss', 
+        writer.writerow(['Epoch', 'Phase', 'Training Loss', 'Validation Loss', 
                         'Test Loss Wiki', 'Test Loss Shakespeare', 
-                        'Metric Value', 'Weight',
-                        'Step FLOPs', 'Model FLOPs', 'Metric FLOPs', 'Opt FLOPs'])
-        for epoch in range(len(train_losses)):
-            # Handle potential length mismatch if FLOPs arrays are shorter (e.g. initial epoch 0 is fake)
-            tf = train_flops[epoch] if epoch < len(train_flops) else 0.0
-            tmod = train_model_flops[epoch] if epoch < len(train_model_flops) else 0.0
-            tmet = train_metric_flops[epoch] if epoch < len(train_metric_flops) else 0.0
-            topt = train_opt_flops[epoch] if epoch < len(train_opt_flops) else 0.0
-
-            writer.writerow([
-                epoch,
-                f'{train_losses[epoch]:.16f}',
-                f'{val_losses[epoch]:.16f}',
-                f'{test_losses_wiki[epoch]:.16f}',
-                f'{test_losses_shakespeare[epoch]:.16f}',
-                f'{metric_values[epoch]:.16f}',
-                f'{lmc_weight_values[epoch]:.4f}',
-                f'{tf:.4e}',
-                f'{tmod:.4e}',
-                f'{tmet:.4e}',
-                f'{topt:.4e}'
+                        'Cumulative FLOPs'])
+        
+        for i in range(len(train_losses)):
+             writer.writerow([
+                i,
+                phases[i] if i < len(phases) else "N/A",
+                f'{train_losses[i]:.16f}',
+                f'{val_losses[i]:.16f}',
+                f'{test_losses_wiki[i]:.16f}',
+                f'{test_losses_shakespeare[i]:.16f}',
+                f'{cumulative_flops[i]:.4e}'
             ])
 
 def run_training_single(output_dir, config, run_num, tokenizer, vocab_size, train_loader, val_loader, test_loader_wiki, test_loader_shakespeare):
@@ -769,100 +653,91 @@ def run_training_single(output_dir, config, run_num, tokenizer, vocab_size, trai
     torch.manual_seed(seed)
     np.random.seed(seed)
     
-    print(f"\nInitialized run {run_num} with seed {seed}")
+    print(f"\nInitialized run {run_num} with seed {seed} [Protocol: Nature]")
+
+    # --- PROTOCOL CONFIG ---
+    if config.CONTROL_MODE:
+        precondition_epochs = 0
+        ce_epochs = TOTAL_EPOCHS
+    else:
+        precondition_epochs = PRECONDITION_EPOCHS
+        ce_epochs = CE_EPOCHS
     
+    # Model Init
     model = SimpleTransformer(vocab_size, config.HIDDEN_DIM, config.NUM_LAYERS, config.NUM_ATTENTION_HEADS, config.SEQ_LENGTH).to(config.DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE)
-    total_steps = len(train_loader) * config.EPOCHS
-    # All models use identical learning-rate schedules; auxiliary loss decay is independent of learning rate.
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=config.LEARNING_RATE, total_steps=total_steps, pct_start=0.1)
+    
+    # Initial Scheduler
+    # For Control: OneCycle over TOTAL_EPOCHS
+    # For Metric: OneCycle over PRECONDITION_EPOCHS
+    steps_p1 = len(train_loader) * (precondition_epochs if precondition_epochs > 0 else ce_epochs)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer, 
+        max_lr=config.LEARNING_RATE, 
+        total_steps=steps_p1, 
+        pct_start=0.1
+    )
     
     model.eval()
     
-    # Estimate normalization constants over multiple batches for stability
-    # Initial normalization constants are estimated from a single minibatch if Num Batches is 1
-    # and are used only to match loss scales.
-    metric_start = 0.0
-    ce_start = 0.0
-    num_batches = 5
-    
-    loader_iter = iter(train_loader)
-    for _ in range(num_batches):
-        try:
-            input_ids, labels = next(loader_iter)
-        except StopIteration:
-            break
-            
-        input_ids, labels = input_ids.to(config.DEVICE), labels.to(config.DEVICE)
-        
-        if config.CONTROL_MODE:
-            with torch.no_grad():
-                logits = model(input_ids)
-                ce_val = nn.CrossEntropyLoss()(logits.view(-1, vocab_size), labels.view(-1)).item()
-                ce_start += ce_val
-                metric_start += 1.0 # Placeholder
-        else:
-            with torch.enable_grad():
-                logits = model(input_ids)
-                m_val = Metrics.calculate_metric(model, config.METRIC_NAME, logits, labels, input_ids).item()
-                metric_start += m_val
-                
-            with torch.no_grad():
-                ce_val = nn.CrossEntropyLoss()(logits.detach().view(-1, vocab_size), labels.view(-1)).item()
-                ce_start += ce_val
-
-    # Average over batches
-    ce_start /= num_batches
-    metric_start /= num_batches
-    
-    print(f"Start CE: {ce_start:.4f}, Start Metric: {metric_start:.4f}")
-    
-    # Evaluate initial model (epoch 0)
+    # Initial Eval
     initial_val_loss = evaluate(model, val_loader, config.DEVICE, vocab_size)
     initial_test_loss_wiki = test(model, test_loader_wiki, config.DEVICE, vocab_size)
     initial_test_loss_shakespeare = test(model, test_loader_shakespeare, config.DEVICE, vocab_size)
     
-    print(f"Epoch 0 (Initial): Train Loss {ce_start:.4f}, Val Loss {initial_val_loss:.4f}, Metric {metric_start:.4f}, Wiki Test {initial_test_loss_wiki:.4f}, Shake Test {initial_test_loss_shakespeare:.4f}")
+    print(f"Epoch 0 (Initial): Val Loss {initial_val_loss:.4f}")
     
-    # Initialize lists with epoch 0 values
-    train_losses = [ce_start]
+    # Lists
+    phases = ["init"]
+    train_losses = [0.0]
     val_losses = [initial_val_loss]
-    metric_values = [metric_start]
-    lmc_weight_values = [config.AUX_SCHEDULE.start_weight]
     test_losses_wiki = [initial_test_loss_wiki]
     test_losses_shakespeare = [initial_test_loss_shakespeare]
+    cumulative_flops = [0.0]
     
-    train_flops = [0.0]
-    train_model_flops = [0.0]
-    train_metric_flops = [0.0]
-    train_opt_flops = [0.0]
+    compute_tracker = ComputeTracker()
     
-    for epoch in range(config.EPOCHS):
-        train_loss, train_ce, train_metric, t_flops, t_model, t_metric, t_opt, avg_lmc_weight = train_epoch(model, train_loader, optimizer, scheduler, config.DEVICE, config, vocab_size, metric_start, ce_start, epoch)
-        val_loss = evaluate(model, val_loader, config.DEVICE, vocab_size)
+    # Loop
+    for epoch in range(TOTAL_EPOCHS):
+        # Determine Phase
+        if epoch < precondition_epochs:
+            current_phase = TrainingPhase.METRIC
+        else:
+            current_phase = TrainingPhase.CE
+            
+        # Phase Transition Logic
+        if epoch == precondition_epochs and not config.CONTROL_MODE:
+            print(f"--- Phase Transition: METRIC -> CE (Resetting Optimizer) ---")
+            optimizer.state.clear()
+            # New scheduler for CE phase
+            steps_p2 = len(train_loader) * ce_epochs
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                optimizer, 
+                max_lr=config.LEARNING_RATE, 
+                total_steps=steps_p2, 
+                pct_start=0.1
+            )
+
+        # Train
+        avg_loss, _ = train_epoch(model, train_loader, optimizer, scheduler, config.DEVICE, config, vocab_size, epoch, current_phase, compute_tracker)
         
-        # Run tests
-        # Test metrics are reported for completeness and are not used for model selection.
+        # Val
+        val_loss = evaluate(model, val_loader, config.DEVICE, vocab_size)
         test_loss_wiki = test(model, test_loader_wiki, config.DEVICE, vocab_size)
         test_loss_shakespeare = test(model, test_loader_shakespeare, config.DEVICE, vocab_size)
         
-        print(f"Epoch {epoch+1}: Train Loss {train_loss:.4f}, Val Loss {val_loss:.4f}, Metric {train_metric:.4f}, Wiki Test {test_loss_wiki:.4f}, Shake Test {test_loss_shakespeare:.4f}")
+        print(f"Epoch {epoch+1}: Phase {current_phase.value.upper()} | Loss {avg_loss:.4f} | Val {val_loss:.4f} | TFLOPs {compute_tracker.total/1e12:.2f}")
         
-        train_losses.append(train_loss)
+        phases.append(current_phase.value)
+        train_losses.append(avg_loss)
         val_losses.append(val_loss)
-        metric_values.append(train_metric)
-        lmc_weight_values.append(avg_lmc_weight)
         test_losses_wiki.append(test_loss_wiki)
         test_losses_shakespeare.append(test_loss_shakespeare)
-
-        train_flops.append(t_flops)
-        train_model_flops.append(t_model)
-        train_metric_flops.append(t_metric)
-        train_opt_flops.append(t_opt)
+        cumulative_flops.append(compute_tracker.total)
         
-    save_results_to_csv(output_dir, train_losses, val_losses, metric_values, lmc_weight_values, 
+    save_results_to_csv(output_dir, phases, train_losses, val_losses, 
                         test_losses_wiki, test_losses_shakespeare, 
-                        train_flops, train_model_flops, train_metric_flops, train_opt_flops,
+                        cumulative_flops,
                         config, run_num)
 
 def main():
@@ -902,7 +777,7 @@ def main():
     for metric_name in METRICS_TO_RUN:
         # Determine direction for folder naming
         if metric_name == 'control':
-             direction = 'min' 
+             direction = 'control' 
         elif metric_name.startswith('-'):
              direction = 'min'
         else:
@@ -917,9 +792,13 @@ def main():
         print(f"\nRunning experiment: {metric_name} ({direction})")
         Config.METRIC_NAME = metric_name
         
+        # Treatment of Control:
+        # 'control' refers to the Random Preconditioning Baseline.
+        # This ensures the baseline has the same compute structure (Phase I + Phase II) as the metric runs.
         if metric_name == 'control':
-            Config.CONTROL_MODE = True
-            Config.METRIC_NAME = 'shannon' 
+            Config.CONTROL_MODE = False
+            # Config.METRIC_NAME remains as set above ('control')
+            # to trigger the randn logic in train_epoch
         else:
             Config.CONTROL_MODE = False
             
