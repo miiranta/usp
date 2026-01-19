@@ -121,15 +121,15 @@ def load_data(root_dir=None):
                             final_test_loss_shake = float(parts[1])
                             
                     # Read history
-                    # Find where the data starts
+                    # Find where the data starts (new format: Epoch,Phase,Training Loss,...)
                     start_idx = 0
                     for i, line in enumerate(lines):
-                        if 'Step FLOPs' in line and 'Epoch' in line:
+                        if 'Epoch' in line and 'Phase' in line and 'CE FLOPs' in line:
                             start_idx = i
                             break
                     
                     if start_idx == 0:
-                        # Fallback for old CSV format if necessary, but train_nature was updated
+                        # Fallback: old format compatibility
                         continue
                         
                     # Create temporary buffer for pandas
@@ -137,12 +137,12 @@ def load_data(root_dir=None):
                     history_str = "".join(lines[start_idx:])
                     df_hist = pd.read_csv(StringIO(history_str))
                     
-                    # Cumulative FLOPs
-                    if 'Step FLOPs' in df_hist.columns:
-                        df_hist['Cumulative FLOPs'] = df_hist['Step FLOPs'].cumsum()
+                    # Extract final CE FLOPs (last row, CE FLOPs column)
+                    final_ce_flops = df_hist['CE FLOPs'].iloc[-1] if 'CE FLOPs' in df_hist.columns else 0.0
                     
-                    # Calculate Total Model FLOPs from history summing 'Model FLOPs'
-                    total_model_flops = df_hist['Model FLOPs'].sum() if 'Model FLOPs' in df_hist.columns else total_flops
+                    # Cumulative FLOPs (for trajectories)
+                    if 'Cumulative FLOPs' not in df_hist.columns:
+                        df_hist['Cumulative FLOPs'] = df_hist['Cumulative FLOPs'] if 'Cumulative FLOPs' in df_hist.columns else 0
 
                     # Calculate BEST losses from history
                     best_val_loss = df_hist['Validation Loss'].min() if 'Validation Loss' in df_hist.columns else final_val_loss
@@ -157,14 +157,14 @@ def load_data(root_dir=None):
                         'params': param_proxy,
                         'run': int(os.path.basename(csv_file).split('_')[-1].split('.')[0]),
                         'total_flops': total_flops,
-                        'total_model_flops': total_model_flops,
+                        'ce_flops': final_ce_flops,  # Nature-compliant scaling axis
                         'final_val_loss': final_val_loss,
                         'final_test_loss_wiki': final_test_loss_wiki,
                         'final_test_loss_shake': final_test_loss_shake,
                         'best_val_loss': best_val_loss,
                         'best_test_loss_wiki': best_test_loss_wiki,
                         'best_test_loss_shake': best_test_loss_shake,
-                        'is_control': 'control' in metric_name or 'shannon' in metric_name,
+                        'is_control': 'control' in metric_name,
                         'history': df_hist
                     }
                     data_list.append(run_data)
@@ -176,18 +176,19 @@ def load_data(root_dir=None):
 
 def plot_scaling_laws(df):
     """
-    1. The scaling-law plot (System Efficiency)
-    X-axis: log10(Total FLOPs)
+    1. CE-only Scaling Laws (Nature-Compliant)
+    X-axis: log10(CE FLOPs) - Cross-entropy training compute only
     Y-axis: log10(Best Validation loss)
     """
-    print("Plotting Scaling Laws (System Efficiency)...")
+    print("Plotting CE-Only Scaling Laws (Nature-Compliant)...")
     plt.figure(figsize=(10, 8))
     
-    # Filter valid data
-    df = df.dropna(subset=['total_flops', 'best_val_loss']) 
+    # Filter valid data - use CE FLOPs only
+    df = df.dropna(subset=['ce_flops', 'best_val_loss']) 
+    df = df[df['ce_flops'] > 0]  # Ensure CE phase occurred
     
-    # Use Best Validation Loss as requested
-    df['log_flops'] = np.log10(df['total_flops'])
+    # Use CE FLOPs as scaling axis
+    df['log_ce_flops'] = np.log10(df['ce_flops'])
     df['log_val_loss'] = np.log10(df['best_val_loss'])
     
     # Separate Control and Others
@@ -202,14 +203,14 @@ def plot_scaling_laws(df):
     # Plot Control
     if not control_df.empty:
         sns.scatterplot(
-            data=control_df, x='log_flops', y='log_val_loss', 
+            data=control_df, x='log_ce_flops', y='log_val_loss', 
             label='Baseline', color='black', s=100, marker='o'
         )
         # Fit Line
-        if control_df['log_flops'].nunique() > 1:
+        if control_df['log_ce_flops'].nunique() > 1:
             try:
-                slope, intercept, r_value, p_value, std_err = stats.linregress(control_df['log_flops'], control_df['log_val_loss'])
-                x_vals = np.array([control_df['log_flops'].min(), control_df['log_flops'].max()])
+                slope, intercept, r_value, p_value, std_err = stats.linregress(control_df['log_ce_flops'], control_df['log_val_loss'])
+                x_vals = np.array([control_df['log_ce_flops'].min(), control_df['log_ce_flops'].max()])
                 plt.plot(x_vals, intercept + slope * x_vals, 'k--', linewidth=2, label=f'Baseline Fit (α={-slope:.3f})')
             except ValueError:
                 pass
@@ -220,26 +221,26 @@ def plot_scaling_laws(df):
         color = colors[i]
         
         sns.scatterplot(
-            data=m_df, x='log_flops', y='log_val_loss', 
+            data=m_df, x='log_ce_flops', y='log_val_loss', 
             label=f'{metric}', color=color, s=80, marker='s', alpha=0.7
         )
         
         # Fit Line
-        if m_df['log_flops'].nunique() > 1:
+        if m_df['log_ce_flops'].nunique() > 1:
             try:
-                slope, intercept, r_value, p_value, std_err = stats.linregress(m_df['log_flops'], m_df['log_val_loss'])
-                x_vals = np.array([m_df['log_flops'].min(), m_df['log_flops'].max()])
+                slope, intercept, r_value, p_value, std_err = stats.linregress(m_df['log_ce_flops'], m_df['log_val_loss'])
+                x_vals = np.array([m_df['log_ce_flops'].min(), m_df['log_ce_flops'].max()])
                 plt.plot(x_vals, intercept + slope * x_vals, '-', color=color, linewidth=2, label=f'{metric} Fit (α={-slope:.3f})')
             except ValueError:
                 pass
 
-    plt.xlabel(r'$\log_{10}(\text{Total FLOPs})$')
+    plt.xlabel(r'$\log_{10}(\text{CE FLOPs})$')
     plt.ylabel(r'$\log_{10}(\text{Best Validation Loss})$')
-    plt.title('System Efficiency: Validation Loss vs Total Compute')
+    plt.title('CE Scaling Laws: Validation Loss vs Cross-Entropy Compute')
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.grid(True, which="both", ls="-", alpha=0.2)
     plt.tight_layout()
-    plt.savefig(os.path.join(PLOT_DIR, "1_scaling_law_system_efficiency.png"), dpi=300)
+    plt.savefig(os.path.join(PLOT_DIR, "1_scaling_law_ce_flops.png"), dpi=300)
     plt.close()
 
 def plot_loss_vs_flops_trajectory(df):
@@ -357,7 +358,7 @@ def plot_optimizer_cost_fraction(df):
 
 def plot_universality(df):
     """
-    4. Universality plot (Wiki vs Shakespeare)
+    4. Universality plot (Wiki vs Shakespeare) - Using CE FLOPs
     Scaling laws on different datasets.
     """
     print("Plotting Universality...")
@@ -370,8 +371,9 @@ def plot_universality(df):
     for col, name in datasets:
         plt.figure(figsize=(10, 8))
         
-        sub_df = df.dropna(subset=['total_flops', col])
-        sub_df['log_flops'] = np.log10(sub_df['total_flops'])
+        sub_df = df.dropna(subset=['ce_flops', col])
+        sub_df = sub_df[sub_df['ce_flops'] > 0]
+        sub_df['log_ce_flops'] = np.log10(sub_df['ce_flops'])
         sub_df['log_loss'] = np.log10(sub_df[col])
         
         control_df = sub_df[sub_df['is_control']]
@@ -382,14 +384,14 @@ def plot_universality(df):
         # Plot Control
         if not control_df.empty:
             sns.scatterplot(
-                data=control_df, x='log_flops', y='log_loss', 
+                data=control_df, x='log_ce_flops', y='log_loss', 
                 label='Baseline', color='black', s=100, marker='o'
             )
             # Fit
-            if control_df['log_flops'].nunique() > 1:
+            if control_df['log_ce_flops'].nunique() > 1:
                 try:
-                    slope, intercept, _, _, _ = stats.linregress(control_df['log_flops'], control_df['log_loss'])
-                    x_vals = np.array([control_df['log_flops'].min(), control_df['log_flops'].max()])
+                    slope, intercept, _, _, _ = stats.linregress(control_df['log_ce_flops'], control_df['log_loss'])
+                    x_vals = np.array([control_df['log_ce_flops'].min(), control_df['log_ce_flops'].max()])
                     plt.plot(x_vals, intercept + slope * x_vals, 'k--', label=f'Baseline α={-slope:.3f}')
                 except ValueError:
                     pass
@@ -399,19 +401,19 @@ def plot_universality(df):
             m_df = metrics_df[metrics_df['metric'] == metric]
             color = colors[i]
             sns.scatterplot(
-                data=m_df, x='log_flops', y='log_loss', 
+                data=m_df, x='log_ce_flops', y='log_loss', 
                 label=metric, color=color, s=80, marker='s', alpha=0.7
             )
             # Fit
-            if m_df['log_flops'].nunique() > 1:
+            if m_df['log_ce_flops'].nunique() > 1:
                 try:
-                    slope, intercept, _, _, _ = stats.linregress(m_df['log_flops'], m_df['log_loss'])
-                    x_vals = np.array([m_df['log_flops'].min(), m_df['log_flops'].max()])
+                    slope, intercept, _, _, _ = stats.linregress(m_df['log_ce_flops'], m_df['log_loss'])
+                    x_vals = np.array([m_df['log_ce_flops'].min(), m_df['log_ce_flops'].max()])
                     plt.plot(x_vals, intercept + slope * x_vals, '-', color=color, label=f'{metric} α={-slope:.3f}')
                 except ValueError:
                     pass
         
-        plt.xlabel(r'$\log_{10}(\text{Total FLOPs})$')
+        plt.xlabel(r'$\log_{10}(\text{CE FLOPs})$')
         plt.ylabel(r'$\log_{10}(\text{Best Loss})$')
         plt.title(f'Universality: Scaling on {name}')
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -606,22 +608,19 @@ def main():
         
     print(f"Loaded {len(df)} runs.")
     
-    # 1. Scaling Law Plot
+    # 1. CE-only Scaling Laws (Nature-compliant)
     plot_scaling_laws(df)
     
-    # 2. Optimizer Efficiency
-    plot_optimizer_efficiency(df)
-    
-    # 3. Trajectory Plot
+    # 2. Trajectory Plot
     plot_loss_vs_flops_trajectory(df)
     
-    # 4. Optimizer Cost
-    plot_optimizer_cost_fraction(df)
+    # 3. Optimizer Cost (if available)
+    # plot_optimizer_cost_fraction(df)  # Deprecated - needs FLOP breakdown columns
     
-    # 5. Universality
+    # 4. Universality
     plot_universality(df)
     
-    # 6. Learning Curves
+    # 5. Learning Curves
     plot_learning_curves(df)
     
     print(f"All plots saved to {PLOT_DIR}")
