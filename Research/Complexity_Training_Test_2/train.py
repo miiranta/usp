@@ -80,30 +80,100 @@ class Config:
 
     @staticmethod
     def get_device():
-        """Select GPU with most free memory"""
+        """Select GPU with most free memory, respecting locks from other instances"""
+        import atexit
+        
         if not torch.cuda.is_available():
             print("No CUDA devices available. Using CPU.")
             return torch.device('cpu')
+            
+        n_gpus = torch.cuda.device_count()
+        print(f"\nScanning {n_gpus} GPUs for availability (checking {Config.OUTPUT_DIR}/.gpu_lock_*):")
         
-        print(f"\nScanning {torch.cuda.device_count()} available GPUs:")
-        best_gpu, max_free = 0, 0
-        
-        for i in range(torch.cuda.device_count()):
+        # 1. Get memory info for all
+        gpu_stats = []
+        for i in range(n_gpus):
             try:
                 free, total = torch.cuda.mem_get_info(i)
-                used = total - free
-                print(f"  GPU {i} ({torch.cuda.get_device_name(i)}): "
-                      f"Free: {free/1024**3:.2f}GB | "
-                      f"Used: {used/1024**3:.2f}GB | "
-                      f"Total: {total/1024**3:.2f}GB")
-                
-                if free > max_free:
-                    max_free, best_gpu = free, i
-            except Exception:
-                print(f"  GPU {i}: Error during memory check.")
+                gpu_stats.append({'id': i, 'free': free})
+            except:
+                gpu_stats.append({'id': i, 'free': 0})
         
-        print(f"Auto-selecting GPU {best_gpu} with {max_free/1024**3:.2f}GB free\n")
-        return torch.device(f'cuda:{best_gpu}')
+        # Sort by free memory desc
+        gpu_stats.sort(key=lambda x: x['free'], reverse=True)
+        
+        selected_gpu = -1
+        
+        # Ensure output dir exists for locks
+        if not os.path.exists(Config.OUTPUT_DIR):
+            os.makedirs(Config.OUTPUT_DIR, exist_ok=True)
+            
+        # 2. Try to lock
+        for stat in gpu_stats:
+            gpu_id = stat['id']
+            lock_file = os.path.join(Config.OUTPUT_DIR, f".gpu_lock_{gpu_id}")
+            
+            # Check existing lock
+            if os.path.exists(lock_file):
+                try:
+                    with open(lock_file, 'r') as f:
+                        pid = int(f.read().strip())
+                    
+                    # Check if alive
+                    is_dead = False
+                    try:
+                        os.kill(pid, 0)
+                    except OSError as e:
+                        # ProcessLookupError / ESRCH (errno 3) -> Process Dead
+                        if isinstance(e, ProcessLookupError) or getattr(e, 'errno', 0) == 3:
+                             is_dead = True
+                        # PermissionError / EPERM (errno 1) -> Process Alive (other user)
+                    
+                    if not is_dead:
+                         print(f"  GPU {gpu_id}: Locked by Active PID {pid} ({stat['free']/1024**3:.2f}GB free). Skipping.")
+                         continue 
+                    else:
+                        print(f"  GPU {gpu_id}: Stale lock (PID {pid} dead). Reclaiming.")
+                        try: os.remove(lock_file)
+                        except: pass
+                except:
+                    pass
+            
+            # Try acquire
+            try:
+                fd = os.open(lock_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+                with os.fdopen(fd, 'w') as f:
+                    f.write(str(os.getpid()))
+                selected_gpu = gpu_id
+                print(f"  GPU {gpu_id}: AVAILABLE ({stat['free']/1024**3:.2f}GB free). Locked.")
+                break
+            except OSError:
+                print(f"  GPU {gpu_id}: Failed to lock. Skipping.")
+        
+        # 3. Fallback
+        if selected_gpu == -1:
+            selected_gpu = gpu_stats[0]['id']
+            print(f"WARNING: No free GPUs found. Falling back to GPU {selected_gpu} (Max Free RAM).")
+        
+        # Register cleanup
+        def cleanup_lock(path):
+            if os.path.exists(path):
+                try: os.remove(path)
+                except: pass
+                
+        lock_path = os.path.join(Config.OUTPUT_DIR, f".gpu_lock_{selected_gpu}")
+        
+        # Only register cleanup if we actually own it
+        try:
+            if os.path.exists(lock_path):
+                with open(lock_path, 'r') as f:
+                    content = f.read().strip()
+                    if content and int(content) == os.getpid():
+                        atexit.register(cleanup_lock, lock_path)
+        except:
+            pass
+
+        return torch.device(f'cuda:{selected_gpu}')
         
     # Lazy initialization of device
     _DEVICE = None
@@ -531,13 +601,16 @@ class Trainer:
             is_precond = epoch <= self.precond_epochs
             
             # --- Train Epoch ---
-            train_metrics = self.run_epoch(is_precond)
+            train_metrics = self.run_epoch(epoch, is_precond)
             
             # --- Validation ---
-            val_loss = self.evaluate(self.val_loader)
+            val_loss = self.evaluate(self.val_loader, desc=f"Val Ep {epoch}")
             
             # --- Logging ---
             self.log_epoch(epoch, train_metrics['loss'], val_loss, self.total_flops, train_metrics['metric'], mode='precond' if is_precond else 'train')
+            
+            # Print Summary
+            print(f"    Ep {epoch}: Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_loss:.4f}")
             
             # --- Early Stopping Logic ---
             if val_loss < best_val_loss:
@@ -553,15 +626,15 @@ class Trainer:
                 
         return self.results
 
-    def run_epoch(self, is_precond):
+    def run_epoch(self, epoch, is_precond):
         self.model.train()
         total_loss = 0
         total_ce = 0
         total_metric = 0
         
-        progress_bar = tqdm(self.train_loader, desc=f"Ep (Pre={is_precond})", leave=False)
+        progress_bar = tqdm(self.train_loader, desc=f"Ep {epoch} (Pre={is_precond})", leave=True)
         
-        for input_ids, labels in progress_bar:
+        for batch_idx, (input_ids, labels) in enumerate(progress_bar):
             input_ids, labels = input_ids.to(self.device), labels.to(self.device)
             self.optimizer.zero_grad()
             logits = self.model(input_ids)
@@ -599,6 +672,9 @@ class Trainer:
             total_ce += ce_loss.item()
             total_metric += metric_val.item()
             
+            # Live Loss Update
+            progress_bar.set_postfix({'loss': f"{total_loss / (batch_idx + 1):.4f}"})
+            
         self.scheduler.step()
         
         return {
@@ -607,11 +683,11 @@ class Trainer:
             'metric': total_metric / len(self.train_loader)
         }
 
-    def evaluate(self, loader):
+    def evaluate(self, loader, desc="Validation"):
         self.model.eval()
         total_loss = 0
         with torch.no_grad():
-            for input_ids, labels in loader:
+            for input_ids, labels in tqdm(loader, desc=desc, leave=False):
                 input_ids, labels = input_ids.to(self.device), labels.to(self.device)
                 logits = self.model(input_ids)
                 loss = nn.CrossEntropyLoss()(logits.view(-1, self.tokenizer.vocab_size), labels.view(-1))
