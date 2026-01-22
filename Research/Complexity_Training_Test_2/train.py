@@ -35,7 +35,8 @@ class Config:
     
     # Preconditioning
     # Test these durations of preconditioning (in batches)
-    PRECOND_BATCHES_TO_TEST = [1000, 10000, 100000] 
+    # With batch_size=512, ~4675 batches/epoch, these represent: ~1, ~3, ~5 epochs
+    PRECOND_BATCHES_TO_TEST = [1000, 4000, 8000] 
     
     # Metrics to Run (from original script)
     METRICS_TO_RUN = [
@@ -56,18 +57,18 @@ class Config:
     EARLY_STOPPING_PATIENCE = 1
     
     # Model
-    HIDDEN_DIM = 512
+    HIDDEN_DIM = 1024
     NUM_LAYERS = 8
     NUM_ATTENTION_HEADS = 8
     SEQ_LENGTH = 64
     
     # Optimization
-    BATCH_SIZE = 64
+    BATCH_SIZE = 512  # Larger batches = fewer batches per epoch
     LEARNING_RATE = 1e-4
     MAX_GRAD_NORM = 1.0
     
     # Data limits
-    MAX_TRAIN_SAMPLES = 0 # 0 means all data
+    MAX_TRAIN_SAMPLES = 0  # 0 means all data
     MAX_VAL_SAMPLES = 0
     MAX_TEST_SAMPLES = 0
     
