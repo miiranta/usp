@@ -54,7 +54,7 @@ class Config:
 
     # Training Loop
     MAX_TRAIN_EPOCHS = 100 
-    EARLY_STOPPING_PATIENCE = 1
+    EARLY_STOPPING_PATIENCE = 3
     
     # Model
     HIDDEN_DIM = 512
@@ -666,7 +666,6 @@ class Trainer:
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 patience_counter = 0
-                min_model_state = copy.deepcopy(self.model.state_dict())
             else:
                 patience_counter += 1
             
