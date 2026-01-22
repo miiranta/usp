@@ -58,9 +58,9 @@ class Config:
     
     # Model
     HIDDEN_DIM = 512
-    NUM_LAYERS = 6
+    NUM_LAYERS = 8
     NUM_ATTENTION_HEADS = 8
-    SEQ_LENGTH = 64
+    SEQ_LENGTH = 32
     
     # Optimization
     BATCH_SIZE = 512  # Larger batches = fewer batches per epoch
