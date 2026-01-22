@@ -63,7 +63,7 @@ class Config:
     SEQ_LENGTH = 32
     
     # Optimization
-    BATCH_SIZE = 512  # Larger batches = fewer batches per epoch
+    BATCH_SIZE = 512
     LEARNING_RATE = 1e-4
     MAX_GRAD_NORM = 1.0
     
@@ -631,7 +631,7 @@ class Trainer:
             compute_epoch = tokens_epoch * self.training_flops_per_token
 
             # --- Validation ---
-            val_loss = self.evaluate(self.val_loader, desc=f"Val Ep {epoch}")
+            val_loss = self.evaluate(self.val_loader, desc=f"VAL EP {epoch}")
             
             # Determine current mode based on batch count
             current_mode = 'precond' if self.batches_processed < self.precond_batches else 'train'
@@ -641,7 +641,7 @@ class Trainer:
                           mode=current_mode)
             
             # Print Summary
-            print(f"    Ep {epoch}: Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_loss:.4f} | "
+            print(f"    EP {epoch}: Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_loss:.4f} | "
                   f"Compute: {compute_epoch:.2e} | Batches: {self.batches_processed}")
             
             # --- Early Stopping Logic ---
@@ -664,7 +664,7 @@ class Trainer:
         total_ce = 0
         total_metric = 0
         
-        progress_bar = tqdm(self.train_loader, desc=f"Ep {epoch}", leave=True)
+        progress_bar = tqdm(self.train_loader, desc=f"EP {epoch}", leave=True)
         
         for batch_idx, (input_ids, labels) in enumerate(progress_bar):
             input_ids, labels = input_ids.to(self.device), labels.to(self.device)
@@ -723,8 +723,15 @@ class Trainer:
             total_ce += ce_loss.item()
             total_metric += metric_val.item()
             
-            # Live Loss Update
-            progress_bar.set_postfix({'loss': f"{total_loss / (batch_idx + 1):.4f}"})
+            # Live Progress Update - show CE, metric, and what's being optimized
+            avg_ce = total_ce / (batch_idx + 1)
+            avg_metric = total_metric / (batch_idx + 1)
+            mode_str = 'PRECOND' if is_precond else 'CE'
+            progress_bar.set_postfix({
+                'mode': mode_str,
+                'CE': f"{avg_ce:.4f}",
+                'metric': f"{avg_metric:.4f}"
+            })
             
         self.scheduler.step()
         
