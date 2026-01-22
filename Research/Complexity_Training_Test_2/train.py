@@ -13,6 +13,7 @@ from tqdm import tqdm
 from transformers import RobertaTokenizer
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.checkpoint import checkpoint
+from torch.utils.flop_counter import FlopCounterMode
 import pandas as pd
 
 # Disable efficient attention backend to allow second-order derivatives if needed
@@ -53,7 +54,7 @@ class Config:
 
     # Training Loop
     MAX_TRAIN_EPOCHS = 100 
-    EARLY_STOPPING_PATIENCE = 5 
+    EARLY_STOPPING_PATIENCE = 3
     
     # Model
     HIDDEN_DIM = 128
@@ -73,7 +74,7 @@ class Config:
     
     # System
     NUM_WORKERS = 0
-    NUM_RUNS = 1 
+    NUM_RUNS = 2 
 
     # Data
     DATASET_ROOT = "dataset" 
@@ -516,18 +517,12 @@ class Trainer:
         self.results = []
         self.total_flops = 0.0
         
-        # Calculate FLOPs per step
-        # Approximation: 6 * N * Tokens (Kaplan et al. 2020)
-        self.num_params = sum(p.numel() for p in self.model.parameters())
-        self.tokens_per_step = Config.BATCH_SIZE * Config.SEQ_LENGTH
-        self.flops_per_step = 6 * self.num_params * self.tokens_per_step
-        
         # Initialize Scaling Factors
         self.ce_start = 1.0
         self.metric_start = 1.0
         self._initialize_scalers()
         
-        print(f"[Run {run_id}] Metric: {metric_name} | Precond: {precond_epochs} eps | FLOPs/step: {self.flops_per_step:.2e}")
+        print(f"[Run {run_id}] Metric: {metric_name} | Precond: {precond_epochs} eps")
 
     def _set_seed(self):
         torch.manual_seed(self.seed)
@@ -600,9 +595,13 @@ class Trainer:
         for epoch in range(1, Config.MAX_TRAIN_EPOCHS + 1):
             is_precond = epoch <= self.precond_epochs
             
+            flops_before = self.total_flops
+
             # --- Train Epoch ---
             train_metrics = self.run_epoch(epoch, is_precond)
             
+            flops_epoch = self.total_flops - flops_before
+
             # --- Validation ---
             val_loss = self.evaluate(self.val_loader, desc=f"Val Ep {epoch}")
             
@@ -610,7 +609,7 @@ class Trainer:
             self.log_epoch(epoch, train_metrics['loss'], val_loss, self.total_flops, train_metrics['metric'], mode='precond' if is_precond else 'train')
             
             # Print Summary
-            print(f"    Ep {epoch}: Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_loss:.4f}")
+            print(f"    Ep {epoch}: Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_loss:.4f} | FLOPs: {flops_epoch:.2e}")
             
             # --- Early Stopping Logic ---
             if val_loss < best_val_loss:
@@ -637,37 +636,42 @@ class Trainer:
         for batch_idx, (input_ids, labels) in enumerate(progress_bar):
             input_ids, labels = input_ids.to(self.device), labels.to(self.device)
             self.optimizer.zero_grad()
-            logits = self.model(input_ids)
             
-            # CE Loss
-            ce_loss = nn.CrossEntropyLoss()(logits.view(-1, self.tokenizer.vocab_size), labels.view(-1))
-            
-            # Metric Calculation
-            if self.metric_name != 'control':
-                metric_val = Metrics.calculate_metric(self.model, self.metric_name, logits, labels, input_ids)
-            else:
-                metric_val = torch.tensor(0.0, device=self.device)
-            
-            # Determine Loss
-            if is_precond and self.metric_name != 'control':
-                # Normalization
-                if self.metric_name.startswith('-'): # Minimizing metric
-                     # metric / start * ce_start
-                     norm_metric = (metric_val / (abs(self.metric_start) + 1e-10)) * self.ce_start
-                else: # Maximizing metric -> Minimizing 1/metric
-                     # start / metric * ce_start
-                     norm_metric = (abs(self.metric_start) / (metric_val + 1e-10)) * self.ce_start
-                     
-                loss = norm_metric
-            else:
-                loss = ce_loss
+            # Count exact FLOPs using PyTorch's FlopCounterMode
+            flop_counter = FlopCounterMode(display=False)
+            with flop_counter:
+                logits = self.model(input_ids)
                 
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), Config.MAX_GRAD_NORM)
-            self.optimizer.step()
+                # CE Loss
+                ce_loss = nn.CrossEntropyLoss()(logits.view(-1, self.tokenizer.vocab_size), labels.view(-1))
+                
+                # Metric Calculation
+                if self.metric_name != 'control':
+                    metric_val = Metrics.calculate_metric(self.model, self.metric_name, logits, labels, input_ids)
+                else:
+                    metric_val = torch.tensor(0.0, device=self.device)
+                
+                # Determine Loss
+                if is_precond and self.metric_name != 'control':
+                    # Normalization
+                    if self.metric_name.startswith('-'): # Minimizing metric
+                         # metric / start * ce_start
+                         norm_metric = (metric_val / (abs(self.metric_start) + 1e-10)) * self.ce_start
+                    else: # Maximizing metric -> Minimizing 1/metric
+                         # start / metric * ce_start
+                         norm_metric = (abs(self.metric_start) / (metric_val + 1e-10)) * self.ce_start
+                         
+                    loss = norm_metric
+                else:
+                    loss = ce_loss
+                    
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), Config.MAX_GRAD_NORM)
+                self.optimizer.step()
             
-            # Update Counters
-            self.total_flops += self.flops_per_step
+            # Update Counters with Measured FLOPs
+            self.total_flops += flop_counter.get_total_flops()
+
             total_loss += loss.item()
             total_ce += ce_loss.item()
             total_metric += metric_val.item()
