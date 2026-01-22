@@ -34,8 +34,8 @@ class Config:
     OUTPUT_DIR = "output"
     
     # Preconditioning
-    # Test these durations of preconditioning (in epochs)
-    PRECOND_EPOCHS_TO_TEST = [1, 2, 3] 
+    # Test these durations of preconditioning (in batches)
+    PRECOND_BATCHES_TO_TEST = [10, 100, 1000] 
     
     # Metrics to Run (from original script)
     METRICS_TO_RUN = [
@@ -74,6 +74,7 @@ class Config:
     # System
     NUM_WORKERS = 0
     NUM_RUNS = 3
+    LOG_EVERY_N_BATCHES = 10  # Log training metrics every N batches
 
     # Data
     DATASET_ROOT = "dataset" 
@@ -502,9 +503,9 @@ class SimpleTransformer(nn.Module):
 # ============================================================================
 
 class Trainer:
-    def __init__(self, run_id, precond_epochs, metric_name, seed):
+    def __init__(self, run_id, precond_batches, metric_name, seed):
         self.run_id = run_id
-        self.precond_epochs = precond_epochs
+        self.precond_batches = precond_batches
         self.metric_name = metric_name
         self.seed = seed
         self.device = Config.DEVICE()
@@ -515,6 +516,7 @@ class Trainer:
         
         self.results = []
         self.tokens_processed = 0  # Count tokens only
+        self.batches_processed = 0  # Track batch count for preconditioning
         
         # Measure training FLOPs once (analytically computed using 6ND)
         # NOTE: This measures CORE TRAINING COMPUTE ONLY (forward + backward + update)
@@ -526,7 +528,7 @@ class Trainer:
         self.metric_start = 1.0
         self._initialize_scalers()
         
-        print(f"[Run {run_id}] Metric: {metric_name} | Precond: {precond_epochs} eps")
+        print(f"[Run {run_id}] Metric: {metric_name} | Precond: {precond_batches} batches")
 
     def _set_seed(self):
         torch.manual_seed(self.seed)
@@ -619,12 +621,10 @@ class Trainer:
 
         # 2. Main Loop
         for epoch in range(1, Config.MAX_TRAIN_EPOCHS + 1):
-            is_precond = epoch <= self.precond_epochs
-            
             tokens_before = self.tokens_processed
 
             # --- Train Epoch ---
-            train_metrics = self.run_epoch(epoch, is_precond)
+            train_metrics = self.run_epoch(epoch)
             
             tokens_epoch = self.tokens_processed - tokens_before
             compute_epoch = tokens_epoch * self.training_flops_per_token
@@ -632,11 +632,16 @@ class Trainer:
             # --- Validation ---
             val_loss = self.evaluate(self.val_loader, desc=f"Val Ep {epoch}")
             
+            # Determine current mode based on batch count
+            current_mode = 'precond' if self.batches_processed < self.precond_batches else 'train'
+            
             # --- Logging ---
-            self.log_epoch(epoch, train_metrics['loss'], val_loss, train_metrics['metric'], mode='precond' if is_precond else 'train')
+            self.log_epoch(epoch, train_metrics['loss'], val_loss, train_metrics['metric'], 
+                          mode=current_mode)
             
             # Print Summary
-            print(f"    Ep {epoch}: Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_loss:.4f} | Compute: {compute_epoch:.2e}")
+            print(f"    Ep {epoch}: Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_loss:.4f} | "
+                  f"Compute: {compute_epoch:.2e} | Batches: {self.batches_processed}")
             
             # --- Early Stopping Logic ---
             if val_loss < best_val_loss:
@@ -652,17 +657,20 @@ class Trainer:
                 
         return self.results
 
-    def run_epoch(self, epoch, is_precond):
+    def run_epoch(self, epoch):
         self.model.train()
         total_loss = 0
         total_ce = 0
         total_metric = 0
         
-        progress_bar = tqdm(self.train_loader, desc=f"Ep {epoch} (Pre={is_precond})", leave=True)
+        progress_bar = tqdm(self.train_loader, desc=f"Ep {epoch}", leave=True)
         
         for batch_idx, (input_ids, labels) in enumerate(progress_bar):
             input_ids, labels = input_ids.to(self.device), labels.to(self.device)
             self.optimizer.zero_grad()
+            
+            # Determine if this batch uses preconditioning
+            is_precond = self.batches_processed < self.precond_batches
             
             # --- OPTIMIZATION STEP ---
             # COUNTED COMPUTE: Forward, backward, parameter update (6N FLOPs/token)
@@ -695,8 +703,20 @@ class Trainer:
             if metric_val is None:
                  metric_val = torch.tensor(0.0, device=self.device)
             
-            # Track tokens processed (compute calculated at logging time)
+            # Track tokens and batches processed (compute calculated at logging time)
             self.tokens_processed += input_ids.numel()
+            self.batches_processed += 1
+            
+            # Log batch-level metrics periodically
+            if self.batches_processed % Config.LOG_EVERY_N_BATCHES == 0 or self.batches_processed == 1:
+                self.log_batch(
+                    epoch=epoch,
+                    batch=self.batches_processed,
+                    train_loss=loss.item(),
+                    ce_loss=ce_loss.item(),
+                    metric_val=metric_val.item(),
+                    mode='precond' if is_precond else 'train'
+                )
 
             total_loss += loss.item()
             total_ce += ce_loss.item()
@@ -724,7 +744,28 @@ class Trainer:
                 total_loss += loss.item()
         return total_loss / len(loader)
         
+    def log_batch(self, epoch, batch, train_loss, ce_loss, metric_val, mode):
+        """Log batch-level training metrics"""
+        cumulative_compute = self.tokens_processed * self.training_flops_per_token
+        
+        entry = {
+            'metric_name': self.metric_name,
+            'run_id': self.run_id,
+            'precond_batches': self.precond_batches,
+            'epoch': epoch,
+            'batch': batch,
+            'mode': mode,
+            'train_loss': train_loss,
+            'ce_loss': ce_loss,
+            'metric_val': metric_val,
+            'tokens_processed': self.tokens_processed,
+            'cumulative_compute': cumulative_compute,
+            'log_type': 'batch'
+        }
+        self.results.append(entry)
+        
     def log_epoch(self, epoch, train_loss, val_loss, metric, mode):
+        """Log epoch-level validation metrics"""
         # Compute total training FLOPs at logging time (not during training)
         # Uses 6ND formula: 6 × num_parameters × num_tokens
         cumulative_compute = self.tokens_processed * self.training_flops_per_token
@@ -732,14 +773,16 @@ class Trainer:
         entry = {
             'metric_name': self.metric_name,
             'run_id': self.run_id,
-            'precond_epochs': self.precond_epochs,
+            'precond_batches': self.precond_batches,
             'epoch': epoch,
+            'batches_processed': self.batches_processed,
             'mode': mode,
             'train_loss': train_loss,
             'val_loss': val_loss,
             'metric_val': metric,
             'tokens_processed': self.tokens_processed,
-            'cumulative_compute': cumulative_compute
+            'cumulative_compute': cumulative_compute,
+            'log_type': 'validation'
         }
         self.results.append(entry)
 
@@ -752,34 +795,34 @@ def main():
     # 1. Run Experiments Loop
     for metric in Config.METRICS_TO_RUN:
         
-        # Determine strict epochs to test
+        # Determine strict batches to test
         if metric == 'control':
-            epochs_to_test = [0]
+            batches_to_test = [0]
         else:
-            epochs_to_test = Config.PRECOND_EPOCHS_TO_TEST
+            batches_to_test = Config.PRECOND_BATCHES_TO_TEST
         
-        for precond_eps in epochs_to_test:
+        for precond_batches in batches_to_test:
             
             # Organize output by metric and precond configuration (Nature-style organization)
             clean_metric_name = metric.replace('/', '_over_').replace('.', '_')
             if clean_metric_name.startswith('-'): clean_metric_name = clean_metric_name[1:]
             
-            config_dir_name = f"{clean_metric_name}_precond_{precond_eps}"
+            config_dir_name = f"{clean_metric_name}_precond_{precond_batches}"
             config_output_dir = os.path.join(Config.OUTPUT_DIR, config_dir_name)
             
             # Skip if the folder is already created (as requested)
             if os.path.exists(config_output_dir):
-                print(f"Skipping {metric} ({precond_eps} eps) - Folder '{config_dir_name}' exists.")
+                print(f"Skipping {metric} ({precond_batches} batches) - Folder '{config_dir_name}' exists.")
                 continue
                 
-            print(f"\n=== STARTING CONFIGURATION: {metric} | Precond: {precond_eps} ===")
+            print(f"\n=== STARTING CONFIGURATION: {metric} | Precond: {precond_batches} batches ===")
             os.makedirs(config_output_dir, exist_ok=True)
             
             for run_num in range(1, Config.NUM_RUNS + 1):
                 seed = 42 + run_num
                 print(f"  > Run {run_num}/{Config.NUM_RUNS}")
                 
-                trainer = Trainer(run_id=run_num, precond_epochs=precond_eps, metric_name=metric, seed=seed)
+                trainer = Trainer(run_id=run_num, precond_batches=precond_batches, metric_name=metric, seed=seed)
                 run_results = trainer.train()
                 
                 # Save individual run results
