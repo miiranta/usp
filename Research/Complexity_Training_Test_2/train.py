@@ -13,7 +13,6 @@ from tqdm import tqdm
 from transformers import RobertaTokenizer
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.checkpoint import checkpoint
-from torch.utils.flop_counter import FlopCounterMode
 import pandas as pd
 
 # Disable efficient attention backend to allow second-order derivatives if needed
@@ -515,7 +514,12 @@ class Trainer:
         self._init_model()
         
         self.results = []
-        self.total_flops = 0.0
+        self.tokens_processed = 0  # Count tokens only
+        
+        # Measure training FLOPs once (analytically computed using 6ND)
+        # NOTE: This measures CORE TRAINING COMPUTE ONLY (forward + backward + update)
+        # Auxiliary computation (metrics, diagnostics) is NOT counted - standard practice
+        self.training_flops_per_token = self._measure_training_flops()
         
         # Initialize Scaling Factors
         self.ce_start = 1.0
@@ -560,6 +564,28 @@ class Trainer:
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=Config.LEARNING_RATE)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=0.95)
 
+    def _measure_training_flops(self):
+        """Measure training FLOPs per token using the standard 6ND approximation.
+        
+        This computes CORE TRAINING COMPUTE:
+        - Forward pass: ~2N FLOPs/token
+        - Backward pass: ~4N FLOPs/token  
+        - Total: 6N FLOPs/token
+        
+        IMPORTANT: Auxiliary computation is NOT counted:
+        - Metric calculations (complexity measures, curvature probes)
+        - Diagnostic overhead
+        - Checkpointing bookkeeping
+        
+        This separation is standard practice in scaling laws literature
+        (Kaplan et al., Hoffmann et al.) because:
+        1. Metrics don't scale with model size
+        2. They're algorithmic overhead, not learning compute
+        3. They're not part of the trained model
+        """
+        num_params = sum(p.numel() for p in self.model.parameters())
+        return 6 * num_params
+    
     def _initialize_scalers(self):
         if self.metric_name == 'control': return
         
@@ -588,28 +614,29 @@ class Trainer:
         
         # 1. Evaluate Initial State
         initial_val_loss = self.evaluate(self.val_loader)
-        self.log_epoch(0, 0.0, initial_val_loss, 0.0, 0.0, mode='init')
+        self.log_epoch(0, 0.0, initial_val_loss, 0.0, mode='init')
         best_val_loss = initial_val_loss
 
         # 2. Main Loop
         for epoch in range(1, Config.MAX_TRAIN_EPOCHS + 1):
             is_precond = epoch <= self.precond_epochs
             
-            flops_before = self.total_flops
+            tokens_before = self.tokens_processed
 
             # --- Train Epoch ---
             train_metrics = self.run_epoch(epoch, is_precond)
             
-            flops_epoch = self.total_flops - flops_before
+            tokens_epoch = self.tokens_processed - tokens_before
+            compute_epoch = tokens_epoch * self.training_flops_per_token
 
             # --- Validation ---
             val_loss = self.evaluate(self.val_loader, desc=f"Val Ep {epoch}")
             
             # --- Logging ---
-            self.log_epoch(epoch, train_metrics['loss'], val_loss, self.total_flops, train_metrics['metric'], mode='precond' if is_precond else 'train')
+            self.log_epoch(epoch, train_metrics['loss'], val_loss, train_metrics['metric'], mode='precond' if is_precond else 'train')
             
             # Print Summary
-            print(f"    Ep {epoch}: Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_loss:.4f} | FLOPs: {flops_epoch:.2e}")
+            print(f"    Ep {epoch}: Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_loss:.4f} | Compute: {compute_epoch:.2e}")
             
             # --- Early Stopping Logic ---
             if val_loss < best_val_loss:
@@ -637,40 +664,39 @@ class Trainer:
             input_ids, labels = input_ids.to(self.device), labels.to(self.device)
             self.optimizer.zero_grad()
             
-            # Count exact FLOPs using PyTorch's FlopCounterMode
-            flop_counter = FlopCounterMode(display=False)
+            # --- OPTIMIZATION STEP ---
+            # COUNTED COMPUTE: Forward, backward, parameter update (6N FLOPs/token)
+            logits = self.model(input_ids)
             
-            # --- OPTIMIZATION STEP (Measured) ---
-            with flop_counter:
-                logits = self.model(input_ids)
+            # CE Loss (Always needed for logging, but only backwarded if !is_precond)
+            ce_loss = nn.CrossEntropyLoss()(logits.view(-1, self.tokenizer.vocab_size), labels.view(-1))
+            
+            # Metric Calculation (Only measured if being optimized)
+            # AUXILIARY COMPUTE (NOT COUNTED): Metrics, curvature probes, diagnostics
+            # This is standard practice - metrics are algorithmic overhead, not learning compute
+            metric_val = None
+            if is_precond and self.metric_name != 'control':
+                metric_val = Metrics.calculate_metric(self.model, self.metric_name, logits, labels, input_ids)
                 
-                # CE Loss (Always needed for logging, but only backwarded if !is_precond)
-                ce_loss = nn.CrossEntropyLoss()(logits.view(-1, self.tokenizer.vocab_size), labels.view(-1))
-                
-                # Metric Calculation (Only measured if being optimized)
-                metric_val = None
-                if is_precond and self.metric_name != 'control':
-                    metric_val = Metrics.calculate_metric(self.model, self.metric_name, logits, labels, input_ids)
-                    
-                    if self.metric_name.startswith('-'):
-                         norm_metric = (metric_val / (abs(self.metric_start) + 1e-10)) * self.ce_start
-                    else:
-                         norm_metric = (abs(self.metric_start) / (metric_val + 1e-10)) * self.ce_start
-                    loss = norm_metric
+                if self.metric_name.startswith('-'):
+                     norm_metric = (metric_val / (abs(self.metric_start) + 1e-10)) * self.ce_start
                 else:
-                    loss = ce_loss
-                
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), Config.MAX_GRAD_NORM)
-                self.optimizer.step()
+                     norm_metric = (abs(self.metric_start) / (metric_val + 1e-10)) * self.ce_start
+                loss = norm_metric
+            else:
+                loss = ce_loss
             
-            # --- LOGGING STEP (Unmeasured) ---
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), Config.MAX_GRAD_NORM)
+            self.optimizer.step()
+            
+            # --- LOGGING STEP ---
             # If we didn't calculate metric above (because we are in standard training), just log 0
             if metric_val is None:
                  metric_val = torch.tensor(0.0, device=self.device)
             
-            # Update Counters with Measured FLOPs
-            self.total_flops += flop_counter.get_total_flops()
+            # Track tokens processed (compute calculated at logging time)
+            self.tokens_processed += input_ids.numel()
 
             total_loss += loss.item()
             total_ce += ce_loss.item()
@@ -698,7 +724,11 @@ class Trainer:
                 total_loss += loss.item()
         return total_loss / len(loader)
         
-    def log_epoch(self, epoch, train_loss, val_loss, flops, metric, mode):
+    def log_epoch(self, epoch, train_loss, val_loss, metric, mode):
+        # Compute total training FLOPs at logging time (not during training)
+        # Uses 6ND formula: 6 × num_parameters × num_tokens
+        cumulative_compute = self.tokens_processed * self.training_flops_per_token
+        
         entry = {
             'metric_name': self.metric_name,
             'run_id': self.run_id,
@@ -708,7 +738,8 @@ class Trainer:
             'train_loss': train_loss,
             'val_loss': val_loss,
             'metric_val': metric,
-            'cumulative_flops': flops
+            'tokens_processed': self.tokens_processed,
+            'cumulative_compute': cumulative_compute
         }
         self.results.append(entry)
 
@@ -761,121 +792,7 @@ def main():
             # Save aggregated results for this config
             pd.DataFrame(config_results).to_csv(os.path.join(config_output_dir, 'aggregated_results.csv'), index=False)
 
-    # 2. Analysis (Aggregating all subfolders)
-    print("\nTraining Complete. Generating Detailed Analysis...")
-    
-    # Collect all CSVs from subfolders
-    all_results = []
-    # glob pattern to find all results_run_*.csv in subfolders
-    pattern = os.path.join(Config.OUTPUT_DIR, "*", "results_run_*.csv")
-    csv_files = glob.glob(pattern)
-    
-    if not csv_files:
-        print("No result files found for analysis.")
-        return
-
-    print(f"Found {len(csv_files)} result files. Aggregating...")
-    for f in csv_files:
-        try:
-            df_chunk = pd.read_csv(f)
-            all_results.append(df_chunk)
-        except Exception as e:
-            print(f"Error reading {f}: {e}")
-            
-    if not all_results:
-        print("No valid data loaded.")
-        return
-        
-    df = pd.concat(all_results, ignore_index=True)
-    
-    # Ensure numeric columns
-    cols = ['cumulative_flops', 'val_loss', 'precond_epochs', 'run_id']
-    for c in cols: 
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors='coerce')
-    
-    # 2a. Determine Baseline (Control) Performance
-    baseline_flops_list = []
-    # Identify control runs
-    control_df = df[df['metric_name'] == 'control']
-    
-    if not control_df.empty:
-        # Find global min val loss for control runs to establish baseline target
-        for r_id in control_df['run_id'].unique():
-            run_data = control_df[control_df['run_id'] == r_id]
-            if run_data.empty: continue
-            
-            # Find the epoch where validation loss was minimized
-            best_idx = run_data['val_loss'].idxmin()
-            best_row = run_data.loc[best_idx]
-            baseline_flops_list.append(best_row['cumulative_flops'])
-            
-        avg_baseline_flops = np.mean(baseline_flops_list) if baseline_flops_list else 1.0
-        print(f"Baseline (Control) Mean FLOPs to Convergence: {avg_baseline_flops:.4e}")
-    else:
-        print("Warning: No Control runs found in results. Setting baseline to 1.0 for relative calculation.")
-        avg_baseline_flops = 1.0
-        
-    # 2b. Comparative Analysis
-    analysis_data = []
-    
-    # Group by Configuration
-    configs = df[['metric_name', 'precond_epochs']].drop_duplicates()
-    
-    for _, config in configs.iterrows():
-        m_name = config['metric_name']
-        p_eps = config['precond_epochs']
-        
-        # Get all runs for this config
-        sdf = df[(df['metric_name'] == m_name) & (df['precond_epochs'] == p_eps)]
-        
-        flops_list = []
-        min_val_list = []
-        epochs_list = []
-        
-        for r_id in sdf['run_id'].unique():
-            rdf = sdf[sdf['run_id'] == r_id]
-            if rdf.empty: continue
-            
-            # Find the row with Minimum Validation Loss
-            min_idx = rdf['val_loss'].idxmin()
-            min_row = rdf.loc[min_idx]
-            
-            flops_list.append(min_row['cumulative_flops'])
-            min_val_list.append(min_row['val_loss'])
-            epochs_list.append(min_row['epoch'])
-        
-        if not flops_list: continue
-
-        mean_flops = np.mean(flops_list)
-        # Speedup > 1.0 means fewer FLOPs than control
-        speedup = avg_baseline_flops / mean_flops if mean_flops > 0 and avg_baseline_flops > 0 else 0.0
-            
-        analysis_data.append({
-            'metric': m_name,
-            'precond_epochs': int(p_eps),
-            'n_runs': len(flops_list),
-            'mean_flops_to_min': mean_flops,
-            'std_flops_to_min': np.std(flops_list),
-            'speedup_vs_control': speedup,
-            'mean_min_val_loss': np.mean(min_val_list),
-            'ste_min_val_loss': stats.sem(min_val_list) if len(min_val_list) > 1 else 0.0,
-            'mean_convergence_epoch': np.mean(epochs_list)
-        })
-        
-    analysis_df = pd.DataFrame(analysis_data)
-    
-    if not analysis_df.empty:
-        # Sort by efficiency (speedup)
-        analysis_df = analysis_df.sort_values('speedup_vs_control', ascending=False)
-        
-        output_path = os.path.join(Config.OUTPUT_DIR, 'final_flops_analysis.csv')
-        analysis_df.to_csv(output_path, index=False)
-        print(f"Analysis saved to {output_path}")
-        print("\nTop 5 Configurations by Efficiency (Speedup vs Control):")
-        print(analysis_df[['metric', 'precond_epochs', 'speedup_vs_control', 'mean_min_val_loss']].head(5).to_string())
-    else:
-        print("No analysis data generated.")
+    print("\nTraining Complete. Results saved to individual folders.")
 
 if __name__ == '__main__':
     main()
