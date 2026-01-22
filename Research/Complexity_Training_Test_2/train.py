@@ -58,7 +58,7 @@ class Config:
     
     # Model
     HIDDEN_DIM = 512
-    NUM_LAYERS = 8
+    NUM_LAYERS = 6
     NUM_ATTENTION_HEADS = 8
     SEQ_LENGTH = 64
     
