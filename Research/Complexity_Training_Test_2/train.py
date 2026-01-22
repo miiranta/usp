@@ -56,7 +56,7 @@ class Config:
     EARLY_STOPPING_PATIENCE = 3
     
     # Model
-    HIDDEN_DIM = 128
+    HIDDEN_DIM = 256
     NUM_LAYERS = 4
     NUM_ATTENTION_HEADS = 4 
     SEQ_LENGTH = 64
@@ -67,9 +67,9 @@ class Config:
     MAX_GRAD_NORM = 1.0
     
     # Data limits
-    MAX_TRAIN_SAMPLES = 1000 # 0 means all data
-    MAX_VAL_SAMPLES = 1000
-    MAX_TEST_SAMPLES = 1000
+    MAX_TRAIN_SAMPLES = 0 # 0 means all data
+    MAX_VAL_SAMPLES = 0
+    MAX_TEST_SAMPLES = 0
     
     # System
     NUM_WORKERS = 0
