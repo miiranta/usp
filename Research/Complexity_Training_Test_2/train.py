@@ -54,7 +54,7 @@ class Config:
 
     # Training Loop
     MAX_TRAIN_EPOCHS = 100 
-    EARLY_STOPPING_PATIENCE = 3
+    EARLY_STOPPING_PATIENCE = 5
     
     # Model
     HIDDEN_DIM = 512
@@ -68,7 +68,7 @@ class Config:
     MAX_GRAD_NORM = 1.0
     
     # Data limits
-    MAX_TRAIN_SAMPLES = 500  # 0 means all data
+    MAX_TRAIN_SAMPLES = 1000  # 0 means all data
     MAX_VAL_SAMPLES = 0
     MAX_TEST_SAMPLES = 0
     
