@@ -57,8 +57,8 @@ class Config:
     EARLY_STOPPING_PATIENCE = 1
     
     # Model
-    HIDDEN_DIM = 1024
-    NUM_LAYERS = 4
+    HIDDEN_DIM = 512
+    NUM_LAYERS = 8
     NUM_ATTENTION_HEADS = 8
     SEQ_LENGTH = 64
     
