@@ -364,7 +364,12 @@ class TextDataset(Dataset):
                 text = ''.join(row['text'] for row in reader)
             else:
                 text = f.read()
-            
+        
+        # Suppress tokenization length warning
+        # (We handle slicing manually in __getitem__)
+        _prev_max_len = tokenizer.model_max_length
+        tokenizer.model_max_length = int(1e9)
+        
         encodings = tokenizer(
             text,
             return_tensors='pt',
@@ -373,6 +378,8 @@ class TextDataset(Dataset):
             add_special_tokens=False,
             return_attention_mask=False
         )
+        
+        tokenizer.model_max_length = _prev_max_len # Restore
         self.input_ids = encodings['input_ids'][0]
         
         # Apply token limit if configured
