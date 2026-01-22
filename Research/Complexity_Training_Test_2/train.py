@@ -36,7 +36,7 @@ class Config:
     
     # Preconditioning
     # Test these durations of preconditioning (in epochs)
-    PRECOND_EPOCHS_TO_TEST = [1, 2, 3, 4, 5] 
+    PRECOND_EPOCHS_TO_TEST = [1, 2, 3] 
     
     # Metrics to Run (from original script)
     METRICS_TO_RUN = [
@@ -639,35 +639,35 @@ class Trainer:
             
             # Count exact FLOPs using PyTorch's FlopCounterMode
             flop_counter = FlopCounterMode(display=False)
+            
+            # --- OPTIMIZATION STEP (Measured) ---
             with flop_counter:
                 logits = self.model(input_ids)
                 
-                # CE Loss
+                # CE Loss (Always needed for logging, but only backwarded if !is_precond)
                 ce_loss = nn.CrossEntropyLoss()(logits.view(-1, self.tokenizer.vocab_size), labels.view(-1))
                 
-                # Metric Calculation
-                if self.metric_name != 'control':
-                    metric_val = Metrics.calculate_metric(self.model, self.metric_name, logits, labels, input_ids)
-                else:
-                    metric_val = torch.tensor(0.0, device=self.device)
-                
-                # Determine Loss
+                # Metric Calculation (Only measured if being optimized)
+                metric_val = None
                 if is_precond and self.metric_name != 'control':
-                    # Normalization
-                    if self.metric_name.startswith('-'): # Minimizing metric
-                         # metric / start * ce_start
+                    metric_val = Metrics.calculate_metric(self.model, self.metric_name, logits, labels, input_ids)
+                    
+                    if self.metric_name.startswith('-'):
                          norm_metric = (metric_val / (abs(self.metric_start) + 1e-10)) * self.ce_start
-                    else: # Maximizing metric -> Minimizing 1/metric
-                         # start / metric * ce_start
+                    else:
                          norm_metric = (abs(self.metric_start) / (metric_val + 1e-10)) * self.ce_start
-                         
                     loss = norm_metric
                 else:
                     loss = ce_loss
-                    
+                
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), Config.MAX_GRAD_NORM)
                 self.optimizer.step()
+            
+            # --- LOGGING STEP (Unmeasured) ---
+            # If we didn't calculate metric above (because we are in standard training), just log 0
+            if metric_val is None:
+                 metric_val = torch.tensor(0.0, device=self.device)
             
             # Update Counters with Measured FLOPs
             self.total_flops += flop_counter.get_total_flops()
