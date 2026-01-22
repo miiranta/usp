@@ -775,22 +775,16 @@ def main():
             print(f"\n=== STARTING CONFIGURATION: {metric} | Precond: {precond_eps} ===")
             os.makedirs(config_output_dir, exist_ok=True)
             
-            config_results = []
-            
             for run_num in range(1, Config.NUM_RUNS + 1):
                 seed = 42 + run_num
                 print(f"  > Run {run_num}/{Config.NUM_RUNS}")
                 
                 trainer = Trainer(run_id=run_num, precond_epochs=precond_eps, metric_name=metric, seed=seed)
                 run_results = trainer.train()
-                config_results.extend(run_results)
                 
                 # Save individual run results
                 run_csv_path = os.path.join(config_output_dir, f'results_run_{run_num}.csv')
                 pd.DataFrame(run_results).to_csv(run_csv_path, index=False)
-            
-            # Save aggregated results for this config
-            pd.DataFrame(config_results).to_csv(os.path.join(config_output_dir, 'aggregated_results.csv'), index=False)
 
     print("\nTraining Complete. Results saved to individual folders.")
 
