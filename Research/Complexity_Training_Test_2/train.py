@@ -36,7 +36,7 @@ class Config:
     # Preconditioning
     # Test these durations of preconditioning (in batches)
     # With batch_size=512, ~4675 batches/epoch, these represent: ~1, ~3, ~5 epochs
-    PRECOND_BATCHES_TO_TEST = [100, 1000, 10000] 
+    PRECOND_BATCHES_TO_TEST = [10, 100, 1000] 
     
     # Metrics to Run (from original script)
     METRICS_TO_RUN = [
