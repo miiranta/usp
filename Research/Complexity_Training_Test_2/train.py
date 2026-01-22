@@ -63,12 +63,12 @@ class Config:
     SEQ_LENGTH = 32
     
     # Optimization
-    BATCH_SIZE = 512
+    BATCH_SIZE = 64
     LEARNING_RATE = 1e-4
     MAX_GRAD_NORM = 1.0
     
     # Data limits
-    MAX_TRAIN_SAMPLES = 0  # 0 means all data
+    MAX_TRAIN_SAMPLES = 10000  # 0 means all data
     MAX_VAL_SAMPLES = 0
     MAX_TEST_SAMPLES = 0
     
@@ -426,6 +426,7 @@ class TextDataset(Dataset):
     def __init__(self, file_path, tokenizer, seq_length, max_samples=None):
         self.seq_length = seq_length
         self.tokenizer = tokenizer
+        self.max_samples = max_samples
         
         if not os.path.exists(file_path):
              raise FileNotFoundError(f"CRITICAL: Dataset file not found at {file_path}. Please check the path.")
@@ -452,13 +453,30 @@ class TextDataset(Dataset):
         )
         
         tokenizer.model_max_length = _prev_max_len # Restore
-        self.input_ids = encodings['input_ids'][0]
+        self.full_input_ids = encodings['input_ids'][0]
         
-        # Apply token limit if configured
-        if max_samples is not None and max_samples > 0:
-            max_tokens = max_samples * seq_length
-            if len(self.input_ids) > max_tokens:
-                self.input_ids = self.input_ids[:max_tokens]
+        # Print token limit information
+        if self.max_samples is not None and self.max_samples > 0:
+            max_tokens = self.max_samples * self.seq_length
+            print(f"  Dataset limited to {max_tokens:,} tokens ({self.max_samples:,} samples × {self.seq_length} seq_length)")
+            print(f"  Full dataset has {len(self.full_input_ids):,} tokens")
+        
+        # Initialize active data (will be resampled each epoch if limited)
+        self.resample()
+    
+    def resample(self):
+        """Randomly sample a subset of data if max_samples is set"""
+        if self.max_samples is not None and self.max_samples > 0:
+            max_tokens = self.max_samples * self.seq_length
+            if len(self.full_input_ids) > max_tokens:
+                # Randomly select a starting position
+                max_start = len(self.full_input_ids) - max_tokens
+                start_idx = torch.randint(0, max_start + 1, (1,)).item()
+                self.input_ids = self.full_input_ids[start_idx:start_idx + max_tokens]
+            else:
+                self.input_ids = self.full_input_ids
+        else:
+            self.input_ids = self.full_input_ids
     
     def __len__(self):
         return max(0, len(self.input_ids) - self.seq_length)
@@ -660,6 +678,10 @@ class Trainer:
 
     def run_epoch(self, epoch):
         self.model.train()
+        
+        # Resample training data at the start of each epoch (if limited)
+        self.train_ds.resample()
+        
         total_loss = 0
         total_ce = 0
         total_metric = 0
