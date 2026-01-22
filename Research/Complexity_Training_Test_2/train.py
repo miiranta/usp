@@ -67,14 +67,16 @@ class Config:
     MAX_GRAD_NORM = 1.0
     
     # Data limits
-    MAX_SAMPLES = 0 # 0 means all data
+    MAX_TRAIN_SAMPLES = 2000 # 0 means all data
+    MAX_VAL_SAMPLES = 2000
+    MAX_TEST_SAMPLES = 2000
     
     # System
     NUM_WORKERS = 0
     NUM_RUNS = 3 
 
     # Data
-    DATASET_ROOT = "../../dataset" 
+    DATASET_ROOT = "dataset" 
 
     @staticmethod
     def get_device():
@@ -354,25 +356,24 @@ class TextDataset(Dataset):
         self.tokenizer = tokenizer
         
         if not os.path.exists(file_path):
-             print(f"Warning: Dataset {file_path} not found. Creating dummy.")
-             self.input_ids = torch.randint(0, tokenizer.vocab_size, (seq_length * 100 + 1000,))
-        else:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                if file_path.endswith('.csv'):
-                    reader = csv.DictReader(f)
-                    text = ''.join(row['text'] for row in reader)
-                else:
-                    text = f.read()
+             raise FileNotFoundError(f"CRITICAL: Dataset file not found at {file_path}. Please check the path.")
+        
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            if file_path.endswith('.csv'):
+                reader = csv.DictReader(f)
+                text = ''.join(row['text'] for row in reader)
+            else:
+                text = f.read()
             
-            encodings = tokenizer(
-                text,
-                return_tensors='pt',
-                padding=False,
-                truncation=False,
-                add_special_tokens=False,
-                return_attention_mask=False
-            )
-            self.input_ids = encodings['input_ids'][0]
+        encodings = tokenizer(
+            text,
+            return_tensors='pt',
+            padding=False,
+            truncation=False,
+            add_special_tokens=False,
+            return_attention_mask=False
+        )
+        self.input_ids = encodings['input_ids'][0]
         
         # Apply token limit if configured
         if max_samples is not None and max_samples > 0:
@@ -466,9 +467,9 @@ class Trainer:
         test_path_wiki = os.path.join(dataset_root, 'wikitext-2/wiki.test.tokens')
         
         # Datasets
-        self.train_ds = TextDataset(train_path, self.tokenizer, Config.SEQ_LENGTH, max_samples=Config.MAX_SAMPLES)
-        self.val_ds = TextDataset(val_path, self.tokenizer, Config.SEQ_LENGTH, max_samples=Config.MAX_SAMPLES)
-        self.test_ds = TextDataset(test_path_wiki, self.tokenizer, Config.SEQ_LENGTH, max_samples=Config.MAX_SAMPLES)
+        self.train_ds = TextDataset(train_path, self.tokenizer, Config.SEQ_LENGTH, max_samples=Config.MAX_TRAIN_SAMPLES)
+        self.val_ds = TextDataset(val_path, self.tokenizer, Config.SEQ_LENGTH, max_samples=Config.MAX_VAL_SAMPLES)
+        self.test_ds = TextDataset(test_path_wiki, self.tokenizer, Config.SEQ_LENGTH, max_samples=Config.MAX_TEST_SAMPLES)
         
         # Loaders
         self.train_loader = DataLoader(self.train_ds, batch_size=Config.BATCH_SIZE, shuffle=True, num_workers=Config.NUM_WORKERS)
