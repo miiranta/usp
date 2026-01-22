@@ -67,13 +67,13 @@ class Config:
     MAX_GRAD_NORM = 1.0
     
     # Data limits
-    MAX_TRAIN_SAMPLES = 2000 # 0 means all data
-    MAX_VAL_SAMPLES = 2000
-    MAX_TEST_SAMPLES = 2000
+    MAX_TRAIN_SAMPLES = 1000 # 0 means all data
+    MAX_VAL_SAMPLES = 1000
+    MAX_TEST_SAMPLES = 1000
     
     # System
     NUM_WORKERS = 0
-    NUM_RUNS = 3 
+    NUM_RUNS = 1 
 
     # Data
     DATASET_ROOT = "dataset" 
