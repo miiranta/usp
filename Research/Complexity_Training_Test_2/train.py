@@ -35,7 +35,7 @@ class Config:
     
     # Preconditioning
     # Test these durations of preconditioning (in batches)
-    PRECOND_BATCHES_TO_TEST = [10, 100, 1000] 
+    PRECOND_BATCHES_TO_TEST = [1000, 10000, 100000] 
     
     # Metrics to Run (from original script)
     METRICS_TO_RUN = [
@@ -53,12 +53,12 @@ class Config:
 
     # Training Loop
     MAX_TRAIN_EPOCHS = 100 
-    EARLY_STOPPING_PATIENCE = 3
+    EARLY_STOPPING_PATIENCE = 1
     
     # Model
-    HIDDEN_DIM = 256
-    NUM_LAYERS = 4
-    NUM_ATTENTION_HEADS = 4 
+    HIDDEN_DIM = 512
+    NUM_LAYERS = 6
+    NUM_ATTENTION_HEADS = 6
     SEQ_LENGTH = 64
     
     # Optimization
