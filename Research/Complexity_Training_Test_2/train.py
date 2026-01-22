@@ -73,7 +73,7 @@ class Config:
     
     # System
     NUM_WORKERS = 0
-    NUM_RUNS = 2 
+    NUM_RUNS = 3
 
     # Data
     DATASET_ROOT = "dataset" 
