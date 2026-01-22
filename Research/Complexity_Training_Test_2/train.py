@@ -680,19 +680,23 @@ class Trainer:
             # CE Loss (Always needed for logging, but only backwarded if !is_precond)
             ce_loss = nn.CrossEntropyLoss()(logits.view(-1, self.tokenizer.vocab_size), labels.view(-1))
             
-            # Metric Calculation (Only measured if being optimized)
+            # Metric Calculation (ALWAYS calculated for logging and visualization)
             # AUXILIARY COMPUTE (NOT COUNTED): Metrics, curvature probes, diagnostics
             # This is standard practice - metrics are algorithmic overhead, not learning compute
-            metric_val = None
-            if is_precond and self.metric_name != 'control':
+            if self.metric_name != 'control':
                 metric_val = Metrics.calculate_metric(self.model, self.metric_name, logits, labels, input_ids)
                 
-                if self.metric_name.startswith('-'):
-                     norm_metric = (metric_val / (abs(self.metric_start) + 1e-10)) * self.ce_start
+                # During preconditioning, optimize the metric instead of CE
+                if is_precond:
+                    if self.metric_name.startswith('-'):
+                         norm_metric = (metric_val / (abs(self.metric_start) + 1e-10)) * self.ce_start
+                    else:
+                         norm_metric = (abs(self.metric_start) / (metric_val + 1e-10)) * self.ce_start
+                    loss = norm_metric
                 else:
-                     norm_metric = (abs(self.metric_start) / (metric_val + 1e-10)) * self.ce_start
-                loss = norm_metric
+                    loss = ce_loss
             else:
+                metric_val = torch.tensor(0.0, device=self.device)
                 loss = ce_loss
             
             loss.backward()
@@ -700,10 +704,6 @@ class Trainer:
             self.optimizer.step()
             
             # --- LOGGING STEP ---
-            # If we didn't calculate metric above (because we are in standard training), just log 0
-            if metric_val is None:
-                 metric_val = torch.tensor(0.0, device=self.device)
-            
             # Track tokens and batches processed (compute calculated at logging time)
             self.tokens_processed += input_ids.numel()
             self.batches_processed += 1
