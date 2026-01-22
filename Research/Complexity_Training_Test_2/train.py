@@ -63,7 +63,7 @@ class Config:
     SEQ_LENGTH = 32
     
     # Optimization
-    BATCH_SIZE = 64
+    BATCH_SIZE = 512
     LEARNING_RATE = 1e-4
     MAX_GRAD_NORM = 1.0
     
