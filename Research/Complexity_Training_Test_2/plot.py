@@ -664,7 +664,9 @@ def plot_compute_efficiency_frontier(df):
                     color=PlotConfig.CONTROL_COLOR, alpha=0.1)
     
     # Plot best metrics
-    colors = sns.color_palette("bright", n_colors=len(best_configs)-1)
+    # Count non-control configs to set proper color palette size
+    non_control_configs = best_configs[best_configs['metric_name'] != 'control']
+    colors = sns.color_palette("bright", n_colors=max(1, len(non_control_configs)))
     color_idx = 0
     
     for _, row in best_configs.iterrows():
@@ -868,6 +870,161 @@ def plot_fixed_compute_comparison(df):
     agg_stats['fixed_batches'] = max_batches
     agg_stats.to_csv(os.path.join(PlotConfig.PLOTS_DIR, "fig4_fixed_compute.csv"), index=False)
 
+def plot_metric_ranking_integrated(df):
+    """
+    Integrated Multi-Criteria Ranking of Metrics
+    Combines: 1) Final Performance, 2) Compute Efficiency, 3) Early Acceleration, 4) Stability
+    """
+    print("Generating Integrated Metric Ranking (COMPREHENSIVE ANALYSIS)...")
+    
+    val_data = df[df['log_type'] == 'validation'].copy()
+    
+    # Exclude control from ranking
+    val_data_metrics = val_data[val_data['metric_name'] != 'control']
+    
+    if val_data_metrics.empty:
+        print("No metrics found for ranking. Skipping.")
+        return
+    
+    ranking_data = []
+    
+    for (metric, precond), group in val_data_metrics.groupby(['metric_name', 'precond_batches']):
+        # Criterion 1: Final Performance (lower is better)
+        final_loss = group.groupby('run_id')['val_loss'].min().mean()
+        final_loss_std = group.groupby('run_id')['val_loss'].min().std()
+        
+        # Criterion 2: Compute Efficiency (inverse of area under curve - higher is better)
+        # Calculate AUC of validation loss over training compute
+        # Lower AUC = reaches good performance faster = MORE efficient
+        auc_values = []
+        for run_id, run_group in group.groupby('run_id'):
+            sorted_group = run_group.sort_values('cumulative_compute')
+            # Approximate integral using trapezoidal rule
+            if len(sorted_group) > 1:
+                auc = np.trapz(sorted_group['val_loss'], sorted_group['cumulative_compute'])
+                auc_values.append(auc)
+        
+        # Store the average AUC (will invert during normalization)
+        auc_efficiency = np.mean(auc_values) if auc_values else np.nan
+        
+        # Criterion 3: Early Training Acceleration (performance at 25% of training)
+        early_checkpoint = group['batches_processed'].max() * 0.25
+        early_performance = []
+        for run_id, run_group in group.groupby('run_id'):
+            closest = run_group.iloc[(run_group['batches_processed'] - early_checkpoint).abs().argsort()[:1]]
+            if len(closest) > 0:
+                early_performance.append(closest.iloc[0]['val_loss'])
+        early_loss = np.mean(early_performance) if early_performance else np.nan
+        
+        # Criterion 4: Stability (lower variance across runs is better)
+        stability = final_loss_std if final_loss_std is not None else 0
+        
+        ranking_data.append({
+            'metric_name': metric,
+            'precond_batches': int(precond),
+            'final_loss': final_loss,
+            'auc_efficiency': auc_efficiency,  # Lower AUC is better
+            'early_loss': early_loss,
+            'stability': stability
+        })
+    
+    rank_df = pd.DataFrame(ranking_data)
+    
+    # Normalize each criterion to [0, 1] for fair comparison
+    # For metrics where lower is better, invert the scale so higher normalized score = better
+    rank_df['final_loss_norm'] = 1 - (rank_df['final_loss'] - rank_df['final_loss'].min()) / (rank_df['final_loss'].max() - rank_df['final_loss'].min() + 1e-10)
+    
+    # For AUC: lower is better (smaller area = faster learning), so invert
+    rank_df['compute_eff_norm'] = 1 - (rank_df['auc_efficiency'] - rank_df['auc_efficiency'].min()) / (rank_df['auc_efficiency'].max() - rank_df['auc_efficiency'].min() + 1e-10)
+    
+    rank_df['early_loss_norm'] = 1 - (rank_df['early_loss'] - rank_df['early_loss'].min()) / (rank_df['early_loss'].max() - rank_df['early_loss'].min() + 1e-10)
+    rank_df['stability_norm'] = 1 - (rank_df['stability'] - rank_df['stability'].min()) / (rank_df['stability'].max() - rank_df['stability'].min() + 1e-10)
+    
+    # Calculate composite score (weighted average)
+    # Weights: Final Performance (40%), Compute Efficiency (30%), Early Acceleration (20%), Stability (10%)
+    rank_df['composite_score'] = (
+        0.40 * rank_df['final_loss_norm'] +
+        0.30 * rank_df['compute_eff_norm'] +
+        0.20 * rank_df['early_loss_norm'] +
+        0.10 * rank_df['stability_norm']
+    )
+    
+    # Sort by composite score (descending - higher is better)
+    rank_df = rank_df.sort_values('composite_score', ascending=False).reset_index(drop=True)
+    rank_df['rank'] = range(1, len(rank_df) + 1)
+    
+    # Create the plot
+    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+    
+    # Plot 1: Composite Score Ranking (Horizontal Bar Chart)
+    ax1 = axes[0]
+    rank_df_top = rank_df.head(10)  # Show top 10
+    
+    colors_rank = sns.color_palette("RdYlGn_r", n_colors=len(rank_df_top))
+    
+    y_pos = np.arange(len(rank_df_top))
+    labels = [f"{row['metric_name']} (P={row['precond_batches']})" for _, row in rank_df_top.iterrows()]
+    
+    bars = ax1.barh(y_pos, rank_df_top['composite_score'], color=colors_rank)
+    ax1.set_yticks(y_pos)
+    ax1.set_yticklabels(labels, fontsize=10)
+    ax1.invert_yaxis()  # Highest score at top
+    ax1.set_xlabel('Composite Score', fontsize=12, fontweight='bold')
+    ax1.set_title('Top 10 Metrics by Integrated Ranking', fontsize=14, fontweight='bold')
+    ax1.grid(True, alpha=0.3, axis='x')
+    
+    # Add score labels
+    for i, (bar, score) in enumerate(zip(bars, rank_df_top['composite_score'])):
+        ax1.text(score + 0.01, bar.get_y() + bar.get_height()/2, 
+                f'{score:.3f}', va='center', fontsize=9, fontweight='bold')
+    
+    # Plot 2: Criterion Breakdown for Top 5 (Grouped Bar Chart)
+    ax2 = axes[1]
+    rank_df_top5 = rank_df.head(5)
+    
+    criteria = ['final_loss_norm', 'compute_eff_norm', 'early_loss_norm', 'stability_norm']
+    criteria_labels = ['Final\nPerf.', 'Compute\nEfficiency', 'Early\nAccel.', 'Stability']
+    
+    x = np.arange(len(criteria_labels))
+    width = 0.15
+    
+    colors_breakdown = sns.color_palette("Set2", n_colors=len(rank_df_top5))
+    
+    for i, (_, row) in enumerate(rank_df_top5.iterrows()):
+        values = [row[c] for c in criteria]
+        label = f"{row['metric_name']} (P={row['precond_batches']})"
+        ax2.bar(x + i * width, values, width, label=label, color=colors_breakdown[i])
+    
+    ax2.set_ylabel('Normalized Score (0-1)', fontsize=12, fontweight='bold')
+    ax2.set_xlabel('Evaluation Criteria', fontsize=12, fontweight='bold')
+    ax2.set_title('Criterion Breakdown - Top 5 Metrics', fontsize=14, fontweight='bold')
+    ax2.set_xticks(x + width * 2)
+    ax2.set_xticklabels(criteria_labels, fontsize=10)
+    ax2.legend(loc='upper right', fontsize=8, ncol=1)
+    ax2.grid(True, alpha=0.3, axis='y')
+    ax2.set_ylim([0, 1.1])
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(PlotConfig.PLOTS_DIR, "fig5_metric_ranking_integrated.png"), dpi=PlotConfig.DPI)
+    plt.close()
+    auc
+    # Export ranking data to CSV
+    export_df = rank_df[['rank', 'metric_name', 'precond_batches', 'composite_score', 
+                         'final_loss', 'compute_efficiency', 'early_loss', 'stability']]
+    export_df.to_csv(os.path.join(PlotConfig.PLOTS_DIR, "fig5_metric_ranking.csv"), index=False)
+    
+    # Print top 5 to console
+    print("\n" + "="*60)
+    print("TOP 5 METRICS (Integrated Ranking)")
+    print("="*60)
+    for _, row in rank_df.head(5).iterrows():
+        print(f"  #{int(row['rank'])}: {row['metric_name']} (P={int(row['precond_batches'])}) "
+              f"- Score: {row['composite_score']:.4f}")
+        print(f"       Final Loss: {row['final_loss']:.4f} | "
+              f"Early Loss: {row['early_loss']:.4f} | "
+              f"Stability: {row['stability']:.4f}")
+    print("="*60)
+
 def main():
     configure_plotting()
     
@@ -899,6 +1056,9 @@ def main():
     
     # Figure 4: Fixed-compute comparison
     plot_fixed_compute_comparison(df)
+    
+    # Figure 5: Integrated Metric Ranking
+    plot_metric_ranking_integrated(df)
     
     print("\n" + "="*60)
     print("SUPPLEMENTARY FIGURES")
