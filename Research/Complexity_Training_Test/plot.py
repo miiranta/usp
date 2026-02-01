@@ -140,7 +140,8 @@ def load_all_data(sources):
     
     # Rename metrics as requested
     combined.rename(columns={
-        'Weights Entropy': 'Entropy',
+        'Model LMC': 'LMC Complexity',
+        'Weights Entropy': 'Shannon Entropy',
         'Weights Disequilibrium': 'Disequilibrium',
         'LMC Weight': 'λ',
         'Val Error Slope': '∆Lval',
@@ -493,11 +494,12 @@ def plot_test_loss_barplot(master_df):
     
     plt.figure(figsize=(10, 6))
     
-    # Calculate stats for annotations
-    stats = df_melted.groupby(['Source', 'Dataset'])['Loss'].agg(['mean', 'sem']).reset_index()
-    stats['ci'] = stats['sem'] * 1.96
-    
     hue_order = ['Control', 'Optimized']
+    
+    # Calculate stats for annotation including 95% CI
+    stats = df_melted.groupby(['Dataset', 'Source'])['Loss'].agg(['mean', 'std', 'sem']).reset_index()
+    stats['ci'] = stats['sem'] * 1.96  # 95% confidence interval
+    
     ax = sns.barplot(
         data=df_melted,
         x='Dataset',
@@ -506,14 +508,12 @@ def plot_test_loss_barplot(master_df):
         hue_order=hue_order,
         palette=SOURCE_PALETTE, # Use consistent palette
         edgecolor='.2',
+        errorbar=('se', 1.96),  # 95% confidence interval
         capsize=.1,
         err_kws={'linewidth': 3, 'color': 'black'}
     )
     
-    # Calculate stats for annotation
-    stats = df_melted.groupby(['Dataset', 'Source'])['Loss'].agg(['mean', 'std'])
-    
-    # Add numeric labels with SD
+    # Add numeric labels with 95% CI
     for i, container in enumerate(ax.containers):
         if i >= len(hue_order): break
         source_label = hue_order[i]
@@ -526,22 +526,24 @@ def plot_test_loss_barplot(master_df):
                 dataset_label = datasets[j]
                 
                 try:
-                    mean_val = stats.loc[(dataset_label, source_label), 'mean']
-                    std_val = stats.loc[(dataset_label, source_label), 'std']
-                    
-                    height = bar.get_height()
-                    if np.isfinite(height) and height != 0:
-                        label = f'{mean_val:.4f}\n±{std_val:.4f}'
+                    stat_row = stats[(stats['Dataset'] == dataset_label) & (stats['Source'] == source_label)]
+                    if not stat_row.empty:
+                        mean_val = stat_row['mean'].values[0]
+                        ci_val = stat_row['ci'].values[0]
                         
-                        ax.annotate(label, 
-                                    (bar.get_x() + bar.get_width() / 2., height / 2), 
-                                    ha='center', va='center', 
-                                    xytext=(0, 0), 
-                                    textcoords='offset points',
-                                    fontsize=14, # Slightly smaller to fit SD
-                                    color='black',
-                                    fontweight='bold')
-                except KeyError:
+                        height = bar.get_height()
+                        if np.isfinite(height) and height != 0:
+                            label = f'{mean_val:.4f}\n±{ci_val:.4f}'
+                            
+                            ax.annotate(label, 
+                                        (bar.get_x() + bar.get_width() / 2., height / 2), 
+                                        ha='center', va='center', 
+                                        xytext=(0, 0), 
+                                        textcoords='offset points',
+                                        fontsize=14,
+                                        color='black',
+                                        fontweight='bold')
+                except (KeyError, IndexError):
                     pass
     
     # plt.title('Final Test Loss Comparison', fontweight='bold', fontsize=22)
@@ -557,10 +559,10 @@ def plot_test_loss_barplot(master_df):
     print(f"Saved plot: {output_path}")
 
 def plot_3d_trajectory(master_df):
-    """3D Trajectory of Optimization: LMC vs Entropy vs Val Loss."""
+    """3D Trajectory of Optimization: LMC vs Shannon Entropy vs Val Loss."""
     if master_df is None: return
     
-    required = ['Model LMC', 'Entropy', 'Validation Loss']
+    required = ['LMC Complexity', 'Shannon Entropy', 'Validation Loss']
     if not all(c in master_df.columns for c in required): return
     
     # Aggregate mean per epoch per source for the trajectory line
@@ -577,8 +579,8 @@ def plot_3d_trajectory(master_df):
         
         # Plot line
         ax.plot(
-            subset['Model LMC'], 
-            subset['Entropy'], 
+            subset['LMC Complexity'], 
+            subset['Shannon Entropy'], 
             subset['Validation Loss'], 
             label=source,
             color=palette[i],
@@ -588,16 +590,16 @@ def plot_3d_trajectory(master_df):
         
         # Add start and end markers
         ax.scatter(
-            subset.iloc[0]['Model LMC'], subset.iloc[0]['Entropy'], subset.iloc[0]['Validation Loss'],
+            subset.iloc[0]['LMC Complexity'], subset.iloc[0]['Shannon Entropy'], subset.iloc[0]['Validation Loss'],
             color=palette[i], marker='o', s=50, alpha=0.6
         )
         ax.scatter(
-            subset.iloc[-1]['Model LMC'], subset.iloc[-1]['Entropy'], subset.iloc[-1]['Validation Loss'],
+            subset.iloc[-1]['LMC Complexity'], subset.iloc[-1]['Shannon Entropy'], subset.iloc[-1]['Validation Loss'],
             color=palette[i], marker='^', s=80, alpha=1.0
         )
 
-    ax.set_xlabel('Model LMC')
-    ax.set_ylabel('Entropy')
+    ax.set_xlabel('LMC Complexity')
+    ax.set_ylabel('Shannon Entropy')
     ax.set_zlabel('Validation Loss')
     ax.set_title('Optimization Trajectory (3D)', fontweight='normal', fontsize=16)
     ax.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -620,15 +622,15 @@ def plot_complexity_performance_path(master_df):
     """2D Path of Complexity vs Performance."""
     if master_df is None: return
     
-    if 'Model LMC' not in master_df.columns or 'Validation Loss' not in master_df.columns: return
+    if 'LMC Complexity' not in master_df.columns or 'Validation Loss' not in master_df.columns: return
 
     # Aggregate mean per epoch per source
-    agg_df = master_df.groupby(['Source', 'Epoch'])[['Model LMC', 'Validation Loss']].mean().reset_index()
+    agg_df = master_df.groupby(['Source', 'Epoch'])[['LMC Complexity', 'Validation Loss']].mean().reset_index()
     
     plt.figure(figsize=(12, 8))
     sns.lineplot(
         data=agg_df,
-        x='Model LMC',
+        x='LMC Complexity',
         y='Validation Loss',
         hue='Source',
         sort=False, # Keep epoch order
@@ -640,7 +642,7 @@ def plot_complexity_performance_path(master_df):
     )
     
     plt.title('Complexity-Performance Path', fontweight='normal', fontsize=16)
-    plt.xlabel('Model LMC (Complexity)', fontsize=12)
+    plt.xlabel('LMC Complexity', fontsize=12)
     plt.ylabel('Validation Loss', fontsize=12)
     plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
     sns.despine(left=True, bottom=True)
@@ -792,10 +794,10 @@ def plot_final_metrics_barplot(master_df):
         print(f"Saved plot: {output_path}")
 
 def plot_complexity_metrics_comparison(master_df):
-    """Plots Model LMC, Entropy, and Disequilibrium comparison with different scales."""
+    """Plots LMC Complexity, Shannon Entropy, and Disequilibrium comparison with different scales."""
     if master_df is None: return
     
-    cols = ['Model LMC', 'Entropy', 'Disequilibrium']
+    cols = ['LMC Complexity', 'Shannon Entropy', 'Disequilibrium']
     available_cols = [c for c in cols if c in master_df.columns]
     
     if len(available_cols) < 2:
@@ -991,18 +993,25 @@ def plot_adaptive_mechanism_faceted(master_df):
     sources = master_df['Source'].unique()
     n_sources = len(sources)
     
-    # Create subplots - 1 row, n_sources columns
-    # Increased figure size to avoid overlapping
-    fig, axes = plt.subplots(1, n_sources, figsize=(8 * n_sources, 8), sharex=True)
+    # Create subplots - n_sources rows, 1 column (stacked vertically)
+    # Standardized to 14 inch width, height scales with number of sources
+    fig, axes = plt.subplots(n_sources, 1, figsize=(14, 7 * n_sources), sharex=True)
     if n_sources == 1: axes = [axes]
     
-    # Define colors for metrics - Use consistent Blue/Orange
-    color_weight = BLUE
-    color_slope = ORANGE
+    # Define colors for metrics - Use different colors from Control/Optimized palette
+    # Purple and green to avoid confusion with blue/orange used for sources
+    color_weight = '#9467bd'  # Purple for λ
+    color_slope = '#2ca02c'   # Green for ∆Lval
+    
+    # Map sources to Control/Optimized colors for x-axis
+    source_colors = {'Control': BLUE, 'Optimized': ORANGE}
     
     for i, source in enumerate(sources):
         ax1 = axes[i]
         subset = master_df[master_df['Source'] == source]
+        
+        # Get source color for x-axis
+        x_axis_color = source_colors.get(source, 'black')
         
         # Group by Epoch to get mean (if multiple runs)
         # subset_mean = subset.groupby('Epoch')[required].mean()
@@ -1018,12 +1027,19 @@ def plot_adaptive_mechanism_faceted(master_df):
         ax1.fill_between(mean_weight.index, mean_weight - ci_weight, mean_weight + ci_weight, 
                          color=color_weight, alpha=0.2)
         
-        ax1.set_xlabel('Epoch', fontsize=24, fontweight='bold')
+        # Only show x-axis label on the last subplot
+        if i == n_sources - 1:
+            ax1.set_xlabel('Epoch', fontsize=24, fontweight='bold', labelpad=15)
         ax1.set_ylabel('λ', color=color_weight, fontsize=24, fontweight='bold', labelpad=15)
         ax1.tick_params(axis='y', labelcolor=color_weight, labelsize=22)
         ax1.tick_params(axis='x', labelsize=22)
-        ax1.set_title(f'{source}', fontsize=26, fontweight='bold', pad=30) # Added padding
         ax1.grid(True, alpha=0.3)
+        
+        # Add source label inside the plot
+        ax1.text(0.98, 0.04, source, transform=ax1.transAxes, 
+                fontsize=22, fontweight='bold', va='bottom', ha='right',
+                color=x_axis_color, bbox=dict(boxstyle='round,pad=0.5', 
+                facecolor='white', edgecolor=x_axis_color, linewidth=2))
         
         # Plot Slope (Right Axis)
         ax2 = ax1.twinx()
@@ -1033,8 +1049,9 @@ def plot_adaptive_mechanism_faceted(master_df):
         sem_slope = grouped_slope.sem()
         ci_slope = sem_slope * 1.96
         
+        # Make line solid instead of dashed
         ax2.plot(mean_slope.index, mean_slope.values, 
-                 color=color_slope, linewidth=4.0, linestyle='--', alpha=1.0, label='∆Lval')
+                 color=color_slope, linewidth=4.0, linestyle='-', alpha=1.0, label='∆Lval')
         ax2.fill_between(mean_slope.index, mean_slope - ci_slope, mean_slope + ci_slope,
                          color=color_slope, alpha=0.2)
                  
@@ -1052,16 +1069,13 @@ def plot_adaptive_mechanism_faceted(master_df):
         ax1.spines['top'].set_visible(False)
         ax2.spines['top'].set_visible(False)
 
-    # Common title
-    # fig.suptitle('Adaptive Mechanism by Source', fontsize=24, fontweight='bold', y=0.98) # Adjusted y position
-    fig.subplots_adjust(top=0.80, wspace=0.7, bottom=0.20, left=0.15, right=0.85) # Adjusted margins
+    # Align y-axis labels across subplots
+    fig.align_ylabels()
     
-    # Legend
-    legend_elements = [
-        Line2D([0], [0], color=color_weight, lw=4.0, label='λ'),
-        Line2D([0], [0], color=color_slope, lw=4.0, linestyle='--', label='∆Lval')
-    ]
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.92), ncol=2, frameon=False, fontsize=24)
+    # Adjusted margins for vertical stacking - reduced hspace for closer plots
+    fig.subplots_adjust(top=0.95, hspace=0.15, bottom=0.10, left=0.10, right=0.90)
+    
+    # No legend for consistency
 
     output_path = os.path.join(PLOTS_DIR, 'mechanism_adaptive_control_faceted.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -1070,11 +1084,11 @@ def plot_adaptive_mechanism_faceted(master_df):
 
 def plot_complexity_phase_space(master_df):
     """
-    Plots Entropy vs Disequilibrium (The two components of LMC).
+    Plots Shannon Entropy vs Disequilibrium (The two components of LMC).
     """
     if master_df is None: return
     
-    required = ['Entropy', 'Disequilibrium']
+    required = ['Shannon Entropy', 'Disequilibrium']
     if not all(c in master_df.columns for c in required): return
 
     plt.figure(figsize=(12, 8))
@@ -1084,7 +1098,7 @@ def plot_complexity_phase_space(master_df):
     
     sns.lineplot(
         data=agg_df,
-        x='Entropy',
+        x='Shannon Entropy',
         y='Disequilibrium',
         hue='Source',
         sort=False,
@@ -1100,14 +1114,14 @@ def plot_complexity_phase_space(master_df):
         subset = agg_df[agg_df['Source'] == source]
         if not subset.empty:
             # Start
-            plt.text(subset.iloc[0]['Entropy'], subset.iloc[0]['Disequilibrium'], 'Start', 
+            plt.text(subset.iloc[0]['Shannon Entropy'], subset.iloc[0]['Disequilibrium'], 'Start', 
                      fontsize=9, ha='right', va='bottom')
             # End
-            plt.text(subset.iloc[-1]['Entropy'], subset.iloc[-1]['Disequilibrium'], 'End', 
+            plt.text(subset.iloc[-1]['Shannon Entropy'], subset.iloc[-1]['Disequilibrium'], 'End', 
                      fontsize=9, ha='left', va='top')
 
-    plt.title('Complexity Phase Space (Entropy vs Disequilibrium)', fontweight='normal', fontsize=16)
-    plt.xlabel('Entropy (H)', fontsize=12)
+    plt.title('Complexity Phase Space (Shannon Entropy vs Disequilibrium)', fontweight='normal', fontsize=16)
+    plt.xlabel('Shannon Entropy (H)', fontsize=12)
     plt.ylabel('Disequilibrium (D)', fontsize=12)
     plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
     sns.despine(left=True, bottom=True)
@@ -1117,13 +1131,120 @@ def plot_complexity_phase_space(master_df):
     plt.close()
     print(f"Saved plot: {output_path}")
 
+def plot_combined_loss_barplots(master_df):
+    """Combined bar plot for all loss types (Training, Validation, Test Wiki, Test Shakespeare) in one plot."""
+    if master_df is None: return
+    
+    # Get final epoch data
+    final_epochs_df = master_df.loc[master_df.groupby('Run_ID')['Epoch'].idxmax()]
+    
+    # Define all loss columns we want to include
+    loss_cols = ['Training Loss', 'Validation Loss']
+    
+    # Find test loss columns
+    test_cols = [c for c in final_epochs_df.columns if 'Test Loss' in c]
+    loss_cols.extend(test_cols)
+    
+    # Filter only available columns
+    available_loss_cols = [c for c in loss_cols if c in final_epochs_df.columns]
+    
+    if not available_loss_cols:
+        return
+    
+    # Melt the dataframe to long format
+    df_melted = final_epochs_df.melt(
+        id_vars=['Source', 'Run_ID'],
+        value_vars=available_loss_cols,
+        var_name='Loss Type',
+        value_name='Cross-Entropy Loss'
+    )
+    
+    # Clean up loss type names for better labels with full dataset names
+    df_melted['Loss Type'] = df_melted['Loss Type'].str.replace('Training Loss', 'Training')
+    df_melted['Loss Type'] = df_melted['Loss Type'].str.replace('Validation Loss', 'Validation')
+    df_melted['Loss Type'] = df_melted['Loss Type'].str.replace('Test Loss Wiki', 'Test (WikiText-2)')
+    df_melted['Loss Type'] = df_melted['Loss Type'].str.replace('Test Loss Shakespeare', 'Test (Shakespeare)')
+    
+    # Create the order for x-axis: Training, Validation, Test (WikiText-2), Test (Shakespeare)
+    loss_order = ['Training', 'Validation']
+    # Add test types in specific order: Wiki first, then Shakespeare
+    if 'Test (WikiText-2)' in df_melted['Loss Type'].unique():
+        loss_order.append('Test (WikiText-2)')
+    if 'Test (Shakespeare)' in df_melted['Loss Type'].unique():
+        loss_order.append('Test (Shakespeare)')
+    
+    # Create single plot - standardized to 14 inch width
+    fig, ax = plt.subplots(figsize=(14, 8))
+    
+    hue_order = ['Control', 'Optimized']
+    
+    # Calculate stats for annotation including 95% CI
+    stats = df_melted.groupby(['Loss Type', 'Source'])['Cross-Entropy Loss'].agg(['mean', 'std', 'sem']).reset_index()
+    stats['ci'] = stats['sem'] * 1.96  # 95% confidence interval
+    
+    # Create barplot
+    sns.barplot(
+        data=df_melted,
+        x='Loss Type',
+        y='Cross-Entropy Loss',
+        hue='Source',
+        order=loss_order,
+        hue_order=hue_order,
+        palette=SOURCE_PALETTE,
+        edgecolor='.2',
+        errorbar=('se', 1.96),  # 95% confidence interval
+        capsize=.1,
+        err_kws={'linewidth': 3, 'color': 'black'},
+        ax=ax,
+        legend=False  # Remove legend
+    )
+    
+    # Add value labels inside bars
+    for i, container in enumerate(ax.containers):
+        if i >= len(hue_order): break
+        source_label = hue_order[i]
+        
+        for j, bar in enumerate(container):
+            if j < len(loss_order):
+                loss_type = loss_order[j]
+                
+                try:
+                    stat_row = stats[(stats['Loss Type'] == loss_type) & (stats['Source'] == source_label)]
+                    if not stat_row.empty:
+                        mean_val = stat_row['mean'].values[0]
+                        ci_val = stat_row['ci'].values[0]
+                        
+                        height = bar.get_height()
+                        if np.isfinite(height) and height != 0:
+                            # Add value label with CI inside the bar
+                            ax.text(bar.get_x() + bar.get_width() / 2., height / 2,
+                                   f'{mean_val:.4f}\n±{ci_val:.4f}',
+                                   ha='center', va='center',
+                                   fontsize=11,
+                                   color='black',
+                                   fontweight='bold')
+                except (KeyError, IndexError):
+                    pass
+    
+    # Reduce fontsize to compensate for global font_scale=1.2
+    ax.set_ylabel('Cross-Entropy Loss', fontsize=20, fontweight='bold', labelpad=15)
+    ax.set_xlabel('', fontsize=20, fontweight='bold')  # No x-label needed
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    
+    sns.despine(ax=ax, left=True, bottom=True)
+    
+    output_path = os.path.join(PLOTS_DIR, 'barplot_combined_losses.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved plot: {output_path}")
+
 def plot_overfitting_vs_complexity(master_df):
     """
-    Plots Generalization Gap vs Model LMC to see if complexity correlates with overfitting.
+    Plots Generalization Gap vs LMC Complexity to see if complexity correlates with overfitting.
     """
     if master_df is None: return
     
-    if 'Validation Loss' not in master_df.columns or 'Training Loss' not in master_df.columns or 'Model LMC' not in master_df.columns:
+    if 'Validation Loss' not in master_df.columns or 'Training Loss' not in master_df.columns or 'LMC Complexity' not in master_df.columns:
         return
         
     df = master_df.copy()
@@ -1133,7 +1254,7 @@ def plot_overfitting_vs_complexity(master_df):
     
     sns.scatterplot(
         data=df,
-        x='Model LMC',
+        x='LMC Complexity',
         y='Generalization Gap',
         hue='Source',
         style='Source',
@@ -1150,14 +1271,14 @@ def plot_overfitting_vs_complexity(master_df):
         subset = df[df['Source'] == source]
         if len(subset) > 1:
             # Simple linear regression for trend
-            z = np.polyfit(subset['Model LMC'], subset['Generalization Gap'], 1)
+            z = np.polyfit(subset['LMC Complexity'], subset['Generalization Gap'], 1)
             p = np.poly1d(z)
             
-            x_range = np.linspace(subset['Model LMC'].min(), subset['Model LMC'].max(), 100)
+            x_range = np.linspace(subset['LMC Complexity'].min(), subset['LMC Complexity'].max(), 100)
             plt.plot(x_range, p(x_range), color=palette[i], linestyle='--', alpha=0.5, linewidth=1.5)
 
     plt.title('Overfitting vs Complexity (Gen Gap vs LMC)', fontweight='normal', fontsize=16)
-    plt.xlabel('Model LMC', fontsize=12)
+    plt.xlabel('LMC Complexity', fontsize=12)
     plt.ylabel('Generalization Gap (Val - Train)', fontsize=12)
     plt.legend(title='Source', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
     sns.despine(left=True, bottom=True)
@@ -1339,23 +1460,36 @@ def plot_train_val_test_loss_faceted(master_df):
         id_vars=['Epoch', 'Source', 'Run_ID'], 
         value_vars=available_cols,
         var_name='Loss Type', 
-        value_name='Loss'
+        value_name='Cross-Entropy Loss'
     )
     
+    # Clean up loss type names to match barplot_combined_losses standard
+    df_melted['Loss Type'] = df_melted['Loss Type'].str.replace('Training Loss', 'Training')
+    df_melted['Loss Type'] = df_melted['Loss Type'].str.replace('Validation Loss', 'Validation')
+    df_melted['Loss Type'] = df_melted['Loss Type'].str.replace('Test Loss Wiki', 'Test (WikiText-2)')
+    df_melted['Loss Type'] = df_melted['Loss Type'].str.replace('Test Loss Shakespeare', 'Test (Shakespeare)')
+    
     # Facet by Loss Type
-    # Changed to col_wrap=2 for 2x2 layout
+    # Standardized to 14 inch width: height=5, aspect=1.4 gives ~7 inch width per subplot, 2 columns = 14 inches
     g = sns.FacetGrid(df_melted, col="Loss Type", hue="Source", col_wrap=2, 
-                      height=6, aspect=1.4, sharey=False, palette=SOURCE_PALETTE)
-    g.map(sns.lineplot, "Epoch", "Loss", errorbar=('se', 1.96), linewidth=4.0)
-    g.add_legend(title=r'$\bf{Source}$', fontsize=24, title_fontsize=26)
+                      height=5, aspect=1.4, sharey=False, palette=SOURCE_PALETTE)
+    g.map(sns.lineplot, "Epoch", "Cross-Entropy Loss", errorbar=('se', 1.96), linewidth=4.0)
+    # No legend
     g.set_titles("{col_name}", size=26, fontweight='bold')
-    g.set_axis_labels("Epoch", "Loss", fontsize=24, fontweight='bold')
+    g.set_axis_labels("Epoch", "Cross-Entropy Loss", fontsize=24, fontweight='bold')
+    
+    # Add consistent labelpad
+    for ax in g.axes.flat:
+        ax.xaxis.labelpad = 15
+        ax.yaxis.labelpad = 15
+    
+    # Align y-axis labels
+    g.fig.align_ylabels()
     
     # Improve tick readability
     for ax in g.axes.flat:
         ax.tick_params(labelsize=22)
 
-    # g.fig.suptitle('Loss Comparison by Type', fontsize=24, fontweight='bold')
     g.fig.subplots_adjust(top=0.9)
     
     output_path = os.path.join(PLOTS_DIR, 'comparison_train_val_test_loss_faceted.png')
@@ -1364,10 +1498,10 @@ def plot_train_val_test_loss_faceted(master_df):
     print(f"Saved plot: {output_path}")
 
 def plot_complexity_metrics_faceted(master_df):
-    """Plots complexity metrics in faceted subplots."""
+    """Plots complexity metrics in faceted subplots stacked vertically."""
     if master_df is None: return
     
-    cols = ['Model LMC', 'Entropy', 'Disequilibrium']
+    cols = ['LMC Complexity', 'Shannon Entropy', 'Disequilibrium']
     available_cols = [c for c in cols if c in master_df.columns]
     
     if not available_cols: return
@@ -1379,17 +1513,26 @@ def plot_complexity_metrics_faceted(master_df):
         value_name='Value'
     )
     
-    g = sns.FacetGrid(df_melted, col="Metric", hue="Source", height=6, aspect=1.4, sharey=False, palette=SOURCE_PALETTE)
+    # Use row instead of col to stack vertically
+    # Standardized to 14 inch width: height=5.6, aspect=2.5 gives 14 inch width
+    g = sns.FacetGrid(df_melted, row="Metric", hue="Source", height=5.6, aspect=2.5, sharey=False, palette=SOURCE_PALETTE)
     g.map(sns.lineplot, "Epoch", "Value", errorbar=('se', 1.96), linewidth=4.0)
-    g.add_legend(title=r'$\bf{Source}$', fontsize=24, title_fontsize=26)
-    g.set_titles("{col_name}", size=26, fontweight='bold')
+    # No legend
+    g.set_titles("{row_name}", size=26, fontweight='bold')
     g.set_axis_labels("Epoch", "Value", fontsize=24, fontweight='bold')
+    
+    # Add consistent labelpad
+    for ax in g.axes.flat:
+        ax.xaxis.labelpad = 15
+        ax.yaxis.labelpad = 15
+    
+    # Align y-axis labels
+    g.fig.align_ylabels()
     
     for ax in g.axes.flat:
         ax.tick_params(labelsize=22)
 
-    # g.fig.suptitle('Complexity Metrics Comparison', fontsize=24, fontweight='bold')
-    g.fig.subplots_adjust(top=0.85)
+    g.fig.subplots_adjust(top=0.95)
     
     output_path = os.path.join(PLOTS_DIR, 'comparison_complexity_metrics_faceted.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -1415,9 +1558,9 @@ def main():
     
     # 3. New Plots
     plot_generalization_gap(master_df)
-    plot_scatter_phase_space(master_df, 'Model LMC', 'Validation Loss')
-    plot_scatter_phase_space(master_df, 'Entropy', 'Validation Loss')
-    plot_scatter_phase_space(master_df, 'Entropy', 'Model LMC')
+    plot_scatter_phase_space(master_df, 'LMC Complexity', 'Validation Loss')
+    plot_scatter_phase_space(master_df, 'Shannon Entropy', 'Validation Loss')
+    plot_scatter_phase_space(master_df, 'Shannon Entropy', 'LMC Complexity')
     # plot_final_metrics_boxplot(master_df)
     plot_correlation_heatmaps(master_df)
     plot_train_vs_val_loss(master_df)
@@ -1437,6 +1580,9 @@ def main():
     plot_train_val_test_loss_faceted(master_df)
     plot_complexity_metrics_faceted(master_df)
     plot_adaptive_mechanism_faceted(master_df)
+    
+    # Combined Loss Barplots
+    plot_combined_loss_barplots(master_df)
     
     print("Done.")
 

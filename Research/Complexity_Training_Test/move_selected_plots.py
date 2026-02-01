@@ -5,7 +5,7 @@ import shutil
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Source directory where the plots are currently located
-source_dir = os.path.join(base_dir, "plots_50")
+source_dir = os.path.join(base_dir, "plots")
 
 # Destination directory for the selected plots
 destination_folder = os.path.join(base_dir, "selected_plots")
@@ -13,9 +13,7 @@ destination_folder = os.path.join(base_dir, "selected_plots")
 # List of files to move
 files_to_move = [
     "comparison_train_val_test_loss_faceted.png",
-    "barplot_final_Training_Loss.png",
-    "barplot_final_Validation_Loss.png",
-    "barplot_test_loss.png",
+    "barplot_combined_losses.png",
     "comparison_complexity_metrics_faceted.png",
     "mechanism_adaptive_control_faceted.png"
 ]
