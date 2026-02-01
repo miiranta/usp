@@ -38,18 +38,16 @@ class Config:
     # With batch_size=512, ~4675 batches/epoch, these represent: ~1, ~3, ~5 epochs
     PRECOND_BATCHES_TO_TEST = [10, 100, 1000] 
     
-    # Metrics to Run (from original script)
+    # Metrics to Run
     METRICS_TO_RUN = [
         'control',
-        '-A.B.C.G.J',
-        '-B.C.G.J',
-        '-A.B',
-        'U.Y/C.G.J',
-        '-A',
-        '-C.G.J',
-        'U.Y/G.J',
-        'U.Y/J',
-        '-C',
+        'D',           # disequilibrium
+        '-H',          # -shannon entropy
+        'H.D',         # LMC complexity (shannon × disequilibrium)
+        '-T_q0.01',    # -tsallis (q=0.01)
+        '-T_q0.1',     # -tsallis (q=0.1)
+        '-T_q10',      # -tsallis (q=10)
+        '-S',          # -sample entropy
     ]
 
     # Training Loop
@@ -63,14 +61,14 @@ class Config:
     SEQ_LENGTH = 32
     
     # Optimization
-    BATCH_SIZE = 512
+    BATCH_SIZE = 256
     LEARNING_RATE = 1e-4
     MAX_GRAD_NORM = 1.0
     
     # Data limits
     MAX_TRAIN_SAMPLES = 1000  # 0 means all data
-    MAX_VAL_SAMPLES = 0
-    MAX_TEST_SAMPLES = 0
+    MAX_VAL_SAMPLES = 2000
+    MAX_TEST_SAMPLES = 2000
     
     # System
     NUM_WORKERS = 0
@@ -265,15 +263,16 @@ class Metrics:
     @staticmethod
     def calculate_metric(model, metric_name, logits=None, labels=None, input_ids=None):
         mapping = {
-            'A': 'total_variation',
-            'B': 'third_order_curvature_norm',
-            'C': 'hosoya_index',
             'D': 'disequilibrium',
-            'G': 'arithmetic_derivative',
-            'J': 'persistent_landscape_norm',
-            'U': 'varentropy',
-            'Y': 'information_compression_ratio'
+            'H': 'shannon',
+            'S': 'sample_entropy'
         }
+        
+        # Handle tsallis with q parameter (e.g., 'T_q0.1' -> 'tsallis_q0.1')
+        def map_code(code):
+            if code.startswith('T_q'):
+                return 'tsallis_q' + code[3:]
+            return mapping.get(code, code)
         
         if metric_name == 'control':
             return torch.tensor(0.0, device=Config.DEVICE)
@@ -293,7 +292,7 @@ class Metrics:
                 for code in num_str.split('.'):
                     code = code.strip()
                     if not code: continue
-                    real_name = mapping.get(code, code)
+                    real_name = map_code(code)
                     val = Metrics._calculate_primitive_metric(model, real_name, logits, labels, input_ids)
                     num_val = num_val * val
                     
@@ -301,7 +300,7 @@ class Metrics:
                 for code in den_str.split('.'):
                     code = code.strip()
                     if not code: continue
-                    real_name = mapping.get(code, code)
+                    real_name = map_code(code)
                     val = Metrics._calculate_primitive_metric(model, real_name, logits, labels, input_ids)
                     den_val = den_val * val
                     
@@ -311,7 +310,7 @@ class Metrics:
                 for code in clean_name.split('.'):
                     code = code.strip()
                     if not code: continue
-                    real_name = mapping.get(code, code)
+                    real_name = map_code(code)
                     v = Metrics._calculate_primitive_metric(model, real_name, logits, labels, input_ids)
                     val = val * v
                 final_val = val
@@ -330,76 +329,6 @@ class Metrics:
         if metric_name == 'shannon':
             probs, _ = Metrics.soft_histogram(weights)
             return -(probs * torch.log(probs)).sum()
-            
-        elif metric_name == 'total_variation':
-            w = model.lm_head.weight
-            diff_h = torch.abs(w[:, 1:] - w[:, :-1]).sum()
-            diff_v = torch.abs(w[1:, :] - w[:-1, :]).sum()
-            return (diff_h + diff_v) / w.numel()
-
-        elif metric_name == 'third_order_curvature_norm':
-            if labels is None: return torch.tensor(0.0, device=device)
-            # Use smaller batch for expensive curvature
-            if input_ids is not None:
-                b_size = 1
-                seq_len = min(input_ids.size(1), 32) # Reduced for efficiency
-                input_ids_small = input_ids[:b_size, :seq_len]
-                labels_small = labels[:b_size, :seq_len]
-                logits_small = model(input_ids_small)
-                loss = nn.CrossEntropyLoss(ignore_index=-100)(logits_small.view(-1, logits_small.size(-1)), labels_small.view(-1))
-            else:
-               return torch.tensor(0.0, device=device)
-
-            all_params = [p for p in model.parameters() if p.requires_grad]
-            # Optimization: only check last few layers or simplified subset
-            if len(all_params) > 5:
-                # Taking last 5 params (likely head and last layer)
-                params_subset = all_params[-5:]
-            else:
-                params_subset = all_params
-                
-            grads = torch.autograd.grad(loss, params_subset, create_graph=True)
-            v = [torch.randint_like(p, high=2) * 2 - 1 for p in params_subset]
-            grad_v = sum([(g * vi).sum() for g, vi in zip(grads, v)])
-            Hv = torch.autograd.grad(grad_v, params_subset, create_graph=True)
-            vHv = sum([(h * vi).sum() for h, vi in zip(Hv, v)])
-            grad_vHv = torch.autograd.grad(vHv, params_subset, create_graph=True)
-            norm_grad_vHv = torch.sqrt(sum([(g**2).sum() for g in grad_vHv]))
-            return norm_grad_vHv
-
-        elif metric_name == 'varentropy':
-            if logits is None: return torch.tensor(0.0, device=device)
-            batch_size, seq_len, vocab_size = logits.shape
-            logits_flat = logits.view(-1, vocab_size)
-            # Checkpoint for memory efficiency
-            chunk_size = 1024 
-            chunks = torch.split(logits_flat, chunk_size, dim=0)
-            vals = []
-            for chunk in chunks:
-                if chunk.requires_grad:
-                    v_chunk = checkpoint(Metrics._varentropy_func, chunk, use_reentrant=False)
-                else:
-                    v_chunk = Metrics._varentropy_func(chunk)
-                vals.append(v_chunk)
-            return torch.cat(vals).mean()
-
-        elif metric_name == 'arithmetic_derivative':
-            W = model.lm_head.weight
-            f = torch.fft.rfft(W, dim=1)
-            return torch.norm(f, p=1) / (torch.norm(f, p=2) + 1e-10)
-
-        elif metric_name == 'hosoya_index':
-            W = model.lm_head.weight
-            return torch.norm(W, p='nuc')
-
-        elif metric_name == 'persistent_landscape_norm':
-            W = model.lm_head.weight
-            if W.size(0) > 200: # Reduced sampling 
-                indices = torch.randperm(W.size(0))[:200]
-                W = W[indices]
-            dist = torch.cdist(W, W)
-            vals = torch.sort(dist.view(-1))[0]
-            return torch.norm(vals, p=2)
 
         elif metric_name == 'disequilibrium':
             probs, _ = Metrics.soft_histogram(weights)
@@ -407,13 +336,59 @@ class Metrics:
             uniform_prob = 1.0 / n_bins
             return ((probs - uniform_prob) ** 2).sum()
 
-        elif metric_name == 'information_compression_ratio':
-            if logits is None: return torch.tensor(0.0, device=device)
-            probs = torch.softmax(logits, dim=-1)
-            entropy = -(probs * torch.log(probs + 1e-10)).sum(dim=-1).mean()
-            max_entropy = math.log(probs.size(-1))
-            excess_entropy = 1.0 - (entropy / (max_entropy + 1e-10))
-            return 1.0 / (excess_entropy + 1e-10)
+        elif metric_name.startswith('tsallis'):
+            probs, _ = Metrics.soft_histogram(weights)
+            # Extract q value from metric name (e.g., 'tsallis_q0.1' -> 0.1)
+            if '_q' in metric_name:
+                q_str = metric_name.split('_q')[1]
+                q = float(q_str)
+            else:
+                q = 1.0  # Default q value
+            
+            if abs(q - 1.0) < 1e-6:
+                # When q=1, Tsallis entropy reduces to Shannon entropy
+                return -(probs * torch.log(probs)).sum()
+            else:
+                # Tsallis entropy: S_q = (1 - sum(p_i^q)) / (q - 1)
+                return (1.0 - (probs ** q).sum()) / (q - 1.0)
+        
+        elif metric_name == 'sample_entropy':
+            # Sample entropy: measures complexity/regularity in weight sequences
+            # Using last layer weights as sequence
+            W = model.lm_head.weight.view(-1)
+            if W.numel() < 100:
+                return torch.tensor(0.0, device=device)
+            
+            # Sample a manageable portion for efficiency
+            max_len = min(2000, W.numel())
+            w_sample = W[:max_len]
+            
+            # Normalize to [0, 1]
+            w_norm = (w_sample - w_sample.min()) / (w_sample.max() - w_sample.min() + 1e-10)
+            
+            # Parameters for sample entropy
+            m = 2  # Pattern length
+            r = 0.2 * torch.std(w_norm)  # Tolerance
+            
+            # Count matches for m and m+1
+            def count_matches(data, m, r):
+                N = len(data)
+                count = 0
+                for i in range(N - m):
+                    template = data[i:i+m]
+                    for j in range(i+1, N - m):
+                        if torch.max(torch.abs(template - data[j:j+m])) <= r:
+                            count += 1
+                return count
+            
+            B = count_matches(w_norm, m, r)
+            A = count_matches(w_norm, m + 1, r)
+            
+            if B == 0 or A == 0:
+                return torch.tensor(0.0, device=device)
+            
+            # Sample entropy
+            return -torch.log(torch.tensor(A / B, device=device))
         
         return torch.tensor(0.0, device=device)
 
