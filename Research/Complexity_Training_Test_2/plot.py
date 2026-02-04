@@ -1010,7 +1010,7 @@ def plot_metric_ranking_integrated(df):
     auc
     # Export ranking data to CSV
     export_df = rank_df[['rank', 'metric_name', 'precond_batches', 'composite_score', 
-                         'final_loss', 'compute_efficiency', 'early_loss', 'stability']]
+                         'final_loss', 'auc_efficiency', 'early_loss', 'stability']]
     export_df.to_csv(os.path.join(PlotConfig.PLOTS_DIR, "fig5_metric_ranking.csv"), index=False)
     
     # Print top 5 to console
