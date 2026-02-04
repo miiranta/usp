@@ -656,7 +656,7 @@ class Trainer:
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 patience_counter = 0
-            else:
+            elif current_mode != 'precond':
                 patience_counter += 1
             
             if patience_counter >= Config.EARLY_STOPPING_PATIENCE:
