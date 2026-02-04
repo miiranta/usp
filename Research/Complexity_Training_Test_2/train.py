@@ -370,25 +370,40 @@ class Metrics:
             m = 2  # Pattern length
             r = 0.2 * torch.std(w_norm)  # Tolerance
             
-            # Count matches for m and m+1
-            def count_matches(data, m, r):
+            # Differentiable soft matching
+            def count_matches_soft(data, m, r):
                 N = len(data)
-                count = 0
-                for i in range(N - m):
-                    template = data[i:i+m]
-                    for j in range(i+1, N - m):
-                        if torch.max(torch.abs(template - data[j:j+m])) <= r:
-                            count += 1
-                return count
+                # Create windows using unfold
+                windows = data.unfold(0, m, 1)
+                if windows.size(0) < N - m: return torch.tensor(0.0, device=data.device)
+                
+                # Use first N-m windows to match local comparison range
+                X = windows[:N-m] 
+                
+                # Vectorized Pairwise distances (L_inf norm)
+                # X shape: (M, m) -> Expanded for pairwise: (M, 1, m) vs (1, M, m)
+                diffs = torch.abs(X.unsqueeze(1) - X.unsqueeze(0))
+                dists = torch.max(diffs, dim=2).values
+                
+                # Keep only upper triangle (j > i)
+                mask = torch.triu(torch.ones(X.size(0), X.size(0), device=data.device), diagonal=1)
+                
+                # Soft count using Sigmoid approximation for (dist <= r)
+                # Equivalent to sigmoid( (r - dist) / tau )
+                tau = 0.01 
+                soft_counts = torch.sigmoid((r - dists) / tau)
+                
+                return (soft_counts * mask).sum()
             
-            B = count_matches(w_norm, m, r)
-            A = count_matches(w_norm, m + 1, r)
-            
-            if B == 0 or A == 0:
+            B = count_matches_soft(w_norm, m, r)
+            A = count_matches_soft(w_norm, m + 1, r)
+
+            # Epsilon to avoid log(0) or division by zero
+            if B < 1e-4 or A < 1e-4:
                 return torch.tensor(0.0, device=device)
             
             # Sample entropy
-            return -torch.log(torch.tensor(A / B, device=device))
+            return -torch.log(A / (B + 1e-10))
         
         return torch.tensor(0.0, device=device)
 
