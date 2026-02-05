@@ -998,50 +998,36 @@ def plot_adaptive_mechanism_faceted(master_df):
     fig, axes = plt.subplots(n_sources, 1, figsize=(14, 7 * n_sources), sharex=True)
     if n_sources == 1: axes = [axes]
     
-    # Define colors for metrics - Use different colors from Control/Optimized palette
-    # Purple and green to avoid confusion with blue/orange used for sources
-    color_weight = '#9467bd'  # Purple for λ
-    color_slope = '#2ca02c'   # Green for ∆Lval
-    
-    # Map sources to Control/Optimized colors for x-axis
+    # Map sources to Control/Optimized colors
     source_colors = {'Control': BLUE, 'Optimized': ORANGE}
     
     for i, source in enumerate(sources):
         ax1 = axes[i]
         subset = master_df[master_df['Source'] == source]
         
-        # Get source color for x-axis
-        x_axis_color = source_colors.get(source, 'black')
+        # Determine color for this graph based on source
+        graph_color = source_colors.get(source, 'black')
         
-        # Group by Epoch to get mean (if multiple runs)
-        # subset_mean = subset.groupby('Epoch')[required].mean()
-        
-        # Plot λ (Left Axis)
+        # Plot λ (Left Axis) - SOLID
         grouped_weight = subset.groupby('Epoch')['λ']
         mean_weight = grouped_weight.mean()
         sem_weight = grouped_weight.sem()
         ci_weight = sem_weight * 1.96
         
         ax1.plot(mean_weight.index, mean_weight.values, 
-                 color=color_weight, linewidth=4.0, label='λ')
+                 color=graph_color, linewidth=4.0, linestyle='-', label='λ')
         ax1.fill_between(mean_weight.index, mean_weight - ci_weight, mean_weight + ci_weight, 
-                         color=color_weight, alpha=0.2)
+                         color=graph_color, alpha=0.2)
         
         # Only show x-axis label on the last subplot
         if i == n_sources - 1:
             ax1.set_xlabel('Epoch', fontsize=24, fontweight='bold', labelpad=15)
-        ax1.set_ylabel('λ', color=color_weight, fontsize=24, fontweight='bold', labelpad=15)
-        ax1.tick_params(axis='y', labelcolor=color_weight, labelsize=22)
+        ax1.set_ylabel('λ', color=graph_color, fontsize=24, fontweight='bold', labelpad=15)
+        ax1.tick_params(axis='y', labelcolor=graph_color, labelsize=22)
         ax1.tick_params(axis='x', labelsize=22)
         ax1.grid(True, alpha=0.3)
         
-        # Add source label inside the plot
-        ax1.text(0.98, 0.04, source, transform=ax1.transAxes, 
-                fontsize=22, fontweight='bold', va='bottom', ha='right',
-                color=x_axis_color, bbox=dict(boxstyle='round,pad=0.5', 
-                facecolor='white', edgecolor=x_axis_color, linewidth=2))
-        
-        # Plot Slope (Right Axis)
+        # Plot Slope (Right Axis) - DASHED
         ax2 = ax1.twinx()
         
         grouped_slope = subset.groupby('Epoch')['∆Lval']
@@ -1049,23 +1035,31 @@ def plot_adaptive_mechanism_faceted(master_df):
         sem_slope = grouped_slope.sem()
         ci_slope = sem_slope * 1.96
         
-        # Make line solid instead of dashed
+        # Dashed line
         ax2.plot(mean_slope.index, mean_slope.values, 
-                 color=color_slope, linewidth=4.0, linestyle='-', alpha=1.0, label='∆Lval')
+                 color=graph_color, linewidth=4.0, linestyle='--', alpha=1.0, label='∆Lval')
         ax2.fill_between(mean_slope.index, mean_slope - ci_slope, mean_slope + ci_slope,
-                         color=color_slope, alpha=0.2)
+                         color=graph_color, alpha=0.2)
                  
-        ax2.set_ylabel('∆Lval', color=color_slope, fontsize=24, fontweight='bold', labelpad=15)
-        ax2.tick_params(axis='y', labelcolor=color_slope, labelsize=22)
+        ax2.set_ylabel('∆Lval', color=graph_color, fontsize=24, fontweight='bold', labelpad=15)
+        ax2.tick_params(axis='y', labelcolor=graph_color, labelsize=22)
         
         # Add zero line for slope
         ax2.axhline(0, color='gray', linestyle=':', alpha=0.5)
         
         # Spines
-        ax1.spines['left'].set_color(color_weight)
+        ax1.spines['left'].set_color(graph_color)
         ax1.spines['left'].set_linewidth(3)
-        ax2.spines['right'].set_color(color_slope)
+        ax1.spines['left'].set_linestyle('-')
+        # Hide the right spine of ax1 to prevent black line overlap on the right
+        ax1.spines['right'].set_visible(False)
+
+        ax2.spines['right'].set_color(graph_color)
         ax2.spines['right'].set_linewidth(3)
+        ax2.spines['right'].set_linestyle('--')
+        # Hide the left spine of ax2 to prevent black line overlap on the left
+        ax2.spines['left'].set_visible(False)
+
         ax1.spines['top'].set_visible(False)
         ax2.spines['top'].set_visible(False)
 
@@ -1518,19 +1512,22 @@ def plot_complexity_metrics_faceted(master_df):
     g = sns.FacetGrid(df_melted, row="Metric", hue="Source", height=5.6, aspect=2.5, sharey=False, palette=SOURCE_PALETTE)
     g.map(sns.lineplot, "Epoch", "Value", errorbar=('se', 1.96), linewidth=4.0)
     # No legend
-    g.set_titles("{row_name}", size=26, fontweight='bold')
-    g.set_axis_labels("Epoch", "Value", fontsize=24, fontweight='bold')
+    # Set titles temporarily to extract row names
+    g.set_titles("{row_name}")
+    g.set_xlabels("Epoch", fontsize=24, fontweight='bold')
     
-    # Add consistent labelpad
+    # Move title to Y-axis label
     for ax in g.axes.flat:
+        title = ax.get_title()
+        ax.set_ylabel(title, fontsize=24, fontweight='bold')
+        ax.set_title("")
+        
         ax.xaxis.labelpad = 15
         ax.yaxis.labelpad = 15
+        ax.tick_params(labelsize=22)
     
     # Align y-axis labels
     g.fig.align_ylabels()
-    
-    for ax in g.axes.flat:
-        ax.tick_params(labelsize=22)
 
     g.fig.subplots_adjust(top=0.95)
     
