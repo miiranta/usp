@@ -36,7 +36,7 @@ class Config:
     # Preconditioning
     # Test these durations of preconditioning (in batches)
     # With batch_size=512, ~4675 batches/epoch, these represent: ~1, ~3, ~5 epochs
-    PRECOND_BATCHES_TO_TEST = [100, 1000, 10000] 
+    PRECOND_BATCHES_TO_TEST = [10, 100, 1000] 
     
     # Metrics to Run
     METRICS_TO_RUN = [
@@ -51,8 +51,8 @@ class Config:
     ]
 
     # Training Loop
-    MAX_TRAIN_EPOCHS = 100 
-    EARLY_STOPPING_PATIENCE = 100
+    MAX_TRAIN_EPOCHS = 200 
+    EARLY_STOPPING_PATIENCE = 10
     
     # Model
     HIDDEN_DIM = 512
@@ -66,9 +66,9 @@ class Config:
     MAX_GRAD_NORM = 1.0
     
     # Data limits
-    MAX_TRAIN_SAMPLES = 0  # 0 means all data
-    MAX_VAL_SAMPLES = 0
-    MAX_TEST_SAMPLES = 0
+    MAX_TRAIN_SAMPLES = 5000  # 0 means all data
+    MAX_VAL_SAMPLES = 5000
+    MAX_TEST_SAMPLES = 5000
     
     # System
     NUM_WORKERS = 0
@@ -624,7 +624,6 @@ class Trainer:
         min_model_state = None
         
         # 1. Evaluate Initial State
-        self.val_ds.resample()
         initial_val_loss = self.evaluate(self.val_loader)
         self.log_epoch(0, 0.0, initial_val_loss, 0.0, mode='init')
         best_val_loss = initial_val_loss
@@ -640,7 +639,6 @@ class Trainer:
             compute_epoch = tokens_epoch * self.training_flops_per_token
 
             # --- Validation ---
-            self.val_ds.resample()
             val_loss = self.evaluate(self.val_loader, desc=f"VAL EP {epoch}")
             
             # Determine current mode based on batch count
@@ -664,11 +662,6 @@ class Trainer:
             if patience_counter >= Config.EARLY_STOPPING_PATIENCE:
                 print(f"  > Stopping early at epoch {epoch}. Best Val: {best_val_loss:.4f}")
                 break
-        
-        # 3. Final Test Evaluation
-        self.test_ds.resample()
-        test_loss = self.evaluate(self.test_loader, desc="FINAL TEST")
-        print(f"  > Final Test Loss: {test_loss:.4f}")
                 
         return self.results
 
