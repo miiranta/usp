@@ -66,9 +66,9 @@ class Config:
     MAX_GRAD_NORM = 1.0
     
     # Data limits
-    MAX_TRAIN_SAMPLES = 0  # 0 means all data
-    MAX_VAL_SAMPLES = 0
-    MAX_TEST_SAMPLES = 0
+    MAX_TRAIN_SAMPLES = 10000  # 0 means all data
+    MAX_VAL_SAMPLES = 5000
+    MAX_TEST_SAMPLES = 5000
     
     # System
     NUM_WORKERS = 0
