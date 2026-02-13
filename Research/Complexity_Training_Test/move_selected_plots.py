@@ -15,7 +15,8 @@ files_to_move = [
     "comparison_train_val_test_loss_faceted.png",
     "barplot_combined_losses.png",
     "comparison_complexity_metrics_faceted.png",
-    "mechanism_adaptive_control_faceted.png"
+    "mechanism_adaptive_control_faceted.png",
+    "distributions_faceted.png"
 ]
 
 # Create the destination directory if it doesn't exist

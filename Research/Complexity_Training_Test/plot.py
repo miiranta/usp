@@ -1125,6 +1125,205 @@ def plot_complexity_phase_space(master_df):
     plt.close()
     print(f"Saved plot: {output_path}")
 
+def plot_distributions_faceted(sources):
+    """
+    Plots weight distributions in a 2x2 faceted layout:
+    Left column: Control (Start, End)
+    Right column: Optimized (Start, End)
+    """
+    print("Plotting faceted distributions...")
+    
+    # We expect exactly 2 sources: Control and Optimized
+    source_dict = {label: folder for label, folder in sources}
+    
+    if 'Control' not in source_dict or 'Optimized' not in source_dict:
+        print("Warning: Both Control and Optimized sources required for faceted distribution plot.")
+        return
+    
+    # Create 2x2 subplot grid - standardized to 14 inch width
+    fig, axes = plt.subplots(2, 2, figsize=(14, 14), sharex=True, sharey=True)
+    
+    # Get epochs for each source
+    control_epochs = get_epochs_for_folder(source_dict['Control'])
+    optimized_epochs = get_epochs_for_folder(source_dict['Optimized'])
+    
+    if not control_epochs or not optimized_epochs:
+        print("Warning: No epochs found for distribution plotting.")
+        plt.close()
+        return
+    
+    # Define subplot positions
+    # axes[0, 0] = Control Start
+    # axes[0, 1] = Control End
+    # axes[1, 0] = Optimized Start
+    # axes[1, 1] = Optimized End
+    
+    configs = [
+        (0, 0, 'Control', control_epochs[0], source_dict['Control'], 'Start'),
+        (0, 1, 'Control', control_epochs[-1], source_dict['Control'], 'End'),
+        (1, 0, 'Optimized', optimized_epochs[0], source_dict['Optimized'], 'Start'),
+        (1, 1, 'Optimized', optimized_epochs[-1], source_dict['Optimized'], 'End'),
+    ]
+    
+    # Store data for all subplots to determine common y-axis limits
+    plot_data = {}
+    
+    for row, col, source_label, epoch, folder, time_label in configs:
+        ax = axes[row, col]
+        
+        # Load distribution files for this epoch
+        dist_dir = os.path.join(folder, 'distributions')
+        files = glob.glob(os.path.join(dist_dir, f'distribution_epoch_{epoch:03d}_run_*.csv'))
+        
+        if not files:
+            ax.text(0.5, 0.5, f'No data for {source_label} {time_label}', 
+                   ha='center', va='center', transform=ax.transAxes, fontsize=12)
+            plot_data[(row, col)] = None
+            # Add Start/End titles only to first row
+            if row == 0:
+                ax.set_title(time_label, fontweight='bold', fontsize=18, pad=15)
+            continue
+        
+        # Color selection
+        color = BLUE if source_label == 'Control' else ORANGE
+        
+        # Aggregate distributions across all runs
+        all_dfs = []
+        for fpath in files:
+            df = load_distribution_file(fpath)
+            if df is not None and 'Bin_Center' in df.columns and 'Probability' in df.columns:
+                all_dfs.append(df.sort_values('Bin_Center'))
+        
+        if all_dfs:
+            # Check if all runs have the same number of bins
+            bin_lengths = [len(df) for df in all_dfs]
+            if len(set(bin_lengths)) == 1:
+                # All runs have same bins - simple averaging
+                avg_df = all_dfs[0][['Bin_Center']].copy()
+                
+                # Shift x-axis to center at 0 (weights are typically centered around 0)
+                avg_df['Bin_Center'] = avg_df['Bin_Center'] - 0.5
+                
+                prob_values = np.array([df['Probability'].values for df in all_dfs])
+                
+                avg_df['Probability'] = np.mean(prob_values, axis=0)
+                avg_df['Std'] = np.std(prob_values, axis=0, ddof=1)  # Sample std
+                avg_df['SE'] = avg_df['Std'] / np.sqrt(len(all_dfs))  # Standard error
+                avg_df['CI_Lower'] = avg_df['Probability'] - 1.96 * avg_df['SE']
+                avg_df['CI_Upper'] = avg_df['Probability'] + 1.96 * avg_df['SE']
+            else:
+                # Bins don't align - use interpolation to common grid
+                from scipy.interpolate import interp1d
+                
+                # Create common grid from min to max bin center across all runs
+                all_bins = np.concatenate([df['Bin_Center'].values for df in all_dfs])
+                common_bins = np.linspace(all_bins.min(), all_bins.max(), 200)
+                
+                # Interpolate each run to common grid
+                interpolated_probs = []
+                for df in all_dfs:
+                    interp_func = interp1d(df['Bin_Center'].values, df['Probability'].values, 
+                                          kind='linear', bounds_error=False, fill_value=0)
+                    interpolated_probs.append(interp_func(common_bins))
+                
+                prob_values = np.array(interpolated_probs)
+                
+                avg_df = pd.DataFrame({
+                    'Bin_Center': common_bins - 0.5,  # Shift to center at 0
+                    'Probability': np.mean(prob_values, axis=0),
+                    'Std': np.std(prob_values, axis=0, ddof=1),
+                })
+                avg_df['SE'] = avg_df['Std'] / np.sqrt(len(all_dfs))
+                avg_df['CI_Lower'] = avg_df['Probability'] - 1.96 * avg_df['SE']
+                avg_df['CI_Upper'] = avg_df['Probability'] + 1.96 * avg_df['SE']
+            
+            # Ensure CI doesn't go below 0
+            avg_df['CI_Lower'] = avg_df['CI_Lower'].clip(lower=0)
+            
+            # Store data for later y-axis standardization
+            plot_data[(row, col)] = avg_df
+            
+            # Plot the averaged distribution with 95% CI
+            ax.plot(avg_df['Bin_Center'], avg_df['Probability'], 
+                   color=color, alpha=0.9, linewidth=3.0, zorder=3)
+            
+            # Add 95% CI shaded region
+            ax.fill_between(avg_df['Bin_Center'], 
+                           avg_df['CI_Lower'], 
+                           avg_df['CI_Upper'],
+                           color=color, alpha=0.2, zorder=2, label='95% CI')
+            
+            # Add base fill under the mean line for visual appeal
+            ax.fill_between(avg_df['Bin_Center'], avg_df['Probability'], 
+                           color=color, alpha=0.15, zorder=1)
+        
+        # Add Start/End column titles only to first row
+        if row == 0:
+            ax.set_title(time_label, fontweight='bold', fontsize=18, pad=15)
+        
+        # Styling
+        ax.grid(True, alpha=0.3)
+        ax.set_axisbelow(True)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_linewidth(1.5)
+        ax.spines['bottom'].set_linewidth(1.5)
+        
+        # Labels for edge subplots only
+        if col == 0:  # Left column
+            ax.set_ylabel('Probability', fontsize=18, fontweight='bold', labelpad=15)
+        if row == 1:  # Bottom row
+            ax.set_xlabel('Weight Value', fontsize=18, fontweight='bold', labelpad=12)
+            
+        ax.tick_params(axis='both', which='major', labelsize=16)
+    
+    # Set common x-axis and y-axis limits across all subplots
+    all_max_probs = []
+    all_min_x = []
+    all_max_x = []
+    for data in plot_data.values():
+        if data is not None:
+            all_max_probs.append(data['CI_Upper'].max())
+            all_min_x.append(data['Bin_Center'].min())
+            all_max_x.append(data['Bin_Center'].max())
+    
+    if all_max_probs:
+        global_y_max = max(all_max_probs)
+        
+        # Aggressive zoom - find where probability mass is concentrated
+        # Calculate weighted center and spread for better zoom
+        zoom_bins = []
+        zoom_probs = []
+        for data in plot_data.values():
+            if data is not None:
+                # Only consider bins with significant probability (> 0.1% of max for more data)
+                significant = data[data['Probability'] > global_y_max * 0.001]
+                if not significant.empty:
+                    zoom_bins.extend(significant['Bin_Center'].values)
+                    zoom_probs.extend(significant['Probability'].values)
+        
+        if zoom_bins:
+            # Use wider percentile range to include more distribution tails
+            zoom_x_min = np.percentile(zoom_bins, 1)
+            zoom_x_max = np.percentile(zoom_bins, 99)
+        else:
+            # Fallback to tight range around 0
+            zoom_x_min = -0.15
+            zoom_x_max = 0.15
+        
+        for ax in axes.flat:
+            # Crop y-axis to show more detail - only display up to 50% of max peak
+            ax.set_ylim(0, global_y_max * 0.50)
+            ax.set_xlim(zoom_x_min, zoom_x_max)
+    
+    # Adjust layout with reduced space between plots
+    plt.subplots_adjust(hspace=0.08, wspace=0.08)
+    
+    output_path = os.path.join(PLOTS_DIR, 'distributions_faceted.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved plot: {output_path}")
+
 def plot_combined_loss_barplots(master_df):
     """Combined bar plot for all loss types (Training, Validation, Test Wiki, Test Shakespeare) in one plot."""
     if master_df is None: return
@@ -1577,6 +1776,7 @@ def main():
     plot_train_val_test_loss_faceted(master_df)
     plot_complexity_metrics_faceted(master_df)
     plot_adaptive_mechanism_faceted(master_df)
+    plot_distributions_faceted(SOURCES)
     
     # Combined Loss Barplots
     plot_combined_loss_barplots(master_df)
