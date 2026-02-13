@@ -1159,10 +1159,10 @@ def plot_distributions_faceted(sources):
     # axes[1, 1] = Optimized End
     
     configs = [
-        (0, 0, 'Control', control_epochs[0], source_dict['Control'], 'Start'),
-        (0, 1, 'Control', control_epochs[-1], source_dict['Control'], 'End'),
-        (1, 0, 'Optimized', optimized_epochs[0], source_dict['Optimized'], 'Start'),
-        (1, 1, 'Optimized', optimized_epochs[-1], source_dict['Optimized'], 'End'),
+        (0, 0, 'Control', control_epochs[0], source_dict['Control'], 'End of Epoch 1'),
+        (0, 1, 'Control', control_epochs[-1], source_dict['Control'], 'End of Epoch 50'),
+        (1, 0, 'Optimized', optimized_epochs[0], source_dict['Optimized'], 'End of Epoch 1'),
+        (1, 1, 'Optimized', optimized_epochs[-1], source_dict['Optimized'], 'End of Epoch 50'),
     ]
     
     # Store data for all subplots to determine common y-axis limits
@@ -1271,7 +1271,7 @@ def plot_distributions_faceted(sources):
         
         # Labels for edge subplots only
         if col == 0:  # Left column
-            ax.set_ylabel('Probability', fontsize=18, fontweight='bold', labelpad=15)
+            ax.set_ylabel('Probability Density', fontsize=18, fontweight='bold', labelpad=15)
         if row == 1:  # Bottom row
             ax.set_xlabel('Weight Value', fontsize=18, fontweight='bold', labelpad=12)
             
