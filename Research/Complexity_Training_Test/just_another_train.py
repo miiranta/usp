@@ -38,7 +38,7 @@ class Config:
     
     # System
     NUM_WORKERS = 8  # DataLoader workers
-    OUTPUT_DIR = "just_another_output"  # For GPU lock files
+    OUTPUT_DIR = "output"  # For GPU lock files
     
     # Performance optimizations
     USE_COMPILE = False  
