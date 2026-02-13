@@ -16,7 +16,7 @@ from torch.utils.data import Dataset, DataLoader
 # ============================================================================
 
 class Config:
-    CONTROL_MODE = False  # False = CE + LMC optimization | True = CE only
+    # CONTROL_MODE is determined by GPU index: GPU 0 = control (CE only), GPU 1+ = experimental (CE + LMC)
     
     # Model hyperparameters
     HIDDEN_DIM = 256
@@ -149,6 +149,14 @@ class Config:
         if cls._DEVICE is None:
             cls._DEVICE = cls.get_device()
         return cls._DEVICE
+    
+    @classmethod
+    def CONTROL_MODE(cls):
+        """GPU 0 = control mode (CE only), GPU 1+ = experimental (CE + LMC)"""
+        device = cls.DEVICE()
+        if device.type == 'cpu':
+            return True  # Default to control mode on CPU
+        return device.index == 0
 
 # ============================================================================
 # DEVICE INITIALIZATION
@@ -408,7 +416,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, config, vocab
         ce_weight = 1.0 - lmc_weight
         lmc_weight_actual = lmc_weight
         
-        if config.CONTROL_MODE == True:
+        if config.CONTROL_MODE():
             combined_loss = ce_loss
         else:
             combined_loss = ce_weight * ce_loss + lmc_weight_actual * lmc_loss_normalized
@@ -1148,7 +1156,7 @@ def main():
     config = Config()
     mode = ""
 
-    if config.CONTROL_MODE == True:
+    if config.CONTROL_MODE():
         mode = "control (ce only)"
         output_dir = os.path.join(script_dir, 'output/just_another_output_0.0')
     else:
