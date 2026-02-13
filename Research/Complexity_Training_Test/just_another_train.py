@@ -31,7 +31,7 @@ class Config:
     MAX_SAMPLES = 1000
     
     # Number of runs
-    NUM_OF_RUN_PER_CALL = 1
+    NUM_OF_RUN_PER_CALL = 3
     
     # Complexity calculation interval | Calculate LMC every X batches (1 = every batch)
     COMPLEXITY_UPDATE_INTERVAL = 1 
