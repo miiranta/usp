@@ -56,12 +56,8 @@ def load_evaluation_data(rank):
     _, _, _, run_title = create_evaluation_csvs(rank)
     RUN_TITLE = str(rank + 1) + "--" + run_title
     
-    # Create directory for this run, return if exist
-    if not os.path.exists(os.path.join(PLOTS_FOLDER, RUN_TITLE)):
-        os.makedirs(os.path.join(PLOTS_FOLDER, RUN_TITLE))
-    else:
-        print(f"Run '{RUN_TITLE}' already exists. Skipping.")
-        return None
+    # Create directory for this run (don't skip - may need to generate prediction CSVs)
+    os.makedirs(os.path.join(PLOTS_FOLDER, RUN_TITLE), exist_ok=True)
     
     baseline = pd.read_csv(baseline_path, sep='|')
     interpolated = pd.read_csv(interpolated_path, sep='|')
@@ -292,7 +288,7 @@ def evaluate_model(method_name, dataset_name, predictions, test_data, lookback=0
     print(f"\n{method_name} - {dataset_name}:")
     print(f"  RMSE: {metrics['RMSE']:.4f}")
     print(f"  MAE:  {metrics['MAE']:.4f}")
-    print(f"  R²:   {metrics['R2']:.4f}")
+    print(f"  R2:   {metrics['R2']:.4f}")
     
     return metrics
 
@@ -429,6 +425,24 @@ def run_full_evaluation():
                 print(f"\n--- {model_name} ---")
                 
                 try:
+                    # Check if per-timestep predictions CSV already exists
+                    safe_model_name = model_name.replace(' ', '_').replace('(', '').replace(')', '')
+                    pred_csv_path = os.path.join(PLOTS_FOLDER, RUN_TITLE,
+                                                f"predictions_{safe_model_name}_{dataset_name}.csv")
+                    if os.path.exists(pred_csv_path):
+                        print(f"  Predictions CSV already exists. Skipping.")
+                        existing_pred = pd.read_csv(pred_csv_path, sep='|')
+                        metrics = calculate_metrics(existing_pred['actual'].values, existing_pred['predicted'].values)
+                        results.append({
+                            'method': model_name,
+                            'dataset': dataset_name,
+                            'RMSE': metrics['RMSE'],
+                            'MAE': metrics['MAE'],
+                            'R2': metrics['R2'],
+                            'MSE': metrics['MSE']
+                        })
+                        continue
+                    
                     # Run model
                     lookback = 0
                     if 'ARIMA' in model_name:
@@ -439,8 +453,19 @@ def run_full_evaluation():
                     # Evaluate
                     metrics = evaluate_model(model_name, dataset_name, predictions, test, lookback)
                     
+                    # Save per-timestep predictions for Diebold-Mariano test
+                    true_values = test['inflation'].iloc[lookback:].values
+                    min_len = min(len(true_values), len(predictions))
+                    pred_df = pd.DataFrame({
+                        'step': range(min_len),
+                        'actual': true_values[:min_len],
+                        'predicted': np.array(predictions[:min_len], dtype=float),
+                        'error': true_values[:min_len] - np.array(predictions[:min_len], dtype=float)
+                    })
+                    pred_df.to_csv(pred_csv_path, sep='|', index=False)
+                    print(f"  Predictions saved: {os.path.basename(pred_csv_path)}")
+                    
                     # Plot
-                    safe_model_name = model_name.replace(' ', '_').replace('(', '').replace(')', '')
                     plot_path = os.path.join(PLOTS_FOLDER, RUN_TITLE,
                                             f"{safe_model_name}_{dataset_name}.png")
                     plot_predictions(model_name, dataset_name, test, predictions, errors, plot_path, lookback)
@@ -490,8 +515,8 @@ def run_full_evaluation():
             print(f"  {metric}: {best[metric]:.4f}")
         
         best_r2 = results_df.loc[results_df['R2'].idxmax()]
-        print(f"\nBest R²: {best_r2['method']} on {best_r2['dataset']} dataset")
-        print(f"  R²: {best_r2['R2']:.4f}")
+        print(f"\nBest R2: {best_r2['method']} on {best_r2['dataset']} dataset")
+        print(f"  R2: {best_r2['R2']:.4f}")
         
         print(f"\n{'='*70}")
         print("EVALUATION COMPLETE!")

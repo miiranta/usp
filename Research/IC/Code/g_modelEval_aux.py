@@ -79,8 +79,8 @@ def download_ipca_data():
         
         # Save to CSV
         df.to_csv(INFLATION_FILE, index=False)
-        print(f"✓ IPCA data downloaded successfully! Saved to: {INFLATION_FILE}")
-        print(f"✓ Downloaded {len(df)} records from {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
+        print(f"[OK] IPCA data downloaded successfully! Saved to: {INFLATION_FILE}")
+        print(f"[OK] Downloaded {len(df)} records from {df['date'].min().strftime('%Y-%m-%d')} to {df['date'].max().strftime('%Y-%m-%d')}")
         
         return df
         
@@ -169,5 +169,5 @@ def create_evaluation_csvs(rank):
     baseline_df.to_csv(baseline_output, sep='|', index=False)
     print(f"Saved baseline CSV with {len(baseline_df)} rows to: {baseline_output}")
     
-    print("\n✓ All 3 evaluation CSVs created successfully!")
+    print("\n[OK] All 3 evaluation CSVs created successfully!")
     return baseline_df, interpolated_merged, optimized_merged, run_title
