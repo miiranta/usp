@@ -41,9 +41,9 @@ SOURCE_COLORS_LIST = [BLUE, ORANGE]
 # List of tuples: (label, folder_path)
 # Configure which folders to use for plotting here.
 SOURCES = [
-    ('Control', os.path.join(BASE_OUTPUT_DIR, 'output_0.0')),
+    ('Control', os.path.join(BASE_OUTPUT_DIR, 'just_another_output_0.0')),
     #('Control', os.path.join(BASE_OUTPUT_DIR, 'output_0.0_test')),
-    ('Optimized', os.path.join(BASE_OUTPUT_DIR, 'output_1.0')),
+    ('Optimized', os.path.join(BASE_OUTPUT_DIR, 'just_another_output_1.0')),
     #('Optimized', os.path.join(BASE_OUTPUT_DIR, 'output_1.0_test')),
 ]
 
