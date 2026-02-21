@@ -1254,9 +1254,35 @@ def plot_distributions_faceted(sources):
                            color=color, alpha=0.2, zorder=2, label='95% CI')
             
             # Add base fill under the mean line for visual appeal
-            ax.fill_between(avg_df['Bin_Center'], avg_df['Probability'], 
+            ax.fill_between(avg_df['Bin_Center'], avg_df['Probability'],
                            color=color, alpha=0.15, zorder=1)
-        
+
+            # Peak probability density line + label
+            peak_idx = avg_df['Probability'].idxmax()
+            peak_x   = avg_df.loc[peak_idx, 'Bin_Center']
+            ax.axvline(peak_x, color=color, linestyle='--', linewidth=1.8,
+                       alpha=0.85, zorder=5)
+            # Offset label to the right of the line with a white background
+            x_range = avg_df['Bin_Center'].max() - avg_df['Bin_Center'].min()
+            ax.text(peak_x + x_range * 0.02, 0.88, f'{peak_x:.3f}',
+                    transform=ax.get_xaxis_transform(),
+                    ha='left', va='top', fontsize=13,
+                    fontweight='bold', color=color, zorder=6,
+                    bbox=dict(boxstyle='round,pad=0.2', fc='white',
+                              ec='none', alpha=0.75))
+            # Weighted mean (avg weight) dotted vertical line + label
+            total = avg_df['Probability'].sum()
+            if total > 1e-12:
+                avg_w = float((avg_df['Bin_Center'] * avg_df['Probability']).sum() / total)
+                ax.axvline(avg_w, color=color, linestyle=':', linewidth=1.8,
+                           alpha=0.80, zorder=5)
+                ax.text(avg_w + x_range * 0.02, 0.70, f'\u03bc={avg_w:.3f}',
+                        transform=ax.get_xaxis_transform(),
+                        ha='left', va='top', fontsize=13,
+                        fontweight='bold', color=color, zorder=6,
+                        bbox=dict(boxstyle='round,pad=0.2', fc='white',
+                                  ec='none', alpha=0.75))
+
         # Add Start/End column titles only to first row
         if row == 0:
             ax.set_title(time_label, fontweight='bold', fontsize=18, pad=15)
@@ -1735,6 +1761,808 @@ def plot_complexity_metrics_faceted(master_df):
     plt.close()
     print(f"Saved plot: {output_path}")
 
+# ==========================================
+# Distribution Evolution Plots (3D, GIF, Interactive)
+# ==========================================
+
+def _load_epoch_distributions(folder_path):
+    """
+    Helper: loads all numeric-epoch distribution CSVs from a folder, averaging
+    across runs and computing a 95% normal confidence interval.
+
+    Returns
+    -------
+    dict  {epoch_int: pd.DataFrame}
+          Each DataFrame has columns:
+              Bin_Center   – weight value shifted so mean≈0
+              Probability  – mean probability density across runs
+              CI_Lower     – lower bound of 95% CI (clipped at 0)
+              CI_Upper     – upper bound of 95% CI
+    """
+    dist_dir = os.path.join(folder_path, 'distributions')
+    if not os.path.isdir(dist_dir):
+        return {}
+
+    epochs = get_epochs_for_folder(folder_path)
+    result = {}
+
+    for epoch in epochs:
+        files = glob.glob(os.path.join(dist_dir, f'distribution_epoch_{epoch:03d}_run_*.csv'))
+        if not files:
+            continue
+
+        all_dfs = []
+        for fpath in files:
+            df = load_distribution_file(fpath)
+            if df is not None and 'Bin_Center' in df.columns and 'Probability' in df.columns:
+                all_dfs.append(df.sort_values('Bin_Center').reset_index(drop=True))
+
+        if not all_dfs:
+            continue
+
+        n_runs = len(all_dfs)
+        bin_lengths = [len(df) for df in all_dfs]
+
+        if len(set(bin_lengths)) == 1:
+            avg_df = all_dfs[0][['Bin_Center']].copy()
+            avg_df['Bin_Center'] = avg_df['Bin_Center'] - 0.5
+            prob_values = np.array([df['Probability'].values for df in all_dfs])
+        else:
+            from scipy.interpolate import interp1d
+            all_bins = np.concatenate([df['Bin_Center'].values for df in all_dfs])
+            common_bins = np.linspace(all_bins.min(), all_bins.max(), 200)
+            interpolated = []
+            for df in all_dfs:
+                f = interp1d(df['Bin_Center'].values, df['Probability'].values,
+                             kind='linear', bounds_error=False, fill_value=0)
+                interpolated.append(f(common_bins))
+            avg_df = pd.DataFrame({'Bin_Center': common_bins - 0.5})
+            prob_values = np.array(interpolated)
+
+        avg_df['Probability'] = np.mean(prob_values, axis=0)
+        std = np.std(prob_values, axis=0, ddof=1) if n_runs > 1 else np.zeros(len(avg_df))
+        se = std / np.sqrt(n_runs)
+        avg_df['CI_Lower'] = (avg_df['Probability'] - 1.96 * se).clip(lower=0)
+        avg_df['CI_Upper'] = avg_df['Probability'] + 1.96 * se
+
+        result[epoch] = avg_df
+
+    return result
+
+
+def _dist_axis_limits(source_data, common_epochs_set):
+    """Return (x_min, x_max, global_y_max) consistent with the faceted plot style."""
+    all_probs, all_sig_bins = [], []
+    for epoch_data in source_data.values():
+        for epoch, df in epoch_data.items():
+            if epoch in common_epochs_set:
+                all_probs.append(df['CI_Upper'].max())
+                sig = df[df['Probability'] > max(df['Probability'].max() * 0.001, 1e-8)]
+                all_sig_bins.extend(sig['Bin_Center'].values)
+    global_y_max = max(all_probs) * 0.5 if all_probs else 1.0
+    if all_sig_bins:
+        x_min = float(np.percentile(all_sig_bins, 1))
+        x_max = float(np.percentile(all_sig_bins, 99))
+    else:
+        x_min, x_max = -0.15, 0.15
+    return x_min, x_max, global_y_max
+
+
+def _load_epoch_distribution_stats(folder_path):
+    """
+    For each epoch, computes per-run summary statistics of the weight distribution:
+      - avg_density  : mean probability density across all bins
+      - peak_density : maximum probability density (mode height)
+      - peak_weight  : weight value (bin center) where probability is highest (mode position)
+      - avg_weight   : weighted mean weight value (first moment / centre of mass)
+
+    Returns
+    -------
+    dict  {epoch_int: {
+               'avg_density':  (mean, ci_lower, ci_upper),
+               'peak_density': (mean, ci_lower, ci_upper),
+               'peak_weight':  (mean, ci_lower, ci_upper),
+               'avg_weight':   (mean, ci_lower, ci_upper),
+           }}
+    """
+    dist_dir = os.path.join(folder_path, 'distributions')
+    if not os.path.isdir(dist_dir):
+        return {}
+
+    epochs = get_epochs_for_folder(folder_path)
+    result = {}
+
+    for epoch in epochs:
+        files = glob.glob(
+            os.path.join(dist_dir, f'distribution_epoch_{epoch:03d}_run_*.csv')
+        )
+        if not files:
+            continue
+
+        run_stats = {'avg_density': [], 'peak_density': [],
+                     'peak_weight': [], 'avg_weight': []}
+
+        for fpath in files:
+            df = load_distribution_file(fpath)
+            if df is None or 'Bin_Center' not in df.columns or 'Probability' not in df.columns:
+                continue
+            df   = df.sort_values('Bin_Center').reset_index(drop=True)
+            bins = df['Bin_Center'].values - 0.5
+            prob = df['Probability'].values
+
+            run_stats['avg_density'].append(float(np.mean(prob)))
+            run_stats['peak_density'].append(float(np.max(prob)))
+            run_stats['peak_weight'].append(float(bins[np.argmax(prob)]))
+
+            total = prob.sum()
+            w = prob / total if total > 1e-12 else np.ones(len(prob)) / len(prob)
+            run_stats['avg_weight'].append(float(np.sum(bins * w)))
+
+        out = {}
+        for key, vals in run_stats.items():
+            if not vals:
+                continue
+            arr = np.array(vals)
+            n   = len(arr)
+            m   = float(arr.mean())
+            se  = float(arr.std(ddof=1) / np.sqrt(n)) if n > 1 else 0.0
+            ci_lo = m - 1.96 * se
+            # weight positions can be negative — don't clip to 0
+            if key in ('avg_density', 'peak_density'):
+                ci_lo = max(0.0, ci_lo)
+            out[key] = (m, ci_lo, m + 1.96 * se)
+
+        if out:
+            result[epoch] = out
+
+    return result
+
+
+def plot_distribution_summary_per_epoch(sources):
+    """
+    1×N figure (one panel per source) mirroring the two vertical lines shown
+    in the GIF per frame — both tracked over epochs on the same weight-value axis:
+      --  Peak Weight Position  (where density peaks, purple)   ← GIF dashed line
+      ··  Avg Weight Value / μ  (weighted mean of distribution, grey) ← GIF dotted line
+    Shaded bands = 95% CI across runs.
+    """
+    print("Plotting distribution summary per epoch...")
+
+    source_data = {}
+    for label, folder in sources:
+        stats = _load_epoch_distribution_stats(folder)
+        if stats:
+            source_data[label] = stats
+    if not source_data:
+        print("No distribution data for summary plot.")
+        return
+
+    sources_list = list(source_data.keys())
+    n_cols       = len(sources_list)
+    src_colors   = {'Control': BLUE, 'Optimized': ORANGE}
+
+    fig, axes = plt.subplots(1, n_cols, figsize=(9 * n_cols, 6), sharey=False)
+    if n_cols == 1:
+        axes = [axes]
+    plt.subplots_adjust(left=0.08, right=0.97, top=0.92,
+                        bottom=0.12, wspace=0.45)
+
+    for col_idx, label in enumerate(sources_list):
+        ax           = axes[col_idx]
+        ax_right     = ax.twinx()
+        epoch_stats  = source_data[label]
+        sorted_epochs = sorted(epoch_stats.keys())
+        xs = sorted_epochs
+
+        def _vec(key, _stats=epoch_stats, _xs=sorted_epochs):
+            means    = [_stats[e][key][0] for e in _xs]
+            ci_lower = [_stats[e][key][1] for e in _xs]
+            ci_upper = [_stats[e][key][2] for e in _xs]
+            return np.array(means), np.array(ci_lower), np.array(ci_upper)
+
+        # --- Peak weight position  (X of GIF dashed line) -- left axis ---
+        m, lo, hi = _vec('peak_weight')
+        ax.plot(xs, m, color='#9467bd', linewidth=3.0, linestyle='--',
+                label='Peak Weight Position')
+        ax.fill_between(xs, lo, hi, color='#9467bd', alpha=0.18)
+
+        # --- Avg weight value / μ  (X of GIF dotted line) -- left axis ---
+        m, lo, hi = _vec('avg_weight')
+        ax.plot(xs, m, color='#7f7f7f', linewidth=2.5, linestyle=':',
+                label='Avg Weight Value (μ)')
+        ax.fill_between(xs, lo, hi, color='#7f7f7f', alpha=0.15)
+
+        # --- Peak density  (Y / height of GIF dashed line) -- right axis ---
+        m, lo, hi = _vec('peak_density')
+        ax_right.plot(xs, m, color='#d62728', linewidth=2.5, linestyle='-',
+                      label='Peak Density')
+        ax_right.fill_between(xs, lo, hi, color='#d62728', alpha=0.13)
+        ax_right.set_ylabel('Peak Density', fontsize=14, fontweight='bold',
+                            labelpad=10, color='#d62728')
+        ax_right.tick_params(axis='y', labelcolor='#d62728', labelsize=12)
+        ax_right.spines['top'].set_visible(False)
+
+        # Title coloured by source
+        panel_color = src_colors.get(label, BLUE)
+        ax.set_title(label, fontsize=20, fontweight='bold', pad=12,
+                     color=panel_color)
+
+        ax.set_xlabel('Epoch', fontsize=15, fontweight='bold', labelpad=10)
+        ax.set_ylabel('Weight Value', fontsize=14, fontweight='bold', labelpad=10)
+        ax.tick_params(axis='both', labelsize=12)
+        ax.grid(True, alpha=0.35)
+        ax.set_axisbelow(True)
+        ax.spines['top'].set_visible(False)
+
+        # Combined legend from both axes
+        h_l, lbl_l = ax.get_legend_handles_labels()
+        h_r, lbl_r = ax_right.get_legend_handles_labels()
+        ax.legend(h_l + h_r, lbl_l + lbl_r,
+                  fontsize=11, loc='best', framealpha=0.85, edgecolor='#cccccc')
+
+    output_path = os.path.join(PLOTS_DIR, 'distribution_summary_per_epoch.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved plot: {output_path}")
+
+
+def plot_distributions_3d_evolution(sources):
+    """
+    3D waterfall (ribbon) plot of weight distribution evolution across all epochs.
+    One subplot per source (side by side). No figure title.
+    Axes: X = Weight Value, Y = Epoch, Z = Probability Density.
+    Control uses the Blues colormap; Optimized uses the Oranges colormap.
+    Mean line + 95% CI ribbon drawn for every epoch (average across runs).
+    """
+    from mpl_toolkits.mplot3d import Axes3D          # noqa: F401
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+    print("Plotting 3D distribution evolution...")
+
+    source_data = {}
+    for label, folder in sources:
+        data = _load_epoch_distributions(folder)
+        if data:
+            source_data[label] = data
+
+    if not source_data:
+        print("No distribution data found for 3D plot.")
+        return
+
+    all_epochs = sorted({ep for ed in source_data.values() for ep in ed})
+    x_min, x_max, global_y_max = _dist_axis_limits(source_data, set(all_epochs))
+
+    cmaps_map = {'Control': plt.cm.Blues, 'Optimized': plt.cm.Oranges}
+
+    sources_list = list(source_data.keys())
+    n_panels = len(sources_list)
+
+    fig = plt.figure(figsize=(10 * n_panels, 9))
+
+    for idx, label in enumerate(sources_list):
+        ax = fig.add_subplot(1, n_panels, idx + 1, projection='3d')
+        epoch_data = source_data[label]
+        cmap = cmaps_map.get(label, plt.cm.Blues)
+        epochs = sorted(epoch_data.keys())
+        n_epochs = len(epochs)
+
+        for i, epoch in enumerate(epochs):
+            df = epoch_data[epoch]
+            mask = (df['Bin_Center'] >= x_min) & (df['Bin_Center'] <= x_max)
+            df_z = df[mask]
+            if df_z.empty:
+                continue
+
+            x = df_z['Bin_Center'].values
+            y_val = float(epoch)
+            z_mean = df_z['Probability'].values
+            z_lower = df_z['CI_Lower'].values
+            z_upper = df_z['CI_Upper'].values
+
+            # Colour: light (early epochs) → dark (late epochs)
+            t = i / max(n_epochs - 1, 1)
+            color = cmap(0.30 + 0.55 * t)
+
+            # Mean line
+            ax.plot(x, [y_val] * len(x), z_mean,
+                    color=color, alpha=0.80, linewidth=1.2, zorder=3)
+
+            # 95% CI ribbon
+            verts_ci = (
+                list(zip(x,        [y_val] * len(x), z_lower)) +
+                list(zip(x[::-1],  [y_val] * len(x), z_upper[::-1]))
+            )
+            poly_ci = Poly3DCollection([verts_ci], alpha=0.07, zorder=2)
+            poly_ci.set_facecolor(color)
+            poly_ci.set_edgecolor('none')
+            ax.add_collection3d(poly_ci)
+
+            # Base fill under mean curve
+            verts_base = (
+                list(zip(x,       [y_val] * len(x), np.zeros_like(z_mean))) +
+                list(zip(x[::-1], [y_val] * len(x), z_mean[::-1]))
+            )
+            poly_base = Poly3DCollection([verts_base], alpha=0.04, zorder=1)
+            poly_base.set_facecolor(color)
+            poly_base.set_edgecolor('none')
+            ax.add_collection3d(poly_base)
+
+        ax.set_xlabel('Weight Value', fontsize=12, labelpad=14)
+        ax.set_ylabel('Epoch', fontsize=12, labelpad=14)
+        ax.set_zlabel('')          # suppress built-in z-label entirely
+        ax.set_xlim(x_min, x_max)
+        ax.set_zlim(0, global_y_max)
+        ax.grid(False)
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+        ax.xaxis.pane.set_edgecolor('lightgray')
+        ax.yaxis.pane.set_edgecolor('lightgray')
+        ax.zaxis.pane.set_edgecolor('lightgray')
+        ax.tick_params(axis='both', labelsize=9)
+        ax.tick_params(axis='z', labelsize=8, pad=12)
+        # Fewer ticks + compact format so labels don't reach the spine
+        ax.set_zticks(np.linspace(0, global_y_max, 5))
+        ax.zaxis.set_major_formatter(
+            plt.FuncFormatter(lambda v, _: f'{v:.1e}')
+        )
+        # Place the z-label using annotate with offset points from the right
+        # edge of the subplot box (transAxes).  offset points are device-
+        # independent so they always clear the tick numbers regardless of
+        # figure size or dpi.
+        ax.annotate(
+            'Probability Density',
+            xy=(1.0, 0.50), xycoords=ax.transAxes,
+            xytext=(55, 0), textcoords='offset points',
+            ha='left', va='center', rotation=90, fontsize=11,
+            annotation_clip=False,
+        )
+
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.97, bottom=0.06,
+                        wspace=-0.10)
+
+    output_path = os.path.join(PLOTS_DIR, '3d_distribution_evolution.png')
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Saved plot: {output_path}")
+
+
+def plot_distributions_gif_evolution(sources):
+    """
+    Animated GIF of weight distribution evolution across epochs.
+    Two side-by-side panels (one per source).
+    Each frame = one epoch. Shows mean + 95% CI. Averages across all runs.
+    """
+    from matplotlib.animation import FuncAnimation, PillowWriter
+
+    print("Creating distribution evolution GIF (this may take a moment)...")
+
+    source_data = {}
+    for label, folder in sources:
+        data = _load_epoch_distributions(folder)
+        if data:
+            source_data[label] = data
+
+    if not source_data:
+        print("No distribution data for GIF.")
+        return
+
+    all_epoch_sets = [set(d.keys()) for d in source_data.values()]
+    common_epochs = sorted(
+        set.intersection(*all_epoch_sets) if len(all_epoch_sets) > 1 else all_epoch_sets[0]
+    )
+    if not common_epochs:
+        print("No common epochs found for GIF.")
+        return
+
+    x_min, x_max, global_y_max = _dist_axis_limits(source_data, set(common_epochs))
+
+    sources_list = list(source_data.keys())
+    n_sources = len(sources_list)
+    src_colors = {'Control': BLUE, 'Optimized': ORANGE}
+
+    fig, axes = plt.subplots(1, n_sources, figsize=(14, 6), sharey=True)
+    if n_sources == 1:
+        axes = [axes]
+    plt.subplots_adjust(wspace=0.06, top=0.93, bottom=0.13, left=0.08, right=0.98)
+
+    lines = []
+    for i, label in enumerate(sources_list):
+        ax = axes[i]
+        color = src_colors.get(label, BLUE)
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(0, global_y_max)
+        ax.set_xlabel('Weight Value', fontsize=15, fontweight='bold')
+        if i == 0:
+            ax.set_ylabel('Probability Density', fontsize=15, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        ax.set_axisbelow(True)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.tick_params(axis='both', labelsize=13)
+        line, = ax.plot([], [], color=color, linewidth=2.5, zorder=4)
+        lines.append(line)
+
+    epoch_text = fig.text(0.5, 0.97, '', ha='center', va='top',
+                          fontsize=17, fontweight='bold')
+
+    # Track per-panel peak indicators so they can be cleared each frame
+    peak_vlines  = [None] * n_sources
+    peak_texts   = [None] * n_sources
+    avg_vlines   = [None] * n_sources
+    avg_vtexts   = [None] * n_sources
+
+    def init():
+        for ln in lines:
+            ln.set_data([], [])
+        epoch_text.set_text('')
+        return lines + [epoch_text]
+
+    def update(frame_idx):
+        epoch = common_epochs[frame_idx]
+        epoch_text.set_text(f'Epoch {epoch}')
+        for i, label in enumerate(sources_list):
+            ax = axes[i]
+            color = src_colors.get(label, BLUE)
+            df = source_data[label].get(epoch)
+            # Remove previous fill collections
+            for coll in ax.collections[:]:
+                coll.remove()
+            # Remove previous peak indicators
+            if peak_vlines[i] is not None:
+                peak_vlines[i].remove()
+                peak_vlines[i] = None
+            if peak_texts[i] is not None:
+                peak_texts[i].remove()
+                peak_texts[i] = None
+            # Remove previous avg-weight indicators
+            if avg_vlines[i] is not None:
+                avg_vlines[i].remove()
+                avg_vlines[i] = None
+            if avg_vtexts[i] is not None:
+                avg_vtexts[i].remove()
+                avg_vtexts[i] = None
+            if df is not None:
+                lines[i].set_data(df['Bin_Center'].values, df['Probability'].values)
+                ax.fill_between(df['Bin_Center'], df['CI_Lower'], df['CI_Upper'],
+                                color=color, alpha=0.25, zorder=2)
+                ax.fill_between(df['Bin_Center'], df['Probability'],
+                                color=color, alpha=0.10, zorder=1)
+                # Peak vertical line + label
+                peak_idx = df['Probability'].idxmax()
+                peak_x   = df.loc[peak_idx, 'Bin_Center']
+                vl = ax.axvline(peak_x, color=color, linestyle='--',
+                                linewidth=1.8, alpha=0.85, zorder=5)
+                peak_vlines[i] = vl
+                x_range = x_max - x_min
+                txt = ax.text(peak_x + x_range * 0.02, 0.88, f'{peak_x:.3f}',
+                              transform=ax.get_xaxis_transform(),
+                              ha='left', va='top', fontsize=11,
+                              fontweight='bold', color=color, zorder=6,
+                              bbox=dict(boxstyle='round,pad=0.2', fc='white',
+                                        ec='none', alpha=0.75))
+                peak_texts[i] = txt
+                # Weighted mean (average weight value) vertical dotted line
+                total = df['Probability'].sum()
+                w = df['Probability'] / total if total > 1e-12 else None
+                if w is not None:
+                    avg_w = float((df['Bin_Center'] * w).sum())
+                    avl = ax.axvline(avg_w, color=color, linestyle=':',
+                                     linewidth=1.8, alpha=0.80, zorder=5)
+                    avg_vlines[i] = avl
+                    atxt = ax.text(avg_w + x_range * 0.02, 0.70, f'μ={avg_w:.3f}',
+                                   transform=ax.get_xaxis_transform(),
+                                   ha='left', va='top', fontsize=11,
+                                   fontweight='bold', color=color, zorder=6,
+                                   bbox=dict(boxstyle='round,pad=0.2', fc='white',
+                                             ec='none', alpha=0.75))
+                    avg_vtexts[i] = atxt
+        return lines + [epoch_text]
+
+    anim = FuncAnimation(fig, update, frames=len(common_epochs),
+                         init_func=init, blit=False, interval=200)
+
+    output_path = os.path.join(PLOTS_DIR, 'distribution_evolution.gif')
+    anim.save(output_path, writer=PillowWriter(fps=5), dpi=100)
+    plt.close()
+    print(f"Saved GIF: {output_path}")
+
+
+def plot_distributions_interactive(sources):
+    """
+    Interactive HTML plot using pure HTML5 Canvas — no external libraries.
+    Guaranteed zero-latency frame switching (plain JS setInterval + slider).
+    Both sources overlaid. Shows mean line + 95% CI band + peak dashed line.
+    """
+    import json
+
+    print("Creating interactive distribution plot (pure canvas)...")
+
+    source_data = {}
+    for label, folder in sources:
+        data = _load_epoch_distributions(folder)
+        if data:
+            source_data[label] = data
+
+    if not source_data:
+        print("No data for interactive plot.")
+        return
+
+    all_epoch_sets = [set(d.keys()) for d in source_data.values()]
+    epochs = sorted(
+        set.intersection(*all_epoch_sets) if len(all_epoch_sets) > 1 else all_epoch_sets[0]
+    )
+    if not epochs:
+        print("No common epochs for interactive plot.")
+        return
+
+    x_min, x_max, global_y_max = _dist_axis_limits(source_data, set(epochs))
+    src_colors_hex = {'Control': '#1f77b4', 'Optimized': '#ff7f0e'}
+
+    # Serialise all epoch data to JSON (only x range that fits the zoom window)
+    all_data = {}
+    for epoch in epochs:
+        all_data[str(epoch)] = {}
+        for label, epoch_data in source_data.items():
+            df = epoch_data.get(epoch)
+            if df is not None:
+                mask = (df['Bin_Center'] >= x_min) & (df['Bin_Center'] <= x_max)
+                df_z = df[mask]
+                all_data[str(epoch)][label] = {
+                    'x':         df_z['Bin_Center'].tolist(),
+                    'mean':      df_z['Probability'].tolist(),
+                    'ci_lower':  df_z['CI_Lower'].tolist(),
+                    'ci_upper':  df_z['CI_Upper'].tolist(),
+                    'avg_weight': float(
+                        (df_z['Bin_Center'] * df_z['Probability']).sum() /
+                        df_z['Probability'].sum()
+                        if df_z['Probability'].sum() > 1e-12 else 0.0
+                    ),
+                }
+
+    data_json   = json.dumps(all_data)
+    epochs_json = json.dumps([str(e) for e in epochs])
+    colors_json = json.dumps(src_colors_hex)
+    n_epochs    = len(epochs)
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Weight Distribution Evolution</title>
+<style>
+  body      {{ font-family: Arial, sans-serif; background:#fff; margin:20px; }}
+  h2        {{ text-align:center; font-size:18px; margin-bottom:6px; }}
+  #controls {{ text-align:center; margin:10px 0; }}
+  #slider   {{ width:80%; cursor:pointer; }}
+  #epoch-label {{ font-weight:bold; font-size:16px; margin:0 12px; }}
+  button    {{ padding:6px 18px; font-size:15px; cursor:pointer; margin:0 4px; border:1px solid #aaa; border-radius:4px; background:#f5f5f5; }}
+  button:hover {{ background:#e0e0e0; }}
+  canvas    {{ display:block; margin:0 auto; border:1px solid #e8e8e8; }}
+  #legend   {{ text-align:center; margin-top:10px; font-size:14px; }}
+  .leg-item {{ display:inline-block; margin:0 14px; }}
+  .leg-line {{ display:inline-block; width:30px; height:3px; vertical-align:middle; margin-right:5px; border-radius:2px; }}
+</style>
+</head>
+<body>
+<h2>Weight Distribution Evolution &mdash; Mean &plusmn; 95% CI (avg over runs)</h2>
+<div id="controls">
+  <button id="btnPlay">&#9654; Play</button>
+  <button id="btnPause">&#9646;&#9646; Pause</button>
+  <span id="epoch-label">Epoch {epochs[0]}</span>
+  <br><br>
+  <input type="range" id="slider" min="0" max="{n_epochs - 1}" value="0" step="1">
+</div>
+<canvas id="chart" width="1100" height="560"></canvas>
+<div id="legend"></div>
+
+<script>
+const DATA   = {data_json};
+const EPOCHS = {epochs_json};
+const COLORS = {colors_json};
+const X_MIN  = {float(x_min)};
+const X_MAX  = {float(x_max)};
+const Y_MAX  = {float(global_y_max)};
+
+const canvas     = document.getElementById('chart');
+const ctx        = canvas.getContext('2d');
+const slider     = document.getElementById('slider');
+const epochLabel = document.getElementById('epoch-label');
+
+const PAD = {{left:82, right:20, top:20, bottom:58}};
+const W   = canvas.width  - PAD.left - PAD.right;
+const H   = canvas.height - PAD.top  - PAD.bottom;
+
+function xToC(x) {{ return PAD.left + (x - X_MIN) / (X_MAX - X_MIN) * W; }}
+function yToC(y) {{ return PAD.top  + H - Math.max(0, y / Y_MAX) * H;    }}
+
+function hexToRgba(hex, a) {{
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `rgba(${{r}},${{g}},${{b}},${{a}})`;
+}}
+
+function drawBackground() {{
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Y grid + labels
+  const nY = 5;
+  for (let i = 0; i <= nY; i++) {{
+    const cy  = PAD.top + (H / nY) * i;
+    const val = Y_MAX * (1 - i / nY);
+    ctx.save();
+    ctx.strokeStyle = '#ebebeb'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD.left, cy); ctx.lineTo(PAD.left + W, cy); ctx.stroke();
+    ctx.fillStyle = '#555'; ctx.font = '11px Arial'; ctx.textAlign = 'right';
+    ctx.fillText(val.toExponential(2), PAD.left - 6, cy + 4);
+    ctx.restore();
+  }}
+
+  // X grid + labels
+  const nX = 6;
+  for (let i = 0; i <= nX; i++) {{
+    const cx  = PAD.left + (W / nX) * i;
+    const val = X_MIN + (X_MAX - X_MIN) * i / nX;
+    ctx.save();
+    ctx.strokeStyle = '#ebebeb'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, PAD.top); ctx.lineTo(cx, PAD.top + H); ctx.stroke();
+    ctx.fillStyle = '#555'; ctx.font = '11px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(val.toFixed(3), cx, PAD.top + H + 18);
+    ctx.restore();
+  }}
+
+  // Axes frame
+  ctx.save();
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(PAD.left, PAD.top, W, H);
+  ctx.restore();
+
+  // Axis labels
+  ctx.save();
+  ctx.fillStyle = '#222'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center';
+  ctx.fillText('Weight Value', PAD.left + W / 2, canvas.height - 8);
+  ctx.translate(16, PAD.top + H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Probability Density', 0, 0);
+  ctx.restore();
+}}
+
+function drawFrame(epochIdx) {{
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground();
+
+  const epochKey = EPOCHS[epochIdx];
+  const frameData = DATA[epochKey] || {{}};
+  const labels = Object.keys(frameData);
+
+  // Track peak positions to avoid label overlap between sources
+  const peakPositions = [];
+
+  labels.forEach(label => {{
+    const d     = frameData[label];
+    const color = COLORS[label] || '#1f77b4';
+    const n     = d.x.length;
+
+    // CI band
+    ctx.save();
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {{
+      const cx = xToC(d.x[i]), cy = yToC(d.ci_upper[i]);
+      i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }}
+    for (let i = n - 1; i >= 0; i--) {{
+      ctx.lineTo(xToC(d.x[i]), yToC(d.ci_lower[i]));
+    }}
+    ctx.closePath();
+    ctx.fillStyle = hexToRgba(color, 0.18);
+    ctx.fill();
+    ctx.restore();
+
+    // Mean line
+    ctx.save();
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {{
+      const cx = xToC(d.x[i]), cy = yToC(d.mean[i]);
+      i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }}
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // Peak dashed line
+    let maxV = -Infinity, maxI = 0;
+    d.mean.forEach((v, i) => {{ if (v > maxV) {{ maxV = v; maxI = i; }} }});
+    const peakX  = d.x[maxI];
+    const peakCX = xToC(peakX);
+
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = color; ctx.lineWidth = 1.8; ctx.globalAlpha = 0.85;
+    ctx.beginPath(); ctx.moveTo(peakCX, PAD.top); ctx.lineTo(peakCX, PAD.top + H); ctx.stroke();
+    ctx.restore();
+
+    // Peak label — stack vertically if positions clash
+    const lText = peakX.toFixed(3);
+    ctx.font = 'bold 12px Arial';
+    const tw  = ctx.measureText(lText).width;
+    let lx = peakCX + 5;
+    let ly = PAD.top + 20;
+    // Shift down if another label is nearby
+    peakPositions.forEach(p => {{ if (Math.abs(p.x - lx) < tw + 10) ly += 20; }});
+    peakPositions.push({{x: lx, y: ly}});
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.80)';
+    ctx.fillRect(lx - 2, ly - 13, tw + 6, 17);
+    ctx.fillStyle = color;
+    ctx.fillText(lText, lx, ly);
+    ctx.restore();
+
+    // Weighted mean (avg weight value) dotted vertical line + label
+    const avgW  = d.avg_weight;
+    const avgCX = xToC(avgW);
+    ctx.save();
+    ctx.setLineDash([3, 5]);
+    ctx.strokeStyle = color; ctx.lineWidth = 1.8; ctx.globalAlpha = 0.75;
+    ctx.beginPath(); ctx.moveTo(avgCX, PAD.top); ctx.lineTo(avgCX, PAD.top + H); ctx.stroke();
+    ctx.restore();
+    const muText = '\u03bc=' + avgW.toFixed(3);
+    ctx.font = 'bold 11px Arial';
+    const mtw = ctx.measureText(muText).width;
+    let mlx = avgCX + 5;
+    let mly = PAD.top + 44;   // below the peak label row
+    peakPositions.forEach(p => {{ if (Math.abs(p.x - mlx) < mtw + 10) mly += 20; }});
+    peakPositions.push({{x: mlx, y: mly}});
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.80)';
+    ctx.fillRect(mlx - 2, mly - 13, mtw + 6, 17);
+    ctx.fillStyle = color;
+    ctx.fillText(muText, mlx, mly);
+    ctx.restore();
+  }});
+}}
+
+// Legend
+const legendDiv = document.getElementById('legend');
+Object.entries(COLORS).forEach(([label, color]) => {{
+  legendDiv.innerHTML +=
+    `<span class="leg-item"><span class="leg-line" style="background:${{color}};display:inline-block;"></span>${{label}} (mean + 95% CI)</span>`;
+}});
+
+let currentIdx = 0;
+let playTimer  = null;
+
+function setEpoch(idx) {{
+  currentIdx       = Math.max(0, Math.min(EPOCHS.length - 1, idx));
+  slider.value     = currentIdx;
+  epochLabel.textContent = 'Epoch ' + EPOCHS[currentIdx];
+  drawFrame(currentIdx);
+}}
+
+slider.addEventListener('input', () => setEpoch(parseInt(slider.value)));
+
+document.getElementById('btnPlay').addEventListener('click', () => {{
+  if (playTimer) return;
+  playTimer = setInterval(() => {{
+    if (currentIdx >= EPOCHS.length - 1) {{ clearInterval(playTimer); playTimer = null; return; }}
+    setEpoch(currentIdx + 1);
+  }}, 150);
+}});
+
+document.getElementById('btnPause').addEventListener('click', () => {{
+  clearInterval(playTimer); playTimer = null;
+}});
+
+setEpoch(0);
+</script>
+</body>
+</html>"""
+
+    output_path = os.path.join(PLOTS_DIR, 'distribution_evolution_interactive.html')
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(html)
+    print(f"Saved interactive plot: {output_path}")
+
+
 def main():
     print(f"Starting plot generation...")
     print(f"Sources: {[s[0] for s in SOURCES]}")
@@ -1777,7 +2605,15 @@ def main():
     plot_complexity_metrics_faceted(master_df)
     plot_adaptive_mechanism_faceted(master_df)
     plot_distributions_faceted(SOURCES)
-    
+
+    # Distribution Summary per Epoch
+    plot_distribution_summary_per_epoch(SOURCES)
+
+    # Distribution Evolution (3D, GIF, Interactive)
+    plot_distributions_3d_evolution(SOURCES)
+    plot_distributions_gif_evolution(SOURCES)
+    plot_distributions_interactive(SOURCES)
+
     # Combined Loss Barplots
     plot_combined_loss_barplots(master_df)
     
