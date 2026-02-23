@@ -3,7 +3,7 @@ import csv
 import math
 import time
 import atexit
-import collections
+import functools
 
 import torch
 import torch.nn as nn
@@ -322,17 +322,31 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerLM(nn.Module):
-    def __init__(self, vocab_size, cfg: Config, activation_cls=GELU):
+    def __init__(self, vocab_size, cfg: Config, activation_cls=GELU,
+                 with_attn_habituation: bool = False):
         super().__init__()
-        self.embed    = nn.Embedding(vocab_size, cfg.D_MODEL)
-        self.pos_enc  = PositionalEncoding(cfg.D_MODEL, cfg.DROPOUT)
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=cfg.D_MODEL, nhead=cfg.N_HEADS,
-            dim_feedforward=cfg.D_FF, dropout=cfg.DROPOUT,
-            activation=activation_cls(),
-            batch_first=True
-        )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=cfg.N_LAYERS)
+        self.embed   = nn.Embedding(vocab_size, cfg.D_MODEL)
+        self.pos_enc = PositionalEncoding(cfg.D_MODEL, cfg.DROPOUT)
+        self._with_attn = with_attn_habituation
+
+        if with_attn_habituation:
+            # Custom layers with per-head EMA attention bias
+            self.layers = nn.ModuleList([
+                HabituatedEncoderLayer(
+                    cfg.D_MODEL, cfg.N_HEADS, cfg.D_FF, cfg.DROPOUT, activation_cls
+                )
+                for _ in range(cfg.N_LAYERS)
+            ])
+        else:
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=cfg.D_MODEL, nhead=cfg.N_HEADS,
+                dim_feedforward=cfg.D_FF, dropout=cfg.DROPOUT,
+                activation=activation_cls(), batch_first=True
+            )
+            self.transformer = nn.TransformerEncoder(
+                encoder_layer, num_layers=cfg.N_LAYERS
+            )
+
         self.head = nn.Linear(cfg.D_MODEL, vocab_size)
         self._init_weights()
 
@@ -342,11 +356,16 @@ class TransformerLM(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, x):
-        # causal mask so position i can only attend to positions <= i
-        seq_len = x.size(1)
-        mask = nn.Transformer.generate_square_subsequent_mask(seq_len, device=x.device)
+        seq_len     = x.size(1)
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(
+            seq_len, device=x.device
+        )
         out = self.pos_enc(self.embed(x))
-        out = self.transformer(out, mask=mask, is_causal=True)
+        if self._with_attn:
+            for layer in self.layers:
+                out = layer(out, causal_mask=causal_mask)
+        else:
+            out = self.transformer(out, mask=causal_mask, is_causal=True)
         return self.head(out)
 
 
@@ -393,17 +412,20 @@ def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
 #  Experiments
 # ─────────────────────────────────────────────
 
-EXPERIMENTS = [
-    ("control", GELU),
-    ("gelu2",   GELU2),
-]
+K_VALS = [1, 2, 4, 8, 16]
+
+EXPERIMENTS = (
+    [("control",            GELU,                                     False)]
+    + [(f"gelu2_k{k}",      functools.partial(GELU2, n_prototypes=k), False) for k in K_VALS]
+    + [(f"gelu2_k{k}_attn", functools.partial(GELU2, n_prototypes=k), True)  for k in K_VALS]
+)
 
 
 # ─────────────────────────────────────────────
 #  Single-experiment runner
 # ─────────────────────────────────────────────
 
-def run_experiment(exp_name, activation_cls, vocab, device):
+def run_experiment(exp_name, activation_cls, vocab, device, with_attn_habituation: bool = False):
     output_dir = os.path.join(Config.OUTPUT_DIR, exp_name)
     checkpoint  = os.path.join(output_dir, "best_model.pt")
 
@@ -431,7 +453,10 @@ def run_experiment(exp_name, activation_cls, vocab, device):
     test_loader  = DataLoader(test_ds,  batch_size=Config.BATCH_SIZE, shuffle=False, drop_last=False)
 
     # Model
-    model = TransformerLM(len(vocab), Config, activation_cls).to(device)
+    model = TransformerLM(
+        len(vocab), Config, activation_cls,
+        with_attn_habituation=with_attn_habituation
+    ).to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"  Parameters : {n_params:,}\n")
 
@@ -490,8 +515,9 @@ def main():
     vocab = Vocab()
     vocab.build([Config.TRAIN_FILE, Config.VALID_FILE, Config.TEST_FILE])
 
-    for exp_name, activation_cls in EXPERIMENTS:
-        run_experiment(exp_name, activation_cls, vocab, device)
+    for exp_name, activation_cls, with_attn in EXPERIMENTS:
+        run_experiment(exp_name, activation_cls, vocab, device,
+                       with_attn_habituation=with_attn)
 
 
 if __name__ == "__main__":

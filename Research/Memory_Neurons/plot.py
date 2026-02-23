@@ -13,7 +13,16 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 
 # ── Load all experiment metrics ───────────────────────────────────────
 def exp_sort_key(name):
-    return (0, name) if name == "control" else (1, name)
+    if name == "control":
+        return (0, 0, 0, "")
+    base      = name.replace("_attn", "")
+    attn_flag = 1 if name.endswith("_attn") else 0
+    if base.startswith("gelu2_k"):
+        try:
+            return (1, int(base[7:]), attn_flag, name)
+        except ValueError:
+            pass
+    return (2, 0, 0, name)
 
 records = []
 for exp_name in sorted(os.listdir(OUTPUT_DIR), key=exp_sort_key):
