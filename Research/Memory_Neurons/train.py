@@ -4,7 +4,6 @@ import math
 import time
 import atexit
 import collections
-import functools
 
 import torch
 import torch.nn as nn
@@ -252,15 +251,18 @@ class GELU2(nn.Module):
 
     def __init__(self, ema_decay: float = None):
         super().__init__()
-        self._decay = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
+        init_decay = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
         self._ema:     torch.Tensor = None   # (D,) running mean
         self._ema_sq:  torch.Tensor = None   # (D,) running mean of x^2
         self._ready = False
 
-        # Learnable per-layer scalars (initialised from Config)
-        self.log_tau   = nn.Parameter(torch.tensor(math.log(Config.GELU2_TEMP)))
-        self.log_blend = nn.Parameter(                                    # logit so sigmoid gives alpha
+        # Learnable per-layer scalars (all in logit/log space for unconstrained optimisation)
+        self.log_tau     = nn.Parameter(torch.tensor(math.log(Config.GELU2_TEMP)))
+        self.log_blend   = nn.Parameter(                          # logit → sigmoid gives α
             torch.tensor(math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)))
+        )
+        self.logit_decay = nn.Parameter(                          # logit → sigmoid gives decay
+            torch.tensor(math.log(init_decay / (1.0 - init_decay)))
         )
 
     def reset_state(self):
@@ -282,11 +284,13 @@ class GELU2(nn.Module):
         alpha = torch.sigmoid(self.log_blend)           # scalar in (0, 1)
 
         # Compress to (D,) for EMA update — detached, no grad leak
-        x_mean = x.detach().flatten(0, -2).mean(0)      # (D,)
+        x_flat  = x.detach().flatten(0, -2)            # (B*T, D)
+        x_mean  = x_flat.mean(0)                        # (D,)  → E[x]
+        x2_mean = x_flat.pow(2).mean(0)                 # (D,)  → E[x²]  (NOT E[x]²)
 
         if not self._ready:
             self._ema    = x_mean.clone()
-            self._ema_sq = x_mean.pow(2).clone()
+            self._ema_sq = x2_mean.clone()              # Var = E[x²] - E[x]² → 0 on first step
             self._ready  = True
             return self._gelu(x)
 
@@ -305,9 +309,9 @@ class GELU2(nn.Module):
         blended = x * effective_scale
 
         # ── Update EMA state (detached) ────────────────────────────────
-        d = self._decay
+        d = torch.sigmoid(self.logit_decay)              # learned decay in (0, 1)
         self._ema    = d * self._ema    + (1 - d) * x_mean
-        self._ema_sq = d * self._ema_sq + (1 - d) * x_mean.pow(2)
+        self._ema_sq = d * self._ema_sq + (1 - d) * x2_mean   # tracks E[x²], not E[x]²
 
         return self._gelu(blended)
 
@@ -400,12 +404,10 @@ def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
 #  Experiments
 # ─────────────────────────────────────────────
 
-GELU2_EMA_DECAYS = [0.1, 0.5, 0.9, 0.99, 0.999]
-
-EXPERIMENTS = (
-    [("control", GELU)]
-    + [(f"gelu2_ema{d}", functools.partial(GELU2, ema_decay=d)) for d in GELU2_EMA_DECAYS]
-)
+EXPERIMENTS = [
+    ("control", GELU),
+    ("gelu2",   GELU2),
+]
 
 
 # ─────────────────────────────────────────────
