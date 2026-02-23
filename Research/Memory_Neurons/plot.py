@@ -14,7 +14,12 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 # ── Load all experiment metrics ───────────────────────────────────────
 def exp_sort_key(name):
     if name == "control":
-        return (0, 0)
+        return (0, 0.0)
+    if name.startswith("gelu2_ema"):
+        try:
+            return (1, float(name[9:]))
+        except ValueError:
+            pass
     if name.startswith("gelu2_k"):
         try:
             return (1, int(name[7:]))

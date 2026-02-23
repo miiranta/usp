@@ -45,10 +45,10 @@ class Config:
     # Checkpoint
     CHECKPOINT  = os.path.join(OUTPUT_DIR, "best_model.pt")
 
-    # GELU2 memory + habituation
-    GELU2_K     = 4    # rolling buffer size (number of past activations to store)
-    GELU2_TEMP  = 2.0  # habituation temperature τ: higher → sharper suppression of familiar inputs
-    GELU2_BLEND = 0.3  # α: blend factor between current input and memory context (0 = no memory)
+    # GELU2 EMA habituation defaults
+    GELU2_EMA_DECAY = 0.9   # base EMA decay (overridden per experiment)
+    GELU2_TEMP      = 2.0   # initial τ (learnable, this is the starting value)
+    GELU2_BLEND     = 0.3   # initial α blend (learnable, this is the starting value)
 
     @staticmethod
     def get_device():
@@ -229,34 +229,42 @@ class GELU(nn.Module):
 
 
 class GELU2(nn.Module):
-    """Attention-gated memory GELU with habituation (tolerance loop).
+    """EMA-based per-feature habituation GELU.
 
-    For each call, the current input x is blended with a novelty-weighted
-    memory context built from the last K inputs to this layer:
+    Replaces the fixed-size buffer with a per-feature exponential moving
+    average (EMA) that acts as a true frequency counter:
 
-        sim_k   = cosine_similarity(x, past_k)          # how familiar
-        w_k     = exp(-τ * sim_k)                        # high sim → low weight
-        w_k     = w_k / Σ w_k                           # normalise
-        context = Σ w_k * past_k                         # novelty-weighted memory
-        blended = (1 - α) * x + α * context
-        output  = GELU(blended)
+        ema_d  <- decay * ema_d  + (1-decay) * x_d       # running mean per dim
+        std_d  = sqrt(ema_sq_d - ema_d^2)                # running std per dim
+        novelty_d = sigmoid(tau * |x_d - ema_d| / (std_d + eps))  # (B,T,D)
+        blended   = x * ((1-alpha) + alpha * novelty_gate)         # (B,T,D)
+        output    = GELU(blended)
 
-    The more a pattern repeats, the more its buffer entries resemble future
-    inputs → their weights collapse → it is gradually suppressed (tolerance).
+    The more a pattern repeats, the lower its novelty score per dimension,
+    and the more it is suppressed — faithfully modelling tolerance/habituation.
 
-    Config knobs:
-        GELU2_K     – buffer depth
-        GELU2_TEMP  – habituation temperature τ
-        GELU2_BLEND – blend factor α ∈ [0, 1]
+    Modifications vs GELU2 v1:
+      1. Per-feature gate  — each dimension habituates independently
+      2. EMA memory        — frequency-based (not just last K), cheap O(D) state
+      3. Learnable tau & alpha — each layer tunes its own sensitivity
+      4. Std-normalised deviation acts as the recognition threshold
     """
 
-    def __init__(self, k: int = None):
+    def __init__(self, ema_decay: float = None):
         super().__init__()
-        k = k if k is not None else Config.GELU2_K
-        self._buffer: collections.deque = collections.deque(maxlen=k)
+        self._decay = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
+        self._ema:     torch.Tensor = None   # (D,) running mean
+        self._ema_sq:  torch.Tensor = None   # (D,) running mean of x^2
+        self._ready = False
 
-    def reset_buffer(self):
-        self._buffer.clear()
+        # Learnable per-layer scalars (initialised from Config)
+        self.log_tau   = nn.Parameter(torch.tensor(math.log(Config.GELU2_TEMP)))
+        self.log_blend = nn.Parameter(                                    # logit so sigmoid gives alpha
+            torch.tensor(math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)))
+        )
+
+    def reset_state(self):
+        self._ema = None;  self._ema_sq = None;  self._ready = False
 
     @staticmethod
     def _gelu(x: torch.Tensor) -> torch.Tensor:
@@ -269,31 +277,38 @@ class GELU2(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Compress current input to a single D-dim summary (batch/seq agnostic)
-        # x shape: (B, T, D)  →  mean over all dims except last  →  (D,)
-        x_mean = x.detach().flatten(0, -2).mean(dim=0)  # (D,)
+        # x: (B, T, D)
+        tau   = self.log_tau.exp()                      # scalar > 0
+        alpha = torch.sigmoid(self.log_blend)           # scalar in (0, 1)
 
-        # On first call there is no memory yet — pass through directly
-        if not self._buffer:
-            self._buffer.append(x_mean)
+        # Compress to (D,) for EMA update — detached, no grad leak
+        x_mean = x.detach().flatten(0, -2).mean(0)      # (D,)
+
+        if not self._ready:
+            self._ema    = x_mean.clone()
+            self._ema_sq = x_mean.pow(2).clone()
+            self._ready  = True
             return self._gelu(x)
 
-        # ── Novelty score from compressed summaries ────────────────────
-        past_means = torch.stack(list(self._buffer), dim=0)  # (K, D)
+        # ── Per-feature novelty gate ──────────────────────────────────
+        ema_var = (self._ema_sq - self._ema.pow(2)).clamp(min=0)
+        ema_std = ema_var.sqrt()                         # (D,)
 
-        x_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)    # (1, D)
-        p_norm = F.normalize(past_means, dim=-1)              # (K, D)
-        sim    = (p_norm * x_norm).sum(dim=-1)                # (K,)  cosine sim per entry
+        # How many std-deviations is each activation from its long-term mean?
+        deviation = (x - self._ema).abs() / (ema_std + 1e-6)    # (B, T, D)
 
-        # Habituation: most-similar past entry drives suppression
-        max_sim = sim.max()                                   # scalar
-        novelty = torch.exp(-Config.GELU2_TEMP * max_sim)    # 1 = fully novel, →0 = very familiar
+        # Large deviation = novel = gate near 1; small deviation = familiar = gate near 0.5
+        novelty_gate = torch.sigmoid(tau * deviation)            # (B, T, D) in (0.5, 1)
 
-        # ── Gate current input by novelty, then blend ──────────────────
-        # familiar input is suppressed; novel input passes at full strength
-        blended = (1.0 - Config.GELU2_BLEND) * x + Config.GELU2_BLEND * novelty * x
+        # ── Blend: familiar dims suppressed, novel dims preserved ──────────
+        effective_scale = (1.0 - alpha) + alpha * novelty_gate   # (B, T, D)
+        blended = x * effective_scale
 
-        self._buffer.append(x_mean)
+        # ── Update EMA state (detached) ────────────────────────────────
+        d = self._decay
+        self._ema    = d * self._ema    + (1 - d) * x_mean
+        self._ema_sq = d * self._ema_sq + (1 - d) * x_mean.pow(2)
+
         return self._gelu(blended)
 
 
@@ -385,11 +400,11 @@ def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
 #  Experiments
 # ─────────────────────────────────────────────
 
-GELU2_K_VALUES = [1, 4, 16, 64, 256]
+GELU2_EMA_DECAYS = [0.1, 0.5, 0.9, 0.99, 0.999]
 
 EXPERIMENTS = (
     [("control", GELU)]
-    + [(f"gelu2_k{k}", functools.partial(GELU2, k=k)) for k in GELU2_K_VALUES]
+    + [(f"gelu2_ema{d}", functools.partial(GELU2, ema_decay=d)) for d in GELU2_EMA_DECAYS]
 )
 
 
