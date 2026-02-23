@@ -1,4 +1,5 @@
 import os
+import csv
 import math
 import time
 import atexit
@@ -428,6 +429,11 @@ def run_experiment(exp_name, activation_cls, vocab, device):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=Config.EPOCHS)
 
     best_val_loss = float('inf')
+    metrics_path = os.path.join(output_dir, "metrics.csv")
+
+    with open(metrics_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["epoch", "train_loss", "train_ppl", "val_loss", "val_ppl"])
 
     # Training loop
     for epoch in range(1, Config.EPOCHS + 1):
@@ -438,6 +444,9 @@ def run_experiment(exp_name, activation_cls, vocab, device):
 
         print(f"  train loss {tr_loss:.4f} | ppl {tr_ppl:.2f}")
         print(f"  valid loss {vl_loss:.4f} | ppl {vl_ppl:.2f}")
+
+        with open(metrics_path, "a", newline="") as f:
+            csv.writer(f).writerow([epoch, tr_loss, tr_ppl, vl_loss, vl_ppl])
 
         if vl_loss < best_val_loss:
             best_val_loss = vl_loss
@@ -450,6 +459,11 @@ def run_experiment(exp_name, activation_cls, vocab, device):
     # model.load_state_dict(torch.load(checkpoint, map_location=device))
     te_loss, te_ppl = run_epoch(model, test_loader, criterion, optimizer, device, Config, train=False)
     print(f"  test loss {te_loss:.4f} | ppl {te_ppl:.2f}\n")
+
+    with open(os.path.join(output_dir, "test_metrics.csv"), "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["test_loss", "test_ppl"])
+        writer.writerow([te_loss, te_ppl])
 
 
 # ─────────────────────────────────────────────
