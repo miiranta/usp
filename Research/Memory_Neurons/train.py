@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 
 # ─────────────────────────────────────────────
@@ -265,36 +266,31 @@ class GELU2(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Compress current input to a single D-dim summary (batch/seq agnostic)
+        # x shape: (B, T, D)  →  mean over all dims except last  →  (D,)
+        x_mean = x.detach().flatten(0, -2).mean(dim=0)  # (D,)
+
         # On first call there is no memory yet — pass through directly
         if not self._buffer:
-            self._buffer.append(x.detach())
+            self._buffer.append(x_mean)
             return self._gelu(x)
 
-        # ── Build novelty-weighted memory context ──────────────────────
-        past = torch.stack(list(self._buffer), dim=0)  # (K, B, T, D)
-        K = past.size(0)
+        # ── Novelty score from compressed summaries ────────────────────
+        past_means = torch.stack(list(self._buffer), dim=0)  # (K, D)
 
-        # Flatten (B, T, D) → (B*T, D) for similarity computation
-        shape   = x.shape                               # (B, T, D)
-        x_flat  = x.detach().view(-1, shape[-1])        # (B*T, D)
-        p_flat  = past.view(K, -1, shape[-1])           # (K, B*T, D)
+        x_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)    # (1, D)
+        p_norm = F.normalize(past_means, dim=-1)              # (K, D)
+        sim    = (p_norm * x_norm).sum(dim=-1)                # (K,)  cosine sim per entry
 
-        # Cosine similarity: scalar per past entry (mean over all positions)
-        x_norm  = F.normalize(x_flat, dim=-1)           # (B*T, D)
-        p_norm  = F.normalize(p_flat, dim=-1)           # (K, B*T, D)
-        sim     = (p_norm * x_norm.unsqueeze(0)).sum(dim=-1).mean(dim=-1)  # (K,)
+        # Habituation: most-similar past entry drives suppression
+        max_sim = sim.max()                                   # scalar
+        novelty = torch.exp(-Config.GELU2_TEMP * max_sim)    # 1 = fully novel, →0 = very familiar
 
-        # Habituation weights: familiar → low weight
-        weights = torch.exp(-Config.GELU2_TEMP * sim)   # (K,)
-        weights = weights / (weights.sum() + 1e-8)      # normalise to sum=1
+        # ── Gate current input by novelty, then blend ──────────────────
+        # familiar input is suppressed; novel input passes at full strength
+        blended = (1.0 - Config.GELU2_BLEND) * x + Config.GELU2_BLEND * novelty * x
 
-        # Weighted memory context, broadcast weights over (B, T, D)
-        context = (past * weights.view(K, *([1] * (past.dim() - 1)))).sum(dim=0)  # (B, T, D)
-
-        # ── Blend and apply GELU ───────────────────────────────────────
-        blended = (1.0 - Config.GELU2_BLEND) * x + Config.GELU2_BLEND * context
-
-        self._buffer.append(x.detach())
+        self._buffer.append(x_mean)
         return self._gelu(blended)
 
 
@@ -352,9 +348,11 @@ def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
     total_loss, total_tokens = 0.0, 0
     t0 = time.time()
 
+    phase = "train" if train else "eval "
     ctx = torch.enable_grad() if train else torch.no_grad()
     with ctx:
-        for step, (x, y) in enumerate(loader, 1):
+        pbar = tqdm(enumerate(loader, 1), total=len(loader), desc=f"  {phase}", leave=False)
+        for step, (x, y) in pbar:
             x, y = x.to(device), y.to(device)
             logits = model(x)                          # (B, T, V)
             loss = criterion(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
@@ -368,11 +366,13 @@ def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
             total_loss   += loss.item() * y.numel()
             total_tokens += y.numel()
 
+            avg = total_loss / total_tokens
+            ppl = math.exp(min(avg, 20))
+            pbar.set_postfix(loss=f"{avg:.4f}", ppl=f"{ppl:.2f}")
+
             if train and step % cfg.LOG_EVERY == 0:
-                avg = total_loss / total_tokens
-                ppl = math.exp(min(avg, 20))
                 elapsed = time.time() - t0
-                print(f"  step {step:5d} | loss {avg:.4f} | ppl {ppl:8.2f} | {elapsed:.1f}s")
+                tqdm.write(f"  step {step:5d} | loss {avg:.4f} | ppl {ppl:8.2f} | {elapsed:.1f}s")
 
     avg_loss = total_loss / total_tokens
     return avg_loss, math.exp(min(avg_loss, 20))
@@ -441,13 +441,13 @@ def run_experiment(exp_name, activation_cls, vocab, device):
 
         if vl_loss < best_val_loss:
             best_val_loss = vl_loss
-            torch.save(model.state_dict(), checkpoint)
-            print(f"  → saved best model (val ppl {vl_ppl:.2f})")
+            # torch.save(model.state_dict(), checkpoint)
+            print(f"  → new best model (val ppl {vl_ppl:.2f})")
         print()
 
     # Test
     print("── Test ──")
-    model.load_state_dict(torch.load(checkpoint, map_location=device))
+    # model.load_state_dict(torch.load(checkpoint, map_location=device))
     te_loss, te_ppl = run_epoch(model, test_loader, criterion, optimizer, device, Config, train=False)
     print(f"  test loss {te_loss:.4f} | ppl {te_ppl:.2f}\n")
 
