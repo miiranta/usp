@@ -4,6 +4,7 @@ import math
 import time
 import atexit
 import collections
+import functools
 
 import torch
 import torch.nn as nn
@@ -249,9 +250,10 @@ class GELU2(nn.Module):
         GELU2_BLEND – blend factor α ∈ [0, 1]
     """
 
-    def __init__(self):
+    def __init__(self, k: int = None):
         super().__init__()
-        self._buffer: collections.deque = collections.deque(maxlen=Config.GELU2_K)
+        k = k if k is not None else Config.GELU2_K
+        self._buffer: collections.deque = collections.deque(maxlen=k)
 
     def reset_buffer(self):
         self._buffer.clear()
@@ -383,10 +385,12 @@ def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
 #  Experiments
 # ─────────────────────────────────────────────
 
-EXPERIMENTS = [
-    ("gelu",  GELU),
-    ("gelu2", GELU2),
-]
+GELU2_K_VALUES = [1, 4, 16, 64, 256]
+
+EXPERIMENTS = (
+    [("control", GELU)]
+    + [(f"gelu2_k{k}", functools.partial(GELU2, k=k)) for k in GELU2_K_VALUES]
+)
 
 
 # ─────────────────────────────────────────────
@@ -399,7 +403,8 @@ def run_experiment(exp_name, activation_cls, vocab, device):
 
     print(f"\n{'='*55}")
     print(f"  Experiment : {exp_name}")
-    print(f"  Activation : {activation_cls.__name__}")
+    act_name = getattr(activation_cls, "__name__", None) or getattr(activation_cls, "func", activation_cls).__name__
+    print(f"  Activation : {act_name}")
     print(f"  Output dir : {output_dir}")
     print(f"{'='*55}")
 
