@@ -228,32 +228,28 @@ class GELU(nn.Module):
 
 
 class GELU2(nn.Module):
-    """EMA-based per-feature habituation GELU.
+    """EMA-based habituation GELU with learnable parameters.
 
-    Replaces the fixed-size buffer with a per-feature exponential moving
-    average (EMA) that acts as a true frequency counter:
+    Computes cosine similarity between the current batch mean and an EMA of
+    past batch means to derive a scalar novelty score:
 
-        ema_d  <- decay * ema_d  + (1-decay) * x_d       # running mean per dim
-        std_d  = sqrt(ema_sq_d - ema_d^2)                # running std per dim
-        novelty_d = sigmoid(tau * |x_d - ema_d| / (std_d + eps))  # (B,T,D)
-        blended   = x * ((1-alpha) + alpha * novelty_gate)         # (B,T,D)
-        output    = GELU(blended)
+        ema   <- d * ema + (1-d) * x_mean          # running mean, O(D) state
+        sim   = cosine(x_mean, ema)                 # 1=familiar, -1=novel
+        novelty = exp(-τ * sim)                     # 1=novel, →0=familiar
+        scale = (1 - α*d) + α*d * novelty          # scalar gate
+        output = GELU(x * scale)
 
-    The more a pattern repeats, the lower its novelty score per dimension,
-    and the more it is suppressed — faithfully modelling tolerance/habituation.
-
-    Modifications vs GELU2 v1:
-      1. Per-feature gate  — each dimension habituates independently
-      2. EMA memory        — frequency-based (not just last K), cheap O(D) state
-      3. Learnable tau & alpha — each layer tunes its own sensitivity
-      4. Std-normalised deviation acts as the recognition threshold
+    The EMA makes the memory frequency-based (not just last-K recency).
+    All three hyperparameters are learnable per-layer via Adam:
+        logit_decay → d ∈ (0,1)   : memory length (long d = strong habituation)
+        log_tau     → τ > 0       : suppression sharpness
+        log_blend   → α ∈ (0,1)  : max suppression strength
     """
 
     def __init__(self, ema_decay: float = None):
         super().__init__()
         init_decay = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
-        self._ema:     torch.Tensor = None   # (D,) running mean
-        self._ema_sq:  torch.Tensor = None   # (D,) running mean of x^2
+        self._ema: torch.Tensor = None   # (D,) running mean
         self._ready = False
 
         # Learnable per-layer scalars (all in logit/log space for unconstrained optimisation)
@@ -266,7 +262,7 @@ class GELU2(nn.Module):
         )
 
     def reset_state(self):
-        self._ema = None;  self._ema_sq = None;  self._ready = False
+        self._ema = None;  self._ready = False
 
     @staticmethod
     def _gelu(x: torch.Tensor) -> torch.Tensor:
@@ -282,41 +278,29 @@ class GELU2(nn.Module):
         # x: (B, T, D)
         tau   = self.log_tau.exp()                      # scalar > 0
         alpha = torch.sigmoid(self.log_blend)           # scalar in (0, 1)
+        d     = torch.sigmoid(self.logit_decay)         # in (0,1), stays in graph for grad
+        d_val = d.detach().item()                       # plain float for EMA update
 
-        # Compress to (D,) for EMA update — detached, no grad leak
-        x_flat  = x.detach().flatten(0, -2)            # (B*T, D)
-        x_mean  = x_flat.mean(0)                        # (D,)  → E[x]
-        x2_mean = x_flat.pow(2).mean(0)                 # (D,)  → E[x²]  (NOT E[x]²)
+        x_mean = x.detach().flatten(0, -2).mean(0)     # (D,) batch/seq-agnostic summary
 
         if not self._ready:
-            self._ema    = x_mean.clone()
-            self._ema_sq = x2_mean.clone()              # Var = E[x²] - E[x]² → 0 on first step
-            self._ready  = True
+            self._ema   = x_mean.clone()
+            self._ready = True
             return self._gelu(x)
 
-        # ── Per-feature novelty gate ──────────────────────────────────
-        ema_var = (self._ema_sq - self._ema.pow(2)).clamp(min=0)
-        ema_std = ema_var.sqrt()                         # (D,)
+        # ── Cosine similarity between current mean and EMA ─────────────
+        # high sim → familiar → suppress; low sim → novel → pass through
+        sim     = F.cosine_similarity(x_mean.unsqueeze(0), self._ema.unsqueeze(0)).squeeze()
+        novelty = torch.exp(-tau * sim)                 # 1 = fully novel, →0 = very familiar
 
-        # How many std-deviations is each activation from its long-term mean?
-        deviation = (x - self._ema).abs() / (ema_std + 1e-6)    # (B, T, D)
-
-        # Large deviation = novel = gate near 1; small deviation = familiar = gate near 0.5
-        novelty_gate = torch.sigmoid(tau * deviation)            # (B, T, D) in (0.5, 1)
-
-        # d is used in effective_scale (so logit_decay gets gradients) AND in the EMA
-        # update (as a plain float, so stored state stays graph-free across steps)
-        d     = torch.sigmoid(self.logit_decay)          # in (0,1), stays in graph
-        d_val = d.detach().item()                        # plain float for EMA update
-
-        # d→1 (long memory): habituation fully applied
-        # d→0 (no memory):   gate bypassed, effective_scale→1, plain GELU
-        effective_scale = (1.0 - alpha * d) + alpha * d * novelty_gate   # (B, T, D)
+        # d gates memory strength; gradient for logit_decay flows through here:
+        #   d→1 (long memory): habituation fully applied
+        #   d→0 (no memory):   effective_scale→1, behaves like plain GELU
+        effective_scale = (1.0 - alpha * d) + alpha * d * novelty
         blended = x * effective_scale
 
-        # ── Update EMA state with plain-float d_val (no graph retained) ──
-        self._ema    = d_val * self._ema    + (1 - d_val) * x_mean
-        self._ema_sq = d_val * self._ema_sq + (1 - d_val) * x2_mean   # tracks E[x²], not E[x]²
+        # ── Update EMA with plain-float d_val (no graph retained) ─────
+        self._ema = d_val * self._ema + (1 - d_val) * x_mean
 
         return self._gelu(blended)
 
