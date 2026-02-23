@@ -36,7 +36,7 @@ class Config:
 
     # Training
     BATCH_SIZE  = 64
-    EPOCHS      = 10
+    EPOCHS      = 20
     LR          = 3e-4
     GRAD_CLIP   = 1.0
     LOG_EVERY   = 200    # steps between log lines
