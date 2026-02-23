@@ -304,14 +304,19 @@ class GELU2(nn.Module):
         # Large deviation = novel = gate near 1; small deviation = familiar = gate near 0.5
         novelty_gate = torch.sigmoid(tau * deviation)            # (B, T, D) in (0.5, 1)
 
-        # ── Blend: familiar dims suppressed, novel dims preserved ──────────
-        effective_scale = (1.0 - alpha) + alpha * novelty_gate   # (B, T, D)
+        # d is used in effective_scale (so logit_decay gets gradients) AND in the EMA
+        # update (as a plain float, so stored state stays graph-free across steps)
+        d     = torch.sigmoid(self.logit_decay)          # in (0,1), stays in graph
+        d_val = d.detach().item()                        # plain float for EMA update
+
+        # d→1 (long memory): habituation fully applied
+        # d→0 (no memory):   gate bypassed, effective_scale→1, plain GELU
+        effective_scale = (1.0 - alpha * d) + alpha * d * novelty_gate   # (B, T, D)
         blended = x * effective_scale
 
-        # ── Update EMA state (detached) ────────────────────────────────
-        d = torch.sigmoid(self.logit_decay)              # learned decay in (0, 1)
-        self._ema    = d * self._ema    + (1 - d) * x_mean
-        self._ema_sq = d * self._ema_sq + (1 - d) * x2_mean   # tracks E[x²], not E[x]²
+        # ── Update EMA state with plain-float d_val (no graph retained) ──
+        self._ema    = d_val * self._ema    + (1 - d_val) * x_mean
+        self._ema_sq = d_val * self._ema_sq + (1 - d_val) * x2_mean   # tracks E[x²], not E[x]²
 
         return self._gelu(blended)
 
