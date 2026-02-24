@@ -484,7 +484,6 @@ class GELU4(nn.Module):
 
     All scalar params (birth/death/sharpness) created at __init__.
     Per-neuron (D,) params created lazily.
-    Birth capped at GELU3_K_MAX; cleanup prune runs post-forward with no gradient impact.
     """
 
     def __init__(self, ema_decay: float = None):
@@ -619,7 +618,7 @@ class GELU4(nn.Module):
             self._act_score[k] = a_decay * self._act_score[k] + (1.0 - a_decay) * target
 
         # ── Birth (capped at K_MAX, uses detached thresh_birth) ────────
-        if max_sim.detach().mean().item() < thresh_birth and K < Config.GELU3_K_MAX:
+        if max_sim.detach().mean().item() < thresh_birth:
             self._spawn(x_mean)
 
         # ── Memory cleanup (post-forward, no gradient impact) ──────────
