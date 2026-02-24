@@ -205,3 +205,69 @@ path = os.path.join(PLOTS_DIR, "test_results.png")
 fig.savefig(path, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"Saved: {path}")
+
+# ── Parameter count comparison ────────────────────────────────────────
+param_records = []
+for exp_name in exp_names_sorted:
+    info_path = os.path.join(OUTPUT_DIR, exp_name, "model_info.csv")
+    if not os.path.isfile(info_path):
+        continue
+    df = pd.read_csv(info_path)
+    param_records.append({
+        "experiment": exp_name,
+        "label":      pretty(exp_name),
+        "n_params":   int(df["n_params"].iloc[0]),
+    })
+
+if param_records:
+    param_df = pd.DataFrame(param_records)
+    # maintain the same colour scheme as the test-results plot
+    p_colors, bi, oi = [], 0, 0
+    for lbl in param_df["label"]:
+        if lbl == "Control":
+            p_colors.append("#888888")
+        elif "+attn" in lbl:
+            p_colors.append(orange_shades[oi % 5]); oi += 1
+        else:
+            p_colors.append(blue_shades[bi % 5]);   bi += 1
+
+    n = len(param_df)
+    fig, ax = plt.subplots(figsize=(9, max(4, 0.45 * n + 2)))
+    fig.suptitle("Trainable Parameter Count per Experiment",
+                 fontsize=13, fontweight="bold")
+
+    bars = ax.barh(param_df["label"], param_df["n_params"],
+                   color=p_colors, edgecolor="white")
+    ax.set_xlabel("Number of trainable parameters")
+    ax.invert_yaxis()
+    span = param_df["n_params"].max() - param_df["n_params"].min() + 1
+    for bar, val in zip(bars, param_df["n_params"]):
+        ax.text(val + 0.015 * span, bar.get_y() + bar.get_height() / 2,
+                f"{val:,}", va="center", ha="left", fontsize=8)
+    ax.set_xlim(0, param_df["n_params"].max() + 0.25 * span)
+
+    # reference line at control param count
+    ctrl_val = param_df.loc[param_df["experiment"] == "control", "n_params"]
+    if len(ctrl_val):
+        ax.axvline(ctrl_val.values[0], color="red", linewidth=1.2,
+                   linestyle="--", alpha=0.7, label="Control")
+        ax.legend(fontsize=8)
+
+    plt.tight_layout()
+    path = os.path.join(PLOTS_DIR, "param_counts.png")
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {path}")
+
+    # Also print a table
+    print("\n" + "="*45)
+    print("  PARAMETER COUNTS")
+    print("="*45)
+    ctrl_n = param_df.loc[param_df["experiment"] == "control", "n_params"]
+    ctrl_n = ctrl_n.values[0] if len(ctrl_n) else None
+    for _, row in param_df.iterrows():
+        delta = f"  (+{row['n_params'] - ctrl_n:,})" if ctrl_n and row['experiment'] != "control" else ""
+        print(f"  {row['label']:<18} {row['n_params']:>12,}{delta}")
+    print("="*45)
+else:
+    print("No model_info.csv files found; skipping parameter count plot.")

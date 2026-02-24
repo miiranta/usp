@@ -3,7 +3,6 @@ import csv
 import math
 import time
 import atexit
-import functools
 
 import torch
 import torch.nn as nn
@@ -44,10 +43,10 @@ class Config:
     # Checkpoint
     CHECKPOINT  = os.path.join(OUTPUT_DIR, "best_model.pt")
 
-    # GELU2 EMA habituation defaults
-    GELU2_EMA_DECAY = 0.9   # base EMA decay (overridden per experiment)
-    GELU2_TEMP      = 2.0   # initial τ (learnable, this is the starting value)
-    GELU2_BLEND     = 0.3   # initial α blend (learnable, this is the starting value)
+    # GELU2 / GELU3 EMA habituation defaults (all learnable)
+    GELU2_EMA_DECAY = 0.9   # base EMA decay
+    GELU2_TEMP      = 2.0   # initial τ
+    GELU2_BLEND     = 0.3   # initial α blend
 
     @staticmethod
     def get_device():
@@ -310,140 +309,79 @@ class GELU2(nn.Module):
         return self._gelu(blended)
 
 
-class GELU2Soft(nn.Module):
-    """GELU2 with **soft** prototype assignment.
+class GELU3(nn.Module):
+    """Per-neuron learnable EMA GELU with a fully dynamic prototype registry.
 
-    Replaces winner-takes-all competitive update with a softmax-weighted
-    update across all K prototypes.  Every prototype moves toward x_mean
-    proportionally to its cosine similarity with x_mean:
+    All five hyperparameters are (D,) vectors — one value per feature dimension:
+        logit_decay          → d ∈ (0,1)  prototype memory speed
+        log_tau              → τ > 0      suppression sharpness
+        log_blend            → α ∈ (0,1)  max suppression strength
+        log_sensitivity_birth→ θ_b ∈ (0,1) novelty threshold for spawning
+        log_sensitivity_death→ θ_d ∈ (0,1) activity threshold for pruning
 
-        weights_k = softmax(τ_s * cosine(x_mean, prototype_k))   # (K,)
-        prototype_k ← d * prototype_k + (1-d) * weights_k * (x_mean - prot_k)
-                     + d * prototype_k                           (vectorised)
+    Novelty gate is per-neuron (B, T, D):
+        novelty[b,t,d] = exp(-tau[d] * max_sim[b,t])
+        scale[b,t,d]   = (1 - α[d]*d[d]) + α[d]*d[d] * novelty[b,t,d]
 
-    This ensures *all* prototypes remain alive and each specialises
-    gradually — fixing the dead-prototype problem that makes hard
-    winner-takes-all degrade above K≈4.
+    Dynamic Prototype Registry (no hard cap):
+        Birth  – when batch-averaged max cosine-sim < mean(sensitivity_birth),
+                 spawn a new prototype from the current batch mean.
+        Death  – each prototype k tracks an EMA activation score (how often
+                 it is selected as nearest).  When act_score[k] drops below
+                 mean(sensitivity_death), the prototype is pruned (≥1 kept).
+        Strength – emerges naturally: frequently selected prototypes build
+                 a representative EMA → high sim → strong suppression.
 
-    Extra learnable scalar:
-        log_tau_soft → τ_s > 0 : sharpness of soft assignment
+    Parameters are lazily created on the first forward pass (D unknown at
+    __init__ time).  Build the optimizer *after* the dummy forward that
+    run_experiment already performs.
     """
 
-    def __init__(self, n_prototypes: int = 1, ema_decay: float = None):
+    _ACT_DECAY = 0.99   # fixed EMA decay for per-prototype activation scoring
+
+    def __init__(self, ema_decay: float = None):
         super().__init__()
-        init_decay  = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
-        self._K     = n_prototypes
-        self._emas: torch.Tensor = None
+        self._init_decay = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
+
+        # Per-neuron learnable parameters – lazily created in _init_params
+        self.logit_decay           : nn.Parameter = None  # (D,)
+        self.log_tau               : nn.Parameter = None  # (D,)
+        self.log_blend             : nn.Parameter = None  # (D,)
+        self.log_sensitivity_birth : nn.Parameter = None  # (D,)
+        self.log_sensitivity_death : nn.Parameter = None  # (D,)
+
+        self._D = None   # filled on first forward
+
+        # Dynamic prototype state
+        self._emas      : torch.Tensor = None   # (K, D)
+        self._act_score : list         = None   # [float], length K — EMA of selection
+        self._proto_log : list         = []     # K count sampled every training forward
         self._ready = False
 
-        self.log_tau      = nn.Parameter(torch.tensor(math.log(Config.GELU2_TEMP)))
-        self.log_blend    = nn.Parameter(
-            torch.tensor(math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)))
-        )
-        self.logit_decay  = nn.Parameter(
-            torch.tensor(math.log(init_decay / (1.0 - init_decay)))
-        )
-        # Sharpness of the soft assignment (separate from novelty τ)
-        self.log_tau_soft = nn.Parameter(torch.tensor(0.0))  # starts at τ=1
-
-    def reset_state(self):
-        self._emas = None;  self._ready = False
-
-    @staticmethod
-    def _gelu(x: torch.Tensor) -> torch.Tensor:
-        return (
-            0.5 * x
-            * (1.0 + torch.tanh(
-                math.sqrt(2.0 / math.pi)
-                * (x + 0.044715 * x.pow(3))
-            ))
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        tau       = self.log_tau.exp()
-        tau_soft  = self.log_tau_soft.exp()
-        alpha     = torch.sigmoid(self.log_blend)
-        d         = torch.sigmoid(self.logit_decay)
-        d_val     = d.detach().item()
-
-        x_mean = x.detach().flatten(0, -2).mean(0)   # (D,)
-
-        if not self._ready:
-            base = x_mean.unsqueeze(0).expand(self._K, -1).clone()
-            if self._K > 1:
-                base = base + torch.randn_like(base) * 1e-3
-            self._emas  = base
-            self._ready = True
-            return self._gelu(x)
-
-        # ── Per-token novelty (same as GELU2) ──────────────────────────
-        # Detach _emas so stale grad_fn from a previous soft-update never
-        # leaks into the current forward graph (fixes retain_graph error).
-        x_norm  = F.normalize(x, dim=-1)                                # (B, T, D)
-        p_norm  = F.normalize(self._emas.detach(), dim=-1)              # (K, D)
-        sim     = torch.einsum('btd,kd->btk', x_norm, p_norm)          # (B, T, K)
-
-        max_sim, _ = sim.max(dim=-1)                            # (B, T)
-        novelty    = torch.exp(-tau * max_sim)                  # (B, T)
-
-        effective_scale = (1.0 - alpha * d) + alpha * d * novelty.unsqueeze(-1)
-        blended = x * effective_scale
-
-        # ── Soft update: outside autograd — _emas must stay grad_fn-free
-        with torch.no_grad():
-            x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)      # (1, D)
-            proto_sims  = (p_norm * x_mean_norm).sum(-1)                # (K,) cosine sims
-            weights     = F.softmax(tau_soft * proto_sims, dim=0)       # (K,) ∑=1
-            delta       = x_mean.unsqueeze(0) - self._emas              # (K, D)
-            self._emas  = self._emas + (1 - d_val) * weights.unsqueeze(1) * delta
-
-        return self._gelu(blended)
-
-
-class GELU2Selective(nn.Module):
-    """GELU2 with **input-dependent** (selective) decay, inspired by Mamba.
-
-    Instead of a fixed scalar decay *d*, the decay is computed as a linear
-    function of the current batch mean activation:
-
-        d = sigmoid(W_decay · x_mean + b_decay)
-
-    Initialised so W≈0 gives the same behaviour as the scalar baseline.
-    As training proceeds:
-        • Novel / surprising input  → W·x pulls d toward 0 → fast update
-        • Familiar / routine input  → W·x pulls d toward 1 → long memory
-
-    This lets the memory length adapt on-the-fly rather than being frozen.
-    """
-
-    def __init__(self, n_prototypes: int = 1, ema_decay: float = None):
-        super().__init__()
-        init_decay   = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
-        self._K      = n_prototypes
-        self._emas: torch.Tensor = None
-        self._ready  = False
-        self._logit0 = math.log(init_decay / (1.0 - init_decay))
-
-        self.log_tau   = nn.Parameter(torch.tensor(math.log(Config.GELU2_TEMP)))
+    # ── Lazy parameter initialisation ─────────────────────────────────
+    def _init_params(self, D: int, device: torch.device, dtype: torch.dtype):
+        self._D = D
+        ld = math.log(self._init_decay / (1.0 - self._init_decay))
+        self.logit_decay = nn.Parameter(
+            torch.full((D,), ld, device=device, dtype=dtype))
+        self.log_tau = nn.Parameter(
+            torch.full((D,), math.log(Config.GELU2_TEMP), device=device, dtype=dtype))
         self.log_blend = nn.Parameter(
-            torch.tensor(math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)))
-        )
-
-        # LazyLinear: input dim inferred on first call → works for any D_FF / D_MODEL
-        self.W_decay = nn.LazyLinear(1, bias=True)
-
-    def _maybe_init_wdecay(self):
-        """After LazyLinear materialises weights, apply the desired initialisation."""
-        if isinstance(self.W_decay.weight, nn.UninitializedParameter):
-            return
-        if getattr(self, '_wdecay_init_done', False):
-            return
-        nn.init.zeros_(self.W_decay.weight)
-        nn.init.constant_(self.W_decay.bias, self._logit0)
-        self._wdecay_init_done = True
+            torch.full((D,), math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)),
+                       device=device, dtype=dtype))
+        # birth: sigmoid(-1) ≈ 0.27 — conservative, spawns only on clearly novel input
+        self.log_sensitivity_birth = nn.Parameter(
+            torch.full((D,), -1.0, device=device, dtype=dtype))
+        # death: sigmoid(-3) ≈ 0.05 — prototype must be selected occasionally to survive
+        self.log_sensitivity_death = nn.Parameter(
+            torch.full((D,), -3.0, device=device, dtype=dtype))
 
     def reset_state(self):
-        self._emas = None;  self._ready = False
+        self._emas      = None
+        self._act_score = None
+        self._proto_log = []
+        self._ready     = False
+        # Per-neuron Parameters are kept — only the prototype tensors are reset.
 
     @staticmethod
     def _gelu(x: torch.Tensor) -> torch.Tensor:
@@ -455,201 +393,91 @@ class GELU2Selective(nn.Module):
             ))
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        tau   = self.log_tau.exp()
-        alpha = torch.sigmoid(self.log_blend)
+    # ── Prototype management ───────────────────────────────────────────
+    def _spawn(self, x_mean: torch.Tensor):
+        """Append a new prototype; initial activation score = 1.0."""
+        self._emas      = torch.cat([self._emas, x_mean.unsqueeze(0)], dim=0)
+        self._act_score.append(1.0)
 
-        x_mean = x.detach().flatten(0, -2).mean(0)   # (D,)
-
-        # Input-dependent decay: scalar derived from x_mean
-        d     = torch.sigmoid(self.W_decay(x_mean))   # (1,) — in graph
-        self._maybe_init_wdecay()                      # fix init after first materialise
-        d_val = d.detach().item()
-
-        if not self._ready:
-            base = x_mean.unsqueeze(0).expand(self._K, -1).clone()
-            if self._K > 1:
-                base = base + torch.randn_like(base) * 1e-3
-            self._emas  = base
-            self._ready = True
-            return self._gelu(x)
-
-        # ── Per-token novelty ───────────────────────────────────────────
-        x_norm = F.normalize(x, dim=-1)
-        p_norm = F.normalize(self._emas, dim=-1)
-        sim    = torch.einsum('btd,kd->btk', x_norm, p_norm)
-
-        max_sim, _ = sim.max(dim=-1)
-        novelty    = torch.exp(-tau * max_sim)
-
-        effective_scale = (1.0 - alpha * d) + alpha * d * novelty.unsqueeze(-1)
-        blended = x * effective_scale
-
-        # ── Competitive (hard) EMA update ──────────────────────────────
-        x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)
-        k_star      = (p_norm * x_mean_norm).sum(-1).argmax().item()
-        self._emas[k_star] = d_val * self._emas[k_star] + (1 - d_val) * x_mean
-
-        return self._gelu(blended)
-
-
-class GELU2SelectiveSoft(nn.Module):
-    """GELU2 with **both** input-dependent decay (Mamba-inspired) and
-    **soft** prototype assignment — the full combination.
-
-    Combines:
-    • d = sigmoid(W_decay · x_mean) — content-dependent memory length
-    • weights = softmax(τ_s · cosine(x_mean, prototypes)) — no dead prototypes
-    """
-
-    def __init__(self, n_prototypes: int = 1, ema_decay: float = None):
-        super().__init__()
-        init_decay   = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
-        self._K      = n_prototypes
-        self._emas: torch.Tensor = None
-        self._ready  = False
-        self._logit0 = math.log(init_decay / (1.0 - init_decay))
-
-        self.log_tau      = nn.Parameter(torch.tensor(math.log(Config.GELU2_TEMP)))
-        self.log_blend    = nn.Parameter(
-            torch.tensor(math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)))
-        )
-        self.log_tau_soft = nn.Parameter(torch.tensor(0.0))
-
-        # LazyLinear: input dim inferred on first call → works for any D_FF / D_MODEL
-        self.W_decay = nn.LazyLinear(1, bias=True)
-
-    def _maybe_init_wdecay(self):
-        if isinstance(self.W_decay.weight, nn.UninitializedParameter):
+    def _prune(self, death_thresh: float):
+        """Remove prototypes whose activation EMA fell below death_thresh; keep ≥1."""
+        K = self._emas.shape[0]
+        if K <= 1:
             return
-        if getattr(self, '_wdecay_init_done', False):
-            return
-        nn.init.zeros_(self.W_decay.weight)
-        nn.init.constant_(self.W_decay.bias, self._logit0)
-        self._wdecay_init_done = True
+        alive = [k for k in range(K) if self._act_score[k] >= death_thresh]
+        if not alive:   # keep the most recently active one
+            alive = [max(range(K), key=lambda k: self._act_score[k])]
+        if len(alive) < K:
+            self._emas      = self._emas[alive]
+            self._act_score = [self._act_score[k] for k in alive]
 
-    def reset_state(self):
-        self._emas = None;  self._ready = False
-
-    @staticmethod
-    def _gelu(x: torch.Tensor) -> torch.Tensor:
-        return (
-            0.5 * x
-            * (1.0 + torch.tanh(
-                math.sqrt(2.0 / math.pi)
-                * (x + 0.044715 * x.pow(3))
-            ))
-        )
-
+    # ── Forward ────────────────────────────────────────────────────────
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        tau      = self.log_tau.exp()
-        tau_soft = self.log_tau_soft.exp()
-        alpha    = torch.sigmoid(self.log_blend)
-
-        x_mean = x.detach().flatten(0, -2).mean(0)   # (D,)
-
-        d     = torch.sigmoid(self.W_decay(x_mean))   # (1,) — in graph
-        self._maybe_init_wdecay()                      # fix init after first materialise
-        d_val = d.detach().item()
-
-        if not self._ready:
-            base = x_mean.unsqueeze(0).expand(self._K, -1).clone()
-            if self._K > 1:
-                base = base + torch.randn_like(base) * 1e-3
-            self._emas  = base
-            self._ready = True
-            return self._gelu(x)
-
-        # ── Per-token novelty ───────────────────────────────────────────
-        # Detach _emas to prevent stale grad_fn from propagating (retain_graph fix).
-        x_norm  = F.normalize(x, dim=-1)
-        p_norm  = F.normalize(self._emas.detach(), dim=-1)
-        sim     = torch.einsum('btd,kd->btk', x_norm, p_norm)
-
-        max_sim, _ = sim.max(dim=-1)
-        novelty    = torch.exp(-tau * max_sim)
-
-        effective_scale = (1.0 - alpha * d) + alpha * d * novelty.unsqueeze(-1)
-        blended = x * effective_scale
-
-        # ── Soft update — outside autograd so _emas stays grad_fn-free ─
-        with torch.no_grad():
-            x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)
-            proto_sims  = (p_norm * x_mean_norm).sum(-1)             # (K,)
-            weights     = F.softmax(tau_soft * proto_sims, dim=0)    # (K,)
-            delta       = x_mean.unsqueeze(0) - self._emas           # (K, D)
-            self._emas  = self._emas + (1 - d_val) * weights.unsqueeze(1) * delta
-
-        return self._gelu(blended)
-
-
-class HabituatedEncoderLayer(nn.Module):
-    """TransformerEncoderLayer with EMA-based attention habituation.
-
-    Maintains a per-head EMA of attention weight matrices. A habituation
-    bias is subtracted from attention logits before softmax:
-
-        attn_bias = -τ_a * mean_over_heads(ema_attn)   # (T, T)
-        output    = softmax(QKᵀ/√d + causal_mask + attn_bias) · V
-
-    Frequently attended positions accumulate → suppressed over time.
-    τ_a and d_a are learnable per-layer.
-    """
-
-    def __init__(self, d_model: int, n_heads: int, d_ff: int,
-                 dropout: float, activation_cls):
-        super().__init__()
-        self.self_attn = nn.MultiheadAttention(
-            d_model, n_heads, dropout=dropout, batch_first=True
-        )
-        self.linear1  = nn.Linear(d_model, d_ff)
-        self.linear2  = nn.Linear(d_ff, d_model)
-        self.norm1    = nn.LayerNorm(d_model)
-        self.norm2    = nn.LayerNorm(d_model)
-        self.drop     = nn.Dropout(dropout)
-        self.activation = activation_cls()
-        self._n_heads   = n_heads
-
-        self.log_tau_attn     = nn.Parameter(torch.tensor(0.0))
-        self.logit_decay_attn = nn.Parameter(torch.tensor(math.log(0.9 / 0.1)))
-        self._ema_attn: torch.Tensor = None   # (H, T, T)
-
-    def reset_state(self):
-        self._ema_attn = None
-        if hasattr(self.activation, 'reset_state'):
-            self.activation.reset_state()
-
-    def forward(self, x: torch.Tensor,
-                causal_mask: torch.Tensor = None) -> torch.Tensor:
-        tau_a   = self.log_tau_attn.exp()
-        d_a_val = torch.sigmoid(self.logit_decay_attn).detach().item()
+        # x: (B, T, D)
         B, T, D = x.shape
 
-        if self._ema_attn is not None and self._ema_attn.shape[-1] == T:
-            habit_bias = -(tau_a * self._ema_attn).mean(0)        # (T, T)
-            attn_mask  = (causal_mask + habit_bias
-                          if causal_mask is not None else habit_bias)
-        else:
-            attn_mask = causal_mask
+        if self._D is None:
+            self._init_params(D, x.device, x.dtype)
 
-        attn_out, attn_weights = self.self_attn(
-            x, x, x,
-            attn_mask=attn_mask,
-            need_weights=True,
-            average_attn_weights=False,   # (B, H, T, T)
+        tau           = self.log_tau.exp()                            # (D,)
+        alpha         = torch.sigmoid(self.log_blend)                 # (D,)
+        d             = torch.sigmoid(self.logit_decay)               # (D,) in-graph
+        d_val         = d.detach()                                    # (D,) for EMA
+        thresh_birth  = torch.sigmoid(self.log_sensitivity_birth).detach().mean().item()
+        thresh_death  = torch.sigmoid(self.log_sensitivity_death).detach().mean().item()
+
+        x_mean = x.detach().flatten(0, -2).mean(0)    # (D,)
+
+        # ── Bootstrap first call ──────────────────────────────────────
+        if not self._ready:
+            self._emas      = x_mean.unsqueeze(0).clone()   # (1, D)
+            self._act_score = [1.0]
+            self._ready     = True
+            return self._gelu(x)
+
+        # ── Cosine similarity: (B, T, K) ──────────────────────────────
+        x_norm = F.normalize(x,          dim=-1)   # (B, T, D)
+        p_norm = F.normalize(self._emas, dim=-1)   # (K, D)
+        sim    = torch.einsum('btd,kd->btk', x_norm, p_norm)   # (B, T, K)
+
+        max_sim, _ = sim.max(dim=-1)   # (B, T)  — best-matching prototype per token
+
+        # ── Per-neuron novelty & gate: (B, T, D) ──────────────────────
+        novelty = torch.exp(
+            -tau.view(1, 1, D) * max_sim.unsqueeze(-1)
+        )                                                            # (B, T, D)
+        a  = alpha.view(1, 1, D)
+        dg = d.view(1, 1, D)
+        effective_scale = (1.0 - a * dg) + a * dg * novelty         # (B, T, D)
+        blended = x * effective_scale
+
+        # ── Competitive EMA: update nearest prototype ──────────────────
+        x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)       # (1, D)
+        k_star = (
+            (F.normalize(self._emas, dim=-1) @ x_mean_norm.T)
+            .squeeze(-1).argmax().item()
         )
+        self._emas[k_star] = d_val * self._emas[k_star] + (1.0 - d_val) * x_mean
 
-        w = attn_weights.detach().mean(0)   # (H, T, T)
-        if self._ema_attn is None or self._ema_attn.shape != w.shape:
-            self._ema_attn = w.clone()
-        else:
-            self._ema_attn = d_a_val * self._ema_attn + (1 - d_a_val) * w
+        # ── Activation EMA bookkeeping ─────────────────────────────────
+        a_decay = self._ACT_DECAY
+        K = self._emas.shape[0]
+        for k in range(K):
+            target = 1.0 if k == k_star else 0.0
+            self._act_score[k] = a_decay * self._act_score[k] + (1.0 - a_decay) * target
 
-        x = self.norm1(x + self.drop(attn_out))
-        x = self.norm2(x + self.drop(
-            self.linear2(self.drop(self.activation(self.linear1(x))))
-        ))
-        return x
+        # ── Birth ──────────────────────────────────────────────────────
+        if max_sim.mean().item() < thresh_birth:
+            self._spawn(x_mean)
+
+        # ── Death ──────────────────────────────────────────────────────
+        self._prune(thresh_death)
+
+        # ── Log prototype count (training only — grad mode is a good proxy) ──
+        if torch.is_grad_enabled():
+            self._proto_log.append(self._emas.shape[0])
+
+        return self._gelu(blended)
 
 
 class PositionalEncoding(nn.Module):
@@ -669,30 +497,19 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerLM(nn.Module):
-    def __init__(self, vocab_size, cfg: Config, activation_cls=GELU,
-                 with_attn_habituation: bool = False):
+    def __init__(self, vocab_size, cfg: Config, activation_cls=GELU):
         super().__init__()
         self.embed   = nn.Embedding(vocab_size, cfg.D_MODEL)
         self.pos_enc = PositionalEncoding(cfg.D_MODEL, cfg.DROPOUT)
-        self._with_attn = with_attn_habituation
 
-        if with_attn_habituation:
-            # Custom layers with per-head EMA attention bias
-            self.layers = nn.ModuleList([
-                HabituatedEncoderLayer(
-                    cfg.D_MODEL, cfg.N_HEADS, cfg.D_FF, cfg.DROPOUT, activation_cls
-                )
-                for _ in range(cfg.N_LAYERS)
-            ])
-        else:
-            encoder_layer = nn.TransformerEncoderLayer(
-                d_model=cfg.D_MODEL, nhead=cfg.N_HEADS,
-                dim_feedforward=cfg.D_FF, dropout=cfg.DROPOUT,
-                activation=activation_cls(), batch_first=True
-            )
-            self.transformer = nn.TransformerEncoder(
-                encoder_layer, num_layers=cfg.N_LAYERS
-            )
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=cfg.D_MODEL, nhead=cfg.N_HEADS,
+            dim_feedforward=cfg.D_FF, dropout=cfg.DROPOUT,
+            activation=activation_cls(), batch_first=True
+        )
+        self.transformer = nn.TransformerEncoder(
+            encoder_layer, num_layers=cfg.N_LAYERS
+        )
 
         self.head = nn.Linear(cfg.D_MODEL, vocab_size)
         self._init_weights()
@@ -710,11 +527,7 @@ class TransformerLM(nn.Module):
             seq_len, device=x.device
         )
         out = self.pos_enc(self.embed(x))
-        if self._with_attn:
-            for layer in self.layers:
-                out = layer(out, causal_mask=causal_mask)
-        else:
-            out = self.transformer(out, mask=causal_mask, is_causal=True)
+        out = self.transformer(out, mask=causal_mask, is_causal=True)
         return self.head(out)
 
 
@@ -761,50 +574,18 @@ def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
 #  Experiments
 # ─────────────────────────────────────────────
 
-K_VALS     = [1, 2, 4, 8, 16]
-K_VALS_EXT = [1, 2, 4, 8, 16, 32]   # extended range to stress-test K scaling
-
-# ── Round 1: original experiments (results already cached → auto-skipped) ──
-EXPERIMENTS = (
-    [("control",            GELU,                                     False)]
-    + [(f"gelu2_k{k}",      functools.partial(GELU2, n_prototypes=k), False) for k in K_VALS]
-    + [(f"gelu2_k{k}_attn", functools.partial(GELU2, n_prototypes=k), True)  for k in K_VALS]
-)
-
-# ── Round 2: feature ablations ─────────────────────────────────────────────
-#  Soft assignment only — does PPL improve *monotonically* with K now?
-_soft     = [(f"gelu2_soft_k{k}",
-              functools.partial(GELU2Soft, n_prototypes=k), False)
-             for k in K_VALS_EXT]
-
-#  Input-dependent (selective) decay only
-_sel      = [(f"gelu2_sel_k{k}",
-              functools.partial(GELU2Selective, n_prototypes=k), False)
-             for k in K_VALS]
-
-#  Both combined (full model)
-_selsoft  = [(f"gelu2_selsoft_k{k}",
-              functools.partial(GELU2SelectiveSoft, n_prototypes=k), False)
-             for k in K_VALS_EXT]
-
-#  Best combos with attention habituation
-_soft_attn    = [(f"gelu2_soft_k{k}_attn",
-                  functools.partial(GELU2Soft, n_prototypes=k), True)
-                 for k in [4, 8, 16, 32]]
-_selsoft_attn = [(f"gelu2_selsoft_k{k}_attn",
-                  functools.partial(GELU2SelectiveSoft, n_prototypes=k), True)
-                 for k in [4, 8, 16, 32]]
-
-NEW_EXPERIMENTS = _soft + _sel + _selsoft + _soft_attn + _selsoft_attn
-
-ALL_EXPERIMENTS = EXPERIMENTS + NEW_EXPERIMENTS
+ALL_EXPERIMENTS = [
+    ("control",  GELU),
+    ("gelu2_k1", GELU2),
+    ("gelu3_kn", GELU3),
+]
 
 
 # ─────────────────────────────────────────────
 #  Single-experiment runner
 # ─────────────────────────────────────────────
 
-def run_experiment(exp_name, activation_cls, vocab, device, with_attn_habituation: bool = False):
+def run_experiment(exp_name, activation_cls, vocab, device):
     output_dir = os.path.join(Config.OUTPUT_DIR, exp_name)
     checkpoint  = os.path.join(output_dir, "best_model.pt")
 
@@ -833,8 +614,7 @@ def run_experiment(exp_name, activation_cls, vocab, device, with_attn_habituatio
 
     # Model
     model = TransformerLM(
-        len(vocab), Config, activation_cls,
-        with_attn_habituation=with_attn_habituation
+        len(vocab), Config, activation_cls
     ).to(device)
 
     # Materialise any LazyLinear parameters (e.g. GELU2Selective.W_decay)
@@ -849,6 +629,10 @@ def run_experiment(exp_name, activation_cls, vocab, device, with_attn_habituatio
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"  Parameters : {n_params:,}\n")
+
+    # Save model info so plots can compare parameter counts across experiments
+    with open(os.path.join(output_dir, "model_info.csv"), "w", newline="") as f:
+        csv.writer(f).writerows([["n_params"], [n_params]])
 
     criterion = nn.CrossEntropyLoss(ignore_index=vocab.token2idx[Vocab.PAD])
     optimizer = torch.optim.Adam(model.parameters(), lr=Config.LR)
@@ -878,6 +662,23 @@ def run_experiment(exp_name, activation_cls, vocab, device, with_attn_habituatio
             best_val_loss = vl_loss
             # torch.save(model.state_dict(), checkpoint)
             print(f"  → new best model (val ppl {vl_ppl:.2f})")
+
+        # ── GELU3: print prototype-count frequency for this epoch ────────
+        gelu3_mods = [m for m in model.modules() if isinstance(m, GELU3)]
+        if gelu3_mods:
+            from collections import Counter
+            epoch_log = []
+            for m in gelu3_mods:
+                epoch_log.extend(m._proto_log)
+                m._proto_log.clear()
+            if epoch_log:
+                counts   = Counter(epoch_log)
+                total    = len(epoch_log)
+                max_freq = max(counts.values())
+                print(f"  Prototype count distribution (GELU3, {len(gelu3_mods)} layer(s), {total} samples):")
+                for k in sorted(counts):
+                    bar = "█" * max(1, round(counts[k] / max_freq * 30))
+                    print(f"    K={k:3d}: {counts[k]:6d} ({100*counts[k]/total:5.1f}%) {bar}")
         print()
 
     # Test
@@ -905,9 +706,8 @@ def main():
     vocab = Vocab()
     vocab.build([Config.TRAIN_FILE, Config.VALID_FILE, Config.TEST_FILE])
 
-    for exp_name, activation_cls, with_attn in ALL_EXPERIMENTS:
-        run_experiment(exp_name, activation_cls, vocab, device,
-                       with_attn_habituation=with_attn)
+    for exp_name, activation_cls in ALL_EXPERIMENTS:
+        run_experiment(exp_name, activation_cls, vocab, device)
 
 
 if __name__ == "__main__":
