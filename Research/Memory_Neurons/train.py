@@ -776,7 +776,10 @@ class GELU5(nn.Module):
         dist_nearest = dist[k_star].item()                     # dist to winner
 
         # ── Per-token per-neuron familiarity (vectorised over K) ──────
-        diff_all  = x.unsqueeze(0) - self._mus.view(K, 1, 1, D)       # (K,B,T,D)
+        # Detach cluster means so in-place EMA updates later don't
+        # invalidate tensors saved by autograd for backward().
+        mus_fwd   = self._mus.detach()
+        diff_all  = x.unsqueeze(0) - mus_fwd.view(K, 1, 1, D)         # (K,B,T,D)
         famil_all = torch.exp(-tau.view(1, 1, 1, D) * diff_all.abs()) # (K,B,T,D)
         famil     = (r.view(K, 1, 1, 1) * famil_all).sum(dim=0)       # (B,T,D)
         scale     = 1.0 - alpha.view(1, 1, D) * famil                  # (B,T,D)
@@ -987,17 +990,21 @@ class GELU6(nn.Module):
         dist_nearest = dist_batch[k_star].item()
 
         # ── Stage 1: per-token squared distances (B,T,K) ─────────────
+        # Detach cluster means so in-place EMA updates later don't
+        # invalidate tensors saved by autograd for backward().
+        # Gradients still flow through beta via weights; none needed for mus.
+        mus_fwd = self._mus.detach()   # (K,D) snapshot for this forward pass
         # Uses identity: ||x−μ||² = ||x||² − 2xᵀμ + ||μ||²  (no (K,B,T,D) tensor)
         x_sq   = x.pow(2).sum(dim=-1, keepdim=True)            # (B,T,1)
-        mu_sq  = self._mus.pow(2).sum(dim=-1)                  # (K,)
-        cross  = torch.einsum('btd,kd->btk', x, self._mus)    # (B,T,K)
+        mu_sq  = mus_fwd.pow(2).sum(dim=-1)                    # (K,)
+        cross  = torch.einsum('btd,kd->btk', x, mus_fwd)      # (B,T,K)
         dist2  = (x_sq + mu_sq.view(1, 1, K) - 2.0 * cross).clamp(min=0.0) / D  # (B,T,K)
 
         # ── Stage 2: σ-normalised soft assignment → blended refs ──────
         # Gradient flows: loss→famil→eff_mu/eff_sigma→weights→beta
         dist2_norm = dist2 / scales_t.pow(2).view(1, 1, K)     # (B,T,K) in σ² units
         weights    = torch.softmax(-beta * dist2_norm, dim=-1)  # (B,T,K)
-        eff_mu     = torch.einsum('btk,kd->btd', weights, self._mus)    # (B,T,D)
+        eff_mu     = torch.einsum('btk,kd->btd', weights, mus_fwd)      # (B,T,D)
         eff_sigma  = torch.einsum('btk,k->bt',   weights, scales_t)     # (B,T) — via weights→beta
 
         # ── Stage 3: per-neuron τ, scale-normalised familiarity ───────
