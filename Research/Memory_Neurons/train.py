@@ -579,15 +579,24 @@ class GELU4(nn.Module):
         self._act_score.append(1.0)
 
     def _cleanup(self, gate_vals: list):
-        """Memory-only prune: drop prototypes whose gate has collapsed. No gradient impact."""
-        K = self._emas.shape[0]
-        if K <= 1:
+        """Memory-only prune: drop prototypes whose gate has collapsed. No gradient impact.
+
+        gate_vals has length = K at gate-computation time.  _spawn may have added
+        a new prototype since then, so we only consider the first len(gate_vals)
+        slots; the newly born prototype is always kept (it wasn't gated yet).
+        """
+        K_gated = len(gate_vals)   # prototypes that were present when gate was computed
+        if K_gated <= 1:
             return
         eps   = Config.GELU4_PRUNE_EPSILON
-        alive = [k for k in range(K) if gate_vals[k] >= eps]
+        # build alive list over gated slots only; always keep newly spawned ones
+        K_total = self._emas.shape[0]
+        alive = [k for k in range(K_gated) if gate_vals[k] >= eps]
         if not alive:
-            alive = [max(range(K), key=lambda k: gate_vals[k])]
-        if len(alive) < K:
+            alive = [max(range(K_gated), key=lambda k: gate_vals[k])]
+        # append any prototypes born after gate was computed (indices K_gated..K_total-1)
+        alive += list(range(K_gated, K_total))
+        if len(alive) < K_total:
             self._emas      = self._emas[alive]
             self._act_score = [self._act_score[k] for k in alive]
 
