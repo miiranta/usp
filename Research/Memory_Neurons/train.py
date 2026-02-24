@@ -699,6 +699,8 @@ class TransformerLM(nn.Module):
 
     def _init_weights(self):
         for p in self.parameters():
+            if isinstance(p, nn.parameter.UninitializedParameter):
+                continue   # LazyLinear params – not yet materialised
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
