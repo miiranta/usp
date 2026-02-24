@@ -968,8 +968,13 @@ class GELU6(nn.Module):
 
         # ── Bootstrap ──────────────────────────────────────────────────
         if not self._ready:
-            init_scale = x_mean.pow(2).mean().sqrt().item()
-            init_scale = max(init_scale, 1e-3)               # avoid zero on dead layer
+            # init σ = RMS distance from individual tokens to the batch mean.
+            # This is the token-level spread, not the magnitude of the mean —
+            # a stable starting value that matches what the EMA will track later.
+            with torch.no_grad():
+                diff_boot  = x.detach() - x_mean.view(1, 1, D)          # (B,T,D)
+                init_scale = diff_boot.pow(2).mean().sqrt().item()
+            init_scale = max(init_scale, 1e-3)
             self._mus    = x_mean.unsqueeze(0).clone()        # (1, D)
             self._scales = [init_scale]                       # [σ_0]
             self._ws     = torch.ones(1, device=x.device, dtype=x.dtype)
