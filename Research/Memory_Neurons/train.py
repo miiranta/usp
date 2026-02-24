@@ -776,9 +776,11 @@ class GELU5(nn.Module):
         dist_nearest = dist[k_star].item()                     # dist to winner
 
         # ── Per-token per-neuron familiarity (vectorised over K) ──────
-        # Detach cluster means so in-place EMA updates later don't
-        # invalidate tensors saved by autograd for backward().
-        mus_fwd   = self._mus.detach()
+        # Clone so mus_fwd gets its own storage + version counter.
+        # .detach() alone shares storage with self._mus — the in-place EMA
+        # update self._mus[k]=... would then increment mus_fwd's version
+        # counter too, causing "modified by in-place op" in backward().
+        mus_fwd   = self._mus.detach().clone()
         diff_all  = x.unsqueeze(0) - mus_fwd.view(K, 1, 1, D)         # (K,B,T,D)
         famil_all = torch.exp(-tau.view(1, 1, 1, D) * diff_all.abs()) # (K,B,T,D)
         famil     = (r.view(K, 1, 1, 1) * famil_all).sum(dim=0)       # (B,T,D)
@@ -990,10 +992,12 @@ class GELU6(nn.Module):
         dist_nearest = dist_batch[k_star].item()
 
         # ── Stage 1: per-token squared distances (B,T,K) ─────────────
-        # Detach cluster means so in-place EMA updates later don't
-        # invalidate tensors saved by autograd for backward().
+        # Clone so mus_fwd gets its own storage + version counter.
+        # .detach() alone shares storage with self._mus — the in-place EMA
+        # update self._mus[k]=... would then increment mus_fwd's version
+        # counter too, causing "modified by in-place op" in backward().
         # Gradients still flow through beta via weights; none needed for mus.
-        mus_fwd = self._mus.detach()   # (K,D) snapshot for this forward pass
+        mus_fwd = self._mus.detach().clone()   # (K,D) snapshot for this forward pass
         # Uses identity: ||x−μ||² = ||x||² − 2xᵀμ + ||μ||²  (no (K,B,T,D) tensor)
         x_sq   = x.pow(2).sum(dim=-1, keepdim=True)            # (B,T,1)
         mu_sq  = mus_fwd.pow(2).sum(dim=-1)                    # (K,)
