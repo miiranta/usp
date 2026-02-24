@@ -1005,20 +1005,29 @@ class GELU6(nn.Module):
         dist2  = (x_sq + mu_sq.view(1, 1, K) - 2.0 * cross).clamp(min=0.0) / D  # (B,T,K)
 
         # ── Stage 2: σ-normalised soft assignment → blended refs ──────
+        # Floor scales_t so division never produces NaN / Inf.
+        scales_safe = scales_t.clamp(min=1e-3)                  # (K,) floored
         # Gradient flows: loss→famil→eff_mu/eff_sigma→weights→beta
-        dist2_norm = dist2 / scales_t.pow(2).view(1, 1, K)     # (B,T,K) in σ² units
+        dist2_norm = dist2 / scales_safe.pow(2).view(1, 1, K)  # (B,T,K) in σ² units
         weights    = torch.softmax(-beta * dist2_norm, dim=-1)  # (B,T,K)
-        eff_mu     = torch.einsum('btk,kd->btd', weights, mus_fwd)      # (B,T,D)
-        eff_sigma  = torch.einsum('btk,k->bt',   weights, scales_t)     # (B,T) — via weights→beta
+        eff_mu     = torch.einsum('btk,kd->btd', weights, mus_fwd)          # (B,T,D)
+        eff_sigma  = torch.einsum('btk,k->bt',   weights, scales_safe)      # (B,T)
 
         # ── Stage 3: per-neuron τ, scale-normalised familiarity ───────
-        diff  = x - eff_mu                                                      # (B,T,D) in-graph
+        diff  = x - eff_mu                                                   # (B,T,D) in-graph
+        # Extra floor on eff_sigma so gradient of exp stays finite.
         famil = torch.exp(-tau.view(1, 1, D) * diff.abs()
-                          / eff_sigma.unsqueeze(-1))                            # (B,T,D)
-        scale = 1.0 - alpha.view(1, 1, D) * famil                              # (B,T,D)
+                          / eff_sigma.clamp(min=1e-4).unsqueeze(-1))        # (B,T,D)
+        scale = 1.0 - alpha.view(1, 1, D) * famil                           # (B,T,D)
 
         # ── EMA updates — training only, all detached ──────────────────
         if self.training:
+            # Per-cluster RMS spread of individual tokens (not batch-mean distance).
+            # dist2 is (B,T,K), each entry = ||x[b,t]−μ_k||²/D.
+            # sqrt(mean over b,t) = typical per-dimension distance to cluster k.
+            # This is stable and stays finite even when μ_k ≈ x_mean.
+            sigma_from_tokens = dist2.detach().mean(dim=(0, 1)).sqrt()  # (K,)
+
             # Soft online-EM updates: every cluster moves proportional to r_k
             # lr_k = (1-d) · r_k  →  winner moves fastest, losers barely move
             r_list = r.tolist()
@@ -1027,10 +1036,12 @@ class GELU6(nn.Module):
                 # Mean update
                 lr_mu = (1.0 - d_mu) * rk
                 self._mus[k] = (1.0 - lr_mu) * self._mus[k] + lr_mu * x_mean
-                # Scale update: track typical distance from this cluster
-                dist_k = diff_means[k].pow(2).mean().sqrt().item()
-                lr_s   = (1.0 - d_s) * rk
-                self._scales[k] = (1.0 - lr_s) * self._scales[k] + lr_s * dist_k
+                # Scale update: track within-cluster token spread (not batch-mean distance)
+                lr_s = (1.0 - d_s) * rk
+                self._scales[k] = max(
+                    (1.0 - lr_s) * self._scales[k] + lr_s * sigma_from_tokens[k].item(),
+                    1e-3  # hard floor — prevents collapse and div-by-zero
+                )
 
             # Weight EMA → renormalise
             self._ws = dw_val * self._ws + (1.0 - dw_val) * r
