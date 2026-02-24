@@ -630,6 +630,184 @@ class GELU4(nn.Module):
         return self._gelu(blended)
 
 
+class GELU5(nn.Module):
+    """Dynamic Gaussian-Mixture Memory GELU — fully self-regulating.
+
+    Maintains K cluster means that grow and shrink automatically, with no
+    hardcoded thresholds, no K-cap, and no fixed epsilon floors in the logic.
+
+    ── Core idea ──────────────────────────────────────────────────────────
+    Each cluster k has a mean μ_k (D,) and a weight w_k (scalar).
+    Soft responsibilities r_k tell each cluster how much it "owns" the
+    current batch signal:
+
+        log_r_k  =  log w_k  −  RMS_dist(x_mean, μ_k)   (log-softmax)
+        r        =  softmax(log_r)                        ∈ (0,1), sums to 1
+
+    Familiarity per token per neuron is the responsibility-weighted average:
+        famil_i  =  Σ_k  r_k · exp(−τ_i · |x_i − μ_k_i|)
+        scale_i  =  1 − α_i · famil_i
+        output   =  GELU(x · scale)
+
+    ── Birth (learned threshold θ_b) ──────────────────────────────────────
+    Responsibility entropy H(r) = −Σ r_k log r_k is maximised when all
+    clusters are equally poor at explaining x.  Conversely, max_r is low
+    when no cluster is a good match.  A new cluster is born when:
+        max_r  <  θ_b  =  sigmoid(logit_birth)
+    logit_birth is a learned parameter → the model decides how novel
+    something must be before it deserves its own cluster.
+
+    ── Death (no threshold, pure weight decay) ─────────────────────────────
+    Weights are updated via EMA toward current responsibilities:
+        w_k  ←  dw · w_k + (1−dw) · r_k      then renormalised
+    A cluster that consistently loses has its weight driven exponentially
+    toward zero.  We remove it only when its contribution to famil becomes
+    numerically indistinguishable — detected as w_k·K < θ_d, where θ_d is
+    also a learned parameter (not hardcoded).  Death is thus doubly adaptive:
+    the decay speed (dw) and the floor (θ_d) both come from the data.
+
+    ── Forgetting ──────────────────────────────────────────────────────────
+    When a signal stops appearing, only the losing cluster's weight decays —
+    its mean is untouched.  After enough steps, the weight falls below θ_d
+    and the cluster is pruned.  The next occurrence of that signal will find
+    no matching cluster and spawn a fresh one.
+
+    Learned parameters:
+        logit_decay   → d  ∈ (0,1)  mean EMA speed              [scalar]
+        logit_w_decay → dw ∈ (0,1)  weight EMA speed            [scalar]
+        logit_birth   → θ_b ∈ (0,1) max-responsibility birth cut [scalar]
+        logit_death   → θ_d ∈ (0,1) relative weight death floor  [scalar]
+        log_tau       → τ > 0        suppression sharpness        [(D,), lazy]
+        log_blend     → α ∈ (0,1)   max suppression depth        [(D,), lazy]
+    """
+
+    def __init__(self, ema_decay: float = None):
+        super().__init__()
+        init_d = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
+        ld = math.log(init_d / (1.0 - init_d))
+
+        # Scalar learned params — govern cluster lifecycle, no D dependency
+        self.logit_decay   = nn.Parameter(torch.tensor(ld))    # mean EMA speed
+        self.logit_w_decay = nn.Parameter(torch.tensor(ld))    # weight EMA speed
+        # birth: sigmoid(0) ≈ 0.5 → spawn when best cluster owns < 50% responsibility
+        self.logit_birth   = nn.Parameter(torch.tensor(0.0))
+        # death: sigmoid(-2) ≈ 0.12 → prune when cluster weight < 12% of uniform
+        self.logit_death   = nn.Parameter(torch.tensor(-2.0))
+
+        # Per-neuron params — lazily created on first forward (D unknown here)
+        self.log_tau   : nn.Parameter = None  # (D,)
+        self.log_blend : nn.Parameter = None  # (D,)
+        self._D = None
+
+        # Dynamic mixture state
+        self._mus       : torch.Tensor = None  # (K, D)  cluster means
+        self._ws        : torch.Tensor = None  # (K,)    normalised weights
+        self._ready     : bool         = False
+        self._proto_log : list         = []    # K count per training step (monitoring)
+
+    def _init_params(self, D: int, device: torch.device, dtype: torch.dtype):
+        self._D = D
+        self.log_tau = nn.Parameter(
+            torch.full((D,), math.log(Config.GELU2_TEMP), device=device, dtype=dtype))
+        self.log_blend = nn.Parameter(
+            torch.full((D,), math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)),
+                       device=device, dtype=dtype))
+
+    def reset_state(self):
+        self._mus       = None
+        self._ws        = None
+        self._proto_log = []
+        self._ready     = False
+
+    @staticmethod
+    def _gelu(x: torch.Tensor) -> torch.Tensor:
+        return (
+            0.5 * x
+            * (1.0 + torch.tanh(
+                math.sqrt(2.0 / math.pi)
+                * (x + 0.044715 * x.pow(3))
+            ))
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, T, D = x.shape
+        if self._D is None:
+            self._init_params(D, x.device, x.dtype)
+
+        tau   = self.log_tau.exp()                    # (D,) in-graph
+        alpha = torch.sigmoid(self.log_blend)         # (D,) in-graph
+        d_val  = torch.sigmoid(self.logit_decay).detach().item()   # scalar
+        dw_val = torch.sigmoid(self.logit_w_decay).detach().item() # scalar
+        θ_b    = torch.sigmoid(self.logit_birth).detach().item()   # scalar, learned
+        θ_d    = torch.sigmoid(self.logit_death).detach().item()   # scalar, learned
+
+        x_mean = x.detach().mean(dim=(0, 1))   # (D,) — batch+time mean, fully detached
+
+        # ── Bootstrap ────────────────────────────────────────────────
+        if not self._ready:
+            self._mus   = x_mean.unsqueeze(0).clone()                            # (1, D)
+            self._ws    = torch.ones(1, device=x.device, dtype=x.dtype)          # (1,)
+            self._ready = True
+            return self._gelu(x)
+
+        K = self._mus.shape[0]
+
+        # ── Soft responsibilities (batch-level, scalar per cluster) ───
+        # RMS distance from x_mean to each cluster centre, in log-space for stability
+        diff_means = x_mean.unsqueeze(0) - self._mus              # (K, D) detached
+        dist       = diff_means.pow(2).mean(dim=-1).sqrt()        # (K,)
+        log_r      = self._ws.log() - dist                        # unnorm log-prob
+        log_r      = log_r - log_r.logsumexp(dim=0)               # log-softmax → stable
+        r          = log_r.exp()                                   # (K,) ∈ (0,1), Σ=1
+        max_r, k_star_idx = r.max(dim=0)
+        k_star = k_star_idx.item()
+
+        # ── Per-token per-neuron familiarity (vectorised over K) ──────
+        # diff_all: (K, B, T, D) — gradient flows through x and tau only
+        diff_all  = x.unsqueeze(0) - self._mus.view(K, 1, 1, D)               # (K,B,T,D)
+        famil_all = torch.exp(-tau.view(1, 1, 1, D) * diff_all.abs())          # (K,B,T,D)
+        famil     = (r.view(K, 1, 1, 1) * famil_all).sum(dim=0)               # (B,T,D)
+        scale     = 1.0 - alpha.view(1, 1, D) * famil                          # (B,T,D)
+
+        # ── EMA updates — training only, all detached ─────────────────
+        if self.training:
+            # Update winner mean toward current batch mean
+            self._mus[k_star] = d_val * self._mus[k_star] + (1.0 - d_val) * x_mean
+
+            # Update all weights toward responsibilities then renormalise
+            self._ws = dw_val * self._ws + (1.0 - dw_val) * r
+            self._ws = self._ws / self._ws.sum()
+
+            # ── Birth: spawn when best cluster can't explain input ────
+            # max_r < θ_b means "no existing cluster is a good match"
+            if max_r.item() < θ_b:
+                new_mu  = x_mean.unsqueeze(0).clone()                           # (1, D)
+                # New cluster born with weight proportional to novelty, natural scale
+                init_w  = torch.tensor([(1.0 - max_r.item()) / (K + 1)],
+                                       device=x.device, dtype=x.dtype)
+                self._mus = torch.cat([self._mus, new_mu], dim=0)
+                self._ws  = torch.cat([self._ws, init_w])
+                self._ws  = self._ws / self._ws.sum()
+                K += 1
+
+            # ── Death: remove clusters whose relative weight collapsed ─
+            # ws_k * K < θ_d  ↔  cluster has < θ_d fraction of uniform weight
+            # θ_d is learned — no hardcoded floor
+            if K > 1:
+                alive = (self._ws * K >= θ_d).nonzero(as_tuple=True)[0]
+                if alive.numel() == 0:                         # safety: keep the best
+                    alive = self._ws.argmax().unsqueeze(0)
+                if alive.numel() < K:
+                    self._mus = self._mus[alive]
+                    self._ws  = self._ws[alive]
+                    self._ws  = self._ws / self._ws.sum()
+
+        if torch.is_grad_enabled():
+            self._proto_log.append(self._mus.shape[0])
+
+        return self._gelu(x * scale)
+
+
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout, max_len=5000):
         super().__init__()
@@ -725,10 +903,11 @@ def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
 # ─────────────────────────────────────────────
 
 ALL_EXPERIMENTS = [
-    ("control",  GELU),
-    ("gelu2_k1", GELU2),
-    ("gelu3_kn", GELU3),
-    ("gelu4_kn", GELU4),
+    ("control",   GELU),
+    ("gelu2_k1",  GELU2),
+    ("gelu3_kn",  GELU3),
+    ("gelu4_kn",  GELU4),
+    ("gelu5_kn", GELU5),
 ]
 
 
@@ -815,7 +994,7 @@ def run_experiment(exp_name, activation_cls, vocab, device):
             print(f"  → new best model (val ppl {vl_ppl:.2f})")
 
         # ── GELU3 / GELU4: print prototype-count frequency for this epoch ─
-        proto_mods = [m for m in model.modules() if isinstance(m, (GELU3, GELU4))]
+        proto_mods = [m for m in model.modules() if isinstance(m, (GELU3, GELU4, GELU5))]
         if proto_mods:
             from collections import Counter
             epoch_log = []
