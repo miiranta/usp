@@ -141,10 +141,16 @@ print(f"\n  Best overall : {best['label']}  "
 print(f"  Avg GELU2    : PPL {gelu2['test_ppl'].mean():.2f}  "
       f"(Δ {gelu2['test_ppl'].mean() - control_ppl:+.2f} vs control {control_ppl:.2f})")
 if len(attn) and len(no_attn):
-    attn_wins = int((attn["test_ppl"].values < no_attn["test_ppl"].values).sum())
+    # Pair by base name (strip trailing _attn) so mismatched set sizes don't matter
+    attn_base    = attn.copy()
+    attn_base["_base"] = attn_base["experiment"].str.replace(r"_attn$", "", regex=True)
+    no_attn_base = no_attn.copy()
+    no_attn_base["_base"] = no_attn_base["experiment"]
+    paired = attn_base.merge(no_attn_base, on="_base", suffixes=("_a", "_n"))
+    attn_wins = int((paired["test_ppl_a"] < paired["test_ppl_n"]).sum())
     print(f"  +attn avg    : PPL {attn['test_ppl'].mean():.2f}")
     print(f"  no-attn avg  : PPL {no_attn['test_ppl'].mean():.2f}")
-    print(f"  +attn beats no-attn: {attn_wins}/{len(attn)} K values")
+    print(f"  +attn beats no-attn: {attn_wins}/{len(paired)} paired variants")
 print()
 
 # ── Horizontal bar chart ──────────────────────────────────────────────
