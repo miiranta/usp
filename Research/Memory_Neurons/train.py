@@ -50,8 +50,9 @@ class Config:
 
     # GELU3 additional defaults
     GELU3_ACT_DECAY         = 0.99  # EMA decay for per-prototype activation scoring
-    GELU3_SENSITIVITY_BIRTH = -1.0  # logit init for birth threshold  (sigmoid ≈ 0.27)
+    GELU3_SENSITIVITY_BIRTH =  2.0  # logit init for birth threshold  (sigmoid ≈ 0.88)
     GELU3_SENSITIVITY_DEATH = -3.0  # logit init for death threshold  (sigmoid ≈ 0.05)
+    GELU3_TOP_K_UPDATE       = 2    # how many nearest prototypes receive EMA updates
 
     # GELU4 additional defaults (soft-gate death)
     GELU4_GATE_SHARPNESS    = 10.0  # initial gate sharpness — higher → harder cutoff
@@ -456,17 +457,19 @@ class GELU3(nn.Module):
         effective_scale = (1.0 - a * dg) + a * dg * novelty         # (B, T, D)
         blended = x * effective_scale
 
-        # ── Competitive EMA: update nearest prototype ──────────────────
+        # ── Competitive EMA: update top-K nearest prototypes ──────────
         x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)       # (1, D)
-        k_star = (
-            (F.normalize(self._emas, dim=-1) @ x_mean_norm.T)
-            .squeeze(-1).argmax().item()
-        )
-        self._emas[k_star] = d_val * self._emas[k_star] + (1.0 - d_val) * x_mean
+        sims_mean   = (F.normalize(self._emas, dim=-1) @ x_mean_norm.T).squeeze(-1)  # (K,)
+        K           = self._emas.shape[0]
+        top_k       = min(Config.GELU3_TOP_K_UPDATE, K)
+        top_indices = sims_mean.topk(top_k).indices.tolist()
+        k_star      = top_indices[0]   # primary winner (for act_score)
+        for rank, k in enumerate(top_indices):
+            w = 1.0 / (rank + 1)       # winner gets full weight, 2nd gets 1/2, etc.
+            self._emas[k] = d_val * self._emas[k] + (1.0 - d_val) * w * x_mean
 
         # ── Activation EMA bookkeeping ─────────────────────────────────
         a_decay = Config.GELU3_ACT_DECAY
-        K = self._emas.shape[0]
         for k in range(K):
             target = 1.0 if k == k_star else 0.0
             self._act_score[k] = a_decay * self._act_score[k] + (1.0 - a_decay) * target
@@ -633,17 +636,19 @@ class GELU4(nn.Module):
         effective_scale = (1.0 - a * dg) + a * dg * novelty           # (B, T, D)
         blended = x * effective_scale
 
-        # ── Competitive EMA: update nearest prototype ──────────────────
+        # ── Competitive EMA: update top-K nearest prototypes ──────────
         x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)
-        k_star = (
-            (F.normalize(self._emas, dim=-1) @ x_mean_norm.T)
-            .squeeze(-1).argmax().item()
-        )
-        self._emas[k_star] = d_val * self._emas[k_star] + (1.0 - d_val) * x_mean
+        sims_mean   = (F.normalize(self._emas, dim=-1) @ x_mean_norm.T).squeeze(-1)  # (K,)
+        K           = self._emas.shape[0]
+        top_k       = min(Config.GELU3_TOP_K_UPDATE, K)
+        top_indices = sims_mean.topk(top_k).indices.tolist()
+        k_star      = top_indices[0]
+        for rank, k in enumerate(top_indices):
+            w = 1.0 / (rank + 1)
+            self._emas[k] = d_val * self._emas[k] + (1.0 - d_val) * w * x_mean
 
         # ── Activation EMA bookkeeping ─────────────────────────────────
         a_decay = Config.GELU3_ACT_DECAY
-        K = self._emas.shape[0]
         for k in range(K):
             target = 1.0 if k == k_star else 0.0
             self._act_score[k] = a_decay * self._act_score[k] + (1.0 - a_decay) * target
