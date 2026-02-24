@@ -836,6 +836,17 @@ def run_experiment(exp_name, activation_cls, vocab, device, with_attn_habituatio
         len(vocab), Config, activation_cls,
         with_attn_habituation=with_attn_habituation
     ).to(device)
+
+    # Materialise any LazyLinear parameters (e.g. GELU2Selective.W_decay)
+    # by running a single dummy forward pass before inspecting parameters.
+    with torch.no_grad():
+        dummy = torch.zeros(1, Config.SEQ_LEN, dtype=torch.long, device=device)
+        model(dummy)
+    # Reset EMA state so the dummy pass doesn't pollute training
+    for m in model.modules():
+        if hasattr(m, 'reset_state'):
+            m.reset_state()
+
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"  Parameters : {n_params:,}\n")
 
