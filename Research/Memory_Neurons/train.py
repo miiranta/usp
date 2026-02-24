@@ -416,25 +416,31 @@ class GELU2Selective(nn.Module):
     This lets the memory length adapt on-the-fly rather than being frozen.
     """
 
-    def __init__(self, n_prototypes: int = 1, d_model: int = None,
-                 ema_decay: float = None):
+    def __init__(self, n_prototypes: int = 1, ema_decay: float = None):
         super().__init__()
-        init_decay  = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
-        self._K     = n_prototypes
+        init_decay   = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
+        self._K      = n_prototypes
         self._emas: torch.Tensor = None
-        self._ready = False
+        self._ready  = False
+        self._logit0 = math.log(init_decay / (1.0 - init_decay))
 
         self.log_tau   = nn.Parameter(torch.tensor(math.log(Config.GELU2_TEMP)))
         self.log_blend = nn.Parameter(
             torch.tensor(math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)))
         )
 
-        # Input-dependent decay projection
-        _dm = d_model if d_model is not None else Config.D_MODEL
-        self.W_decay = nn.Linear(_dm, 1, bias=True)
-        nn.init.zeros_(self.W_decay.weight)                         # start neutral
-        nn.init.constant_(self.W_decay.bias,
-                          math.log(init_decay / (1.0 - init_decay)))  # logit(init_decay)
+        # LazyLinear: input dim inferred on first call → works for any D_FF / D_MODEL
+        self.W_decay = nn.LazyLinear(1, bias=True)
+
+    def _maybe_init_wdecay(self):
+        """After LazyLinear materialises weights, apply the desired initialisation."""
+        if isinstance(self.W_decay.weight, nn.UninitializedParameter):
+            return
+        if getattr(self, '_wdecay_init_done', False):
+            return
+        nn.init.zeros_(self.W_decay.weight)
+        nn.init.constant_(self.W_decay.bias, self._logit0)
+        self._wdecay_init_done = True
 
     def reset_state(self):
         self._emas = None;  self._ready = False
@@ -455,8 +461,9 @@ class GELU2Selective(nn.Module):
 
         x_mean = x.detach().flatten(0, -2).mean(0)   # (D,)
 
-        # Input-dependent decay: scalar from x_mean
+        # Input-dependent decay: scalar derived from x_mean
         d     = torch.sigmoid(self.W_decay(x_mean))   # (1,) — in graph
+        self._maybe_init_wdecay()                      # fix init after first materialise
         d_val = d.detach().item()
 
         if not self._ready:
@@ -495,13 +502,13 @@ class GELU2SelectiveSoft(nn.Module):
     • weights = softmax(τ_s · cosine(x_mean, prototypes)) — no dead prototypes
     """
 
-    def __init__(self, n_prototypes: int = 1, d_model: int = None,
-                 ema_decay: float = None):
+    def __init__(self, n_prototypes: int = 1, ema_decay: float = None):
         super().__init__()
-        init_decay  = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
-        self._K     = n_prototypes
+        init_decay   = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
+        self._K      = n_prototypes
         self._emas: torch.Tensor = None
-        self._ready = False
+        self._ready  = False
+        self._logit0 = math.log(init_decay / (1.0 - init_decay))
 
         self.log_tau      = nn.Parameter(torch.tensor(math.log(Config.GELU2_TEMP)))
         self.log_blend    = nn.Parameter(
@@ -509,11 +516,17 @@ class GELU2SelectiveSoft(nn.Module):
         )
         self.log_tau_soft = nn.Parameter(torch.tensor(0.0))
 
-        _dm = d_model if d_model is not None else Config.D_MODEL
-        self.W_decay = nn.Linear(_dm, 1, bias=True)
+        # LazyLinear: input dim inferred on first call → works for any D_FF / D_MODEL
+        self.W_decay = nn.LazyLinear(1, bias=True)
+
+    def _maybe_init_wdecay(self):
+        if isinstance(self.W_decay.weight, nn.UninitializedParameter):
+            return
+        if getattr(self, '_wdecay_init_done', False):
+            return
         nn.init.zeros_(self.W_decay.weight)
-        nn.init.constant_(self.W_decay.bias,
-                          math.log(init_decay / (1.0 - init_decay)))
+        nn.init.constant_(self.W_decay.bias, self._logit0)
+        self._wdecay_init_done = True
 
     def reset_state(self):
         self._emas = None;  self._ready = False
@@ -536,6 +549,7 @@ class GELU2SelectiveSoft(nn.Module):
         x_mean = x.detach().flatten(0, -2).mean(0)   # (D,)
 
         d     = torch.sigmoid(self.W_decay(x_mean))   # (1,) — in graph
+        self._maybe_init_wdecay()                      # fix init after first materialise
         d_val = d.detach().item()
 
         if not self._ready:
@@ -763,12 +777,12 @@ _soft     = [(f"gelu2_soft_k{k}",
 
 #  Input-dependent (selective) decay only
 _sel      = [(f"gelu2_sel_k{k}",
-              functools.partial(GELU2Selective, n_prototypes=k, d_model=Config.D_MODEL), False)
+              functools.partial(GELU2Selective, n_prototypes=k), False)
              for k in K_VALS]
 
 #  Both combined (full model)
 _selsoft  = [(f"gelu2_selsoft_k{k}",
-              functools.partial(GELU2SelectiveSoft, n_prototypes=k, d_model=Config.D_MODEL), False)
+              functools.partial(GELU2SelectiveSoft, n_prototypes=k), False)
              for k in K_VALS_EXT]
 
 #  Best combos with attention habituation
@@ -776,7 +790,7 @@ _soft_attn    = [(f"gelu2_soft_k{k}_attn",
                   functools.partial(GELU2Soft, n_prototypes=k), True)
                  for k in [4, 8, 16, 32]]
 _selsoft_attn = [(f"gelu2_selsoft_k{k}_attn",
-                  functools.partial(GELU2SelectiveSoft, n_prototypes=k, d_model=Config.D_MODEL), True)
+                  functools.partial(GELU2SelectiveSoft, n_prototypes=k), True)
                  for k in [4, 8, 16, 32]]
 
 NEW_EXPERIMENTS = _soft + _sel + _selsoft + _soft_attn + _selsoft_attn
