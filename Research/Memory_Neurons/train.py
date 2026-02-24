@@ -228,41 +228,41 @@ class GELU(nn.Module):
 
 
 class GELU2(nn.Module):
-    """EMA-based habituation GELU with learnable parameters.
+    """EMA-based habituation GELU with K learned prototypes and per-token novelty.
 
-    Computes cosine similarity between the current batch mean and an EMA of
-    past batch means to derive a scalar novelty score:
+    Maintains K EMA prototype vectors. For each token, computes cosine similarity
+    against all K prototypes; the maximum (most familiar) drives suppression:
 
-        ema   <- d * ema + (1-d) * x_mean          # running mean, O(D) state
-        sim   = cosine(x_mean, ema)                 # 1=familiar, -1=novel
-        novelty = exp(-τ * sim)                     # 1=novel, →0=familiar
-        scale = (1 - α*d) + α*d * novelty          # scalar gate
-        output = GELU(x * scale)
+        sim_k   = cosine(x_token, prototype_k)     # (B, T, K)
+        max_sim = sim_k.max(dim=-1)                # (B, T)
+        novelty = exp(-τ * max_sim)               # (B, T)
+        scale   = (1 - α*d) + α*d * novelty      # (B, T, 1) per-token gate
+        output  = GELU(x * scale)
 
-    The EMA makes the memory frequency-based (not just last-K recency).
-    All three hyperparameters are learnable per-layer via Adam:
-        logit_decay → d ∈ (0,1)   : memory length (long d = strong habituation)
-        log_tau     → τ > 0       : suppression sharpness
-        log_blend   → α ∈ (0,1)  : max suppression strength
+    The nearest prototype is updated each step (competitive EMA learning).
+    All three hyperparameters are learnable per-layer:
+        logit_decay → d ∈ (0,1) : prototype memory length
+        log_tau     → τ > 0    : suppression sharpness
+        log_blend   → α ∈ (0,1): max suppression strength
     """
 
-    def __init__(self, ema_decay: float = None):
+    def __init__(self, n_prototypes: int = 1, ema_decay: float = None):
         super().__init__()
-        init_decay = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
-        self._ema: torch.Tensor = None   # (D,) running mean
+        init_decay  = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
+        self._K     = n_prototypes
+        self._emas: torch.Tensor = None   # (K, D)
         self._ready = False
 
-        # Learnable per-layer scalars (all in logit/log space for unconstrained optimisation)
         self.log_tau     = nn.Parameter(torch.tensor(math.log(Config.GELU2_TEMP)))
-        self.log_blend   = nn.Parameter(                          # logit → sigmoid gives α
+        self.log_blend   = nn.Parameter(
             torch.tensor(math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)))
         )
-        self.logit_decay = nn.Parameter(                          # logit → sigmoid gives decay
+        self.logit_decay = nn.Parameter(
             torch.tensor(math.log(init_decay / (1.0 - init_decay)))
         )
 
     def reset_state(self):
-        self._ema = None;  self._ready = False
+        self._emas = None;  self._ready = False
 
     @staticmethod
     def _gelu(x: torch.Tensor) -> torch.Tensor:
@@ -276,33 +276,107 @@ class GELU2(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, T, D)
-        tau   = self.log_tau.exp()                      # scalar > 0
-        alpha = torch.sigmoid(self.log_blend)           # scalar in (0, 1)
-        d     = torch.sigmoid(self.logit_decay)         # in (0,1), stays in graph for grad
-        d_val = d.detach().item()                       # plain float for EMA update
+        tau   = self.log_tau.exp()
+        alpha = torch.sigmoid(self.log_blend)
+        d     = torch.sigmoid(self.logit_decay)          # in-graph for gradient
+        d_val = d.detach().item()                        # plain float for EMA update
 
-        x_mean = x.detach().flatten(0, -2).mean(0)     # (D,) batch/seq-agnostic summary
+        x_mean = x.detach().flatten(0, -2).mean(0)      # (D,)
 
         if not self._ready:
-            self._ema   = x_mean.clone()
+            base = x_mean.unsqueeze(0).expand(self._K, -1).clone()
+            if self._K > 1:
+                base = base + torch.randn_like(base) * 1e-3
+            self._emas  = base
             self._ready = True
             return self._gelu(x)
 
-        # ── Cosine similarity between current mean and EMA ─────────────
-        # high sim → familiar → suppress; low sim → novel → pass through
-        sim     = F.cosine_similarity(x_mean.unsqueeze(0), self._ema.unsqueeze(0)).squeeze()
-        novelty = torch.exp(-tau * sim)                 # 1 = fully novel, →0 = very familiar
+        # ── Per-token cosine sim against all K prototypes ──────────────
+        x_norm = F.normalize(x, dim=-1)                        # (B, T, D)
+        p_norm = F.normalize(self._emas, dim=-1)               # (K, D)
+        sim    = torch.einsum('btd,kd->btk', x_norm, p_norm)  # (B, T, K)
 
-        # d gates memory strength; gradient for logit_decay flows through here:
-        #   d→1 (long memory): habituation fully applied
-        #   d→0 (no memory):   effective_scale→1, behaves like plain GELU
-        effective_scale = (1.0 - alpha * d) + alpha * d * novelty
+        max_sim, _ = sim.max(dim=-1)                           # (B, T)
+        novelty    = torch.exp(-tau * max_sim)                 # (B, T)
+
+        effective_scale = (1.0 - alpha * d) + alpha * d * novelty.unsqueeze(-1)  # (B, T, 1)
         blended = x * effective_scale
 
-        # ── Update EMA with plain-float d_val (no graph retained) ─────
-        self._ema = d_val * self._ema + (1 - d_val) * x_mean
+        # ── Competitive EMA: update nearest prototype only ─────────────
+        x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)          # (1, D)
+        k_star      = (F.normalize(self._emas, dim=-1) * x_mean_norm).sum(-1).argmax().item()
+        self._emas[k_star] = d_val * self._emas[k_star] + (1 - d_val) * x_mean
 
         return self._gelu(blended)
+
+
+class HabituatedEncoderLayer(nn.Module):
+    """TransformerEncoderLayer with EMA-based attention habituation.
+
+    Maintains a per-head EMA of attention weight matrices. A habituation
+    bias is subtracted from attention logits before softmax:
+
+        attn_bias = -τ_a * mean_over_heads(ema_attn)   # (T, T)
+        output    = softmax(QKᵀ/√d + causal_mask + attn_bias) · V
+
+    Frequently attended positions accumulate → suppressed over time.
+    τ_a and d_a are learnable per-layer.
+    """
+
+    def __init__(self, d_model: int, n_heads: int, d_ff: int,
+                 dropout: float, activation_cls):
+        super().__init__()
+        self.self_attn = nn.MultiheadAttention(
+            d_model, n_heads, dropout=dropout, batch_first=True
+        )
+        self.linear1  = nn.Linear(d_model, d_ff)
+        self.linear2  = nn.Linear(d_ff, d_model)
+        self.norm1    = nn.LayerNorm(d_model)
+        self.norm2    = nn.LayerNorm(d_model)
+        self.drop     = nn.Dropout(dropout)
+        self.activation = activation_cls()
+        self._n_heads   = n_heads
+
+        self.log_tau_attn     = nn.Parameter(torch.tensor(0.0))
+        self.logit_decay_attn = nn.Parameter(torch.tensor(math.log(0.9 / 0.1)))
+        self._ema_attn: torch.Tensor = None   # (H, T, T)
+
+    def reset_state(self):
+        self._ema_attn = None
+        if hasattr(self.activation, 'reset_state'):
+            self.activation.reset_state()
+
+    def forward(self, x: torch.Tensor,
+                causal_mask: torch.Tensor = None) -> torch.Tensor:
+        tau_a   = self.log_tau_attn.exp()
+        d_a_val = torch.sigmoid(self.logit_decay_attn).detach().item()
+        B, T, D = x.shape
+
+        if self._ema_attn is not None and self._ema_attn.shape[-1] == T:
+            habit_bias = -(tau_a * self._ema_attn).mean(0)        # (T, T)
+            attn_mask  = (causal_mask + habit_bias
+                          if causal_mask is not None else habit_bias)
+        else:
+            attn_mask = causal_mask
+
+        attn_out, attn_weights = self.self_attn(
+            x, x, x,
+            attn_mask=attn_mask,
+            need_weights=True,
+            average_attn_weights=False,   # (B, H, T, T)
+        )
+
+        w = attn_weights.detach().mean(0)   # (H, T, T)
+        if self._ema_attn is None or self._ema_attn.shape != w.shape:
+            self._ema_attn = w.clone()
+        else:
+            self._ema_attn = d_a_val * self._ema_attn + (1 - d_a_val) * w
+
+        x = self.norm1(x + self.drop(attn_out))
+        x = self.norm2(x + self.drop(
+            self.linear2(self.drop(self.activation(self.linear1(x))))
+        ))
+        return x
 
 
 class PositionalEncoding(nn.Module):
