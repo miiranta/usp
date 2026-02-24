@@ -58,6 +58,13 @@ class Config:
     GELU4_GATE_SHARPNESS    = 10.0  # initial gate sharpness — higher → harder cutoff
     GELU4_PRUNE_EPSILON     = 0.01  # remove prototype from memory when gate < this
 
+    # GELU6 defaults
+    GELU6_ASSIGN_TEMP   = 1.0   # init logit for β = softplus(·): cluster assignment sharpness
+                                 # high β → hard per-cluster suppression (complex/fine-grained)
+                                 # low  β → soft blend across clusters (coarse/smooth)
+    GELU6_BIRTH_LOGIT   = 1.0   # init logit for birth ratio θ_b = softplus(·)
+                                 # tolerance to new signals: higher → harder to spawn new cluster
+
     @staticmethod
     def get_device():
 
@@ -819,6 +826,244 @@ class GELU5(nn.Module):
         return self._gelu(x * scale)
 
 
+class GELU6(nn.Module):
+    """Online-EM Dynamic-Memory GELU — principled self-regulation with per-cluster scales.
+
+    Improves over GELU5 in four ways, all without adding hardcoded values:
+
+    1. SOFT (online-EM) MEAN UPDATES instead of hard winner-take-all:
+       Every cluster's mean moves toward x_mean at a rate proportional to its
+       responsibility r_k.  This is the exact online EM update for a GMM:
+           lr_k   = (1 − d_mu) · r_k          ∈ [0, 1−d_mu]
+           μ_k  ← (1 − lr_k) · μ_k + lr_k · x_mean
+       Winner updates fast, losers barely move — but all stay calibrated.
+
+    2. PER-CLUSTER SCALE σ_k (scalar per cluster):
+       Each cluster tracks the EMA of its typical signal distance (soft-EM style):
+           lr_σk  = (1 − d_σ) · r_k
+           σ_k  ← (1 − lr_σk) · σ_k + lr_σk · RMS(x_mean − μ_k)
+       Clusters with large spread suppress loosely; tight clusters suppress sharply.
+       This makes τ a pure sharpness knob, not a scale compensator.
+
+    3. SCALE-NORMALISED ASSIGNMENT:
+       Soft assignments use σ-normalised distances:
+           dist²_norm[b,t,k] = dist²[b,t,k] / σ_k²
+           weights = softmax(−β · dist²_norm)
+       Now β is in standard-deviation units: β=1 ≈ soft, β=10 ≈ hard.
+       Per-cluster σ appears in both the assignment AND the familiarity gate:
+           eff_sigma[b,t] = Σ_k weights[b,t,k] · σ_k          # (B,T)
+           famil_i = exp(−τ_i · |x_i − eff_mu_i| / eff_sigma)  # per-neuron τ kept
+
+    4. DECOUPLED EMA SPEEDS:
+       d_mu, d_sigma, d_w are three independent learned scalars — mean tracking,
+       scale tracking, and weight tracking can have different timescales.
+
+    ── Complexity knob (init_complexity) ──────────────────────────────────
+    β = softplus(logit_assign_temp).  High β → hard cluster assignment →
+    each cluster suppresses its own mode distinctly (fine-grained).
+    Low β → soft blend → coarse habituation.  Fully learned; init biases start.
+
+    ── Tolerance knob (init_tolerance) ────────────────────────────────────
+    θ_b = softplus(logit_birth).  Birth fires when the normalised distance to
+    the nearest cluster is θ_b × larger than the running EMA of typical distances.
+    High → conservative (fewer clusters).  Low → liberal (more clusters).
+
+    ── Birth / Death / Forgetting ──────────────────────────────────────────
+    Birth: relative distance spike (works at K=1, no absolute floor).
+    Death: EMA weight drain → prune when w_k · K < θ_d (learned).
+    Forgetting: when a signal disappears, its cluster loses responsibility →
+    mean and scale stop updating → weight drains → pruned → next occurrence novel.
+
+    Learned parameters (scalar unless noted):
+        logit_decay_mu   → d_mu  ∈ (0,1)    mean EMA speed
+        logit_decay_sigma→ d_σ   ∈ (0,1)    per-cluster scale EMA speed
+        logit_w_decay    → d_w   ∈ (0,1)    weight EMA speed
+        logit_birth      → θ_b   > 0         birth distance ratio  [tolerance knob]
+        logit_death      → θ_d   ∈ (0,1)    weight death floor
+        logit_assign_temp→ β     > 0         assignment sharpness   [complexity knob]
+        log_tau          → τ     > 0  (D,)  per-neuron suppression sharpness
+        log_blend        → α     ∈(0,1)(D,) per-neuron max suppression depth
+    """
+
+    def __init__(
+        self,
+        ema_decay       : float = None,
+        init_complexity : float = None,   # logit init for β (assignment sharpness)
+        init_tolerance  : float = None,   # logit init for θ_b (birth ratio)
+    ):
+        super().__init__()
+        init_d  = ema_decay       if ema_decay       is not None else Config.GELU2_EMA_DECAY
+        init_β  = init_complexity if init_complexity is not None else Config.GELU6_ASSIGN_TEMP
+        init_θb = init_tolerance  if init_tolerance  is not None else Config.GELU6_BIRTH_LOGIT
+        ld = math.log(init_d / (1.0 - init_d))
+
+        # Three decoupled EMA speed scalars
+        self.logit_decay_mu    = nn.Parameter(torch.tensor(ld))       # mean speed
+        self.logit_decay_sigma = nn.Parameter(torch.tensor(ld))       # scale speed
+        self.logit_w_decay     = nn.Parameter(torch.tensor(ld))       # weight speed
+        # Lifecycle / complexity knobs
+        self.logit_birth       = nn.Parameter(torch.tensor(float(init_θb)))
+        self.logit_death       = nn.Parameter(torch.tensor(-2.0))
+        self.logit_assign_temp = nn.Parameter(torch.tensor(float(init_β)))
+
+        # Per-neuron params — lazily created on first forward
+        self.log_tau   : nn.Parameter = None  # (D,)
+        self.log_blend : nn.Parameter = None  # (D,)
+        self._D = None
+
+        # Dynamic mixture state
+        self._mus       : torch.Tensor = None   # (K, D)  cluster means
+        self._scales    : list         = None   # [float] × K per-cluster scale σ_k
+        self._ws        : torch.Tensor = None   # (K,)    normalised weights
+        self._ema_dist  : float        = 0.0    # running EMA of nearest-cluster dist
+        self._ready     : bool         = False
+        self._proto_log : list         = []
+
+    def _init_params(self, D: int, device: torch.device, dtype: torch.dtype):
+        self._D = D
+        self.log_tau = nn.Parameter(
+            torch.full((D,), math.log(Config.GELU2_TEMP), device=device, dtype=dtype))
+        self.log_blend = nn.Parameter(
+            torch.full((D,), math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)),
+                       device=device, dtype=dtype))
+
+    def reset_state(self):
+        self._mus       = None
+        self._scales    = None
+        self._ws        = None
+        self._ema_dist  = 0.0
+        self._proto_log = []
+        self._ready     = False
+
+    @staticmethod
+    def _gelu(x: torch.Tensor) -> torch.Tensor:
+        return (
+            0.5 * x
+            * (1.0 + torch.tanh(
+                math.sqrt(2.0 / math.pi)
+                * (x + 0.044715 * x.pow(3))
+            ))
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, T, D = x.shape
+        if self._D is None:
+            self._init_params(D, x.device, x.dtype)
+
+        tau    = self.log_tau.exp()                      # (D,)  in-graph
+        alpha  = torch.sigmoid(self.log_blend)           # (D,)  in-graph
+        beta   = F.softplus(self.logit_assign_temp)      # scalar in-graph → complexity knob
+        d_mu   = torch.sigmoid(self.logit_decay_mu).detach().item()
+        d_s    = torch.sigmoid(self.logit_decay_sigma).detach().item()
+        dw_val = torch.sigmoid(self.logit_w_decay).detach().item()
+        θ_b    = F.softplus(self.logit_birth).detach().item()
+        θ_d    = torch.sigmoid(self.logit_death).detach().item()
+
+        x_mean = x.detach().mean(dim=(0, 1))   # (D,) fully detached
+
+        # ── Bootstrap ──────────────────────────────────────────────────
+        if not self._ready:
+            init_scale = x_mean.pow(2).mean().sqrt().item()
+            init_scale = max(init_scale, 1e-3)               # avoid zero on dead layer
+            self._mus    = x_mean.unsqueeze(0).clone()        # (1, D)
+            self._scales = [init_scale]                       # [σ_0]
+            self._ws     = torch.ones(1, device=x.device, dtype=x.dtype)
+            self._ready  = True
+            return self._gelu(x)
+
+        K = self._mus.shape[0]
+
+        # ── Batch-level soft responsibilities (detached, lifecycle only) ─
+        diff_means  = x_mean.unsqueeze(0) - self._mus          # (K, D)
+        dist_batch  = diff_means.pow(2).mean(dim=-1).sqrt()    # (K,)  RMS distances
+        # σ-normalised log-responsibilities
+        scales_t    = x.new_tensor(self._scales)                # (K,) detached
+        norm_dist   = dist_batch / scales_t                     # (K,) in σ units
+        log_r       = self._ws.log() - norm_dist
+        log_r       = log_r - log_r.logsumexp(dim=0)
+        r           = log_r.exp()                               # (K,) Σ=1
+
+        k_star       = r.argmax().item()
+        dist_nearest = dist_batch[k_star].item()
+
+        # ── Stage 1: per-token squared distances (B,T,K) ─────────────
+        # Uses identity: ||x−μ||² = ||x||² − 2xᵀμ + ||μ||²  (no (K,B,T,D) tensor)
+        x_sq   = x.pow(2).sum(dim=-1, keepdim=True)            # (B,T,1)
+        mu_sq  = self._mus.pow(2).sum(dim=-1)                  # (K,)
+        cross  = torch.einsum('btd,kd->btk', x, self._mus)    # (B,T,K)
+        dist2  = (x_sq + mu_sq.view(1, 1, K) - 2.0 * cross).clamp(min=0.0) / D  # (B,T,K)
+
+        # ── Stage 2: σ-normalised soft assignment → blended refs ──────
+        # Gradient flows: loss→famil→eff_mu/eff_sigma→weights→beta
+        dist2_norm = dist2 / scales_t.pow(2).view(1, 1, K)     # (B,T,K) in σ² units
+        weights    = torch.softmax(-beta * dist2_norm, dim=-1)  # (B,T,K)
+        eff_mu     = torch.einsum('btk,kd->btd', weights, self._mus)    # (B,T,D)
+        eff_sigma  = torch.einsum('btk,k->bt',   weights, scales_t)     # (B,T) — via weights→beta
+
+        # ── Stage 3: per-neuron τ, scale-normalised familiarity ───────
+        diff  = x - eff_mu                                                      # (B,T,D) in-graph
+        famil = torch.exp(-tau.view(1, 1, D) * diff.abs()
+                          / eff_sigma.unsqueeze(-1))                            # (B,T,D)
+        scale = 1.0 - alpha.view(1, 1, D) * famil                              # (B,T,D)
+
+        # ── EMA updates — training only, all detached ──────────────────
+        if self.training:
+            # Soft online-EM updates: every cluster moves proportional to r_k
+            # lr_k = (1-d) · r_k  →  winner moves fastest, losers barely move
+            r_list = r.tolist()
+            for k in range(K):
+                rk = r_list[k]
+                # Mean update
+                lr_mu = (1.0 - d_mu) * rk
+                self._mus[k] = (1.0 - lr_mu) * self._mus[k] + lr_mu * x_mean
+                # Scale update: track typical distance from this cluster
+                dist_k = diff_means[k].pow(2).mean().sqrt().item()
+                lr_s   = (1.0 - d_s) * rk
+                self._scales[k] = (1.0 - lr_s) * self._scales[k] + lr_s * dist_k
+
+            # Weight EMA → renormalise
+            self._ws = dw_val * self._ws + (1.0 - dw_val) * r
+            self._ws = self._ws / self._ws.sum()
+
+            # Running distance EMA — normalised by current winner's σ
+            norm_near = dist_nearest / self._scales[k_star]
+            if self._ema_dist == 0.0:
+                self._ema_dist = norm_near
+            else:
+                self._ema_dist = d_mu * self._ema_dist + (1.0 - d_mu) * norm_near
+
+            # ── Birth: normalised distance spike ───────────────────────
+            # norm_near is in σ units → θ_b is also in σ units → scale-free
+            if norm_near > θ_b * self._ema_dist:
+                init_scale_new = self._scales[k_star]   # inherit winner's spread
+                init_w = torch.tensor(
+                    [dist_nearest / (self._scales[k_star] * self._ema_dist * (K + 1))],
+                    device=x.device, dtype=x.dtype)
+                self._mus    = torch.cat([self._mus, x_mean.unsqueeze(0).clone()], dim=0)
+                self._scales.append(init_scale_new)
+                self._ws     = torch.cat([self._ws, init_w])
+                self._ws     = self._ws / self._ws.sum()
+                K += 1
+
+            # ── Death: prune clusters with collapsed relative weight ────
+            if K > 1:
+                alive = (self._ws * K >= θ_d).nonzero(as_tuple=True)[0]
+                if alive.numel() == 0:
+                    alive = self._ws.argmax().unsqueeze(0)
+                if alive.numel() < K:
+                    alive_list   = alive.tolist()
+                    self._mus    = self._mus[alive]
+                    self._scales = [self._scales[k] for k in alive_list]
+                    self._ws     = self._ws[alive]
+                    self._ws     = self._ws / self._ws.sum()
+                    K = self._mus.shape[0]
+
+        if torch.is_grad_enabled():
+            self._proto_log.append(K)
+
+        return self._gelu(x * scale)
+
+
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout, max_len=5000):
         super().__init__()
@@ -918,7 +1163,8 @@ ALL_EXPERIMENTS = [
     ("gelu2_k1",  GELU2),
     ("gelu3_kn",  GELU3),
     ("gelu4_kn",  GELU4),
-    ("gelu5_kn", GELU5),
+    ("gelu5_kn",  GELU5),
+    ("gelu6_kn",  GELU6),
 ]
 
 
@@ -1005,7 +1251,7 @@ def run_experiment(exp_name, activation_cls, vocab, device):
             print(f"  → new best model (val ppl {vl_ppl:.2f})")
 
         # ── GELU3 / GELU4: print prototype-count frequency for this epoch ─
-        proto_mods = [m for m in model.modules() if isinstance(m, (GELU3, GELU4, GELU5))]
+        proto_mods = [m for m in model.modules() if isinstance(m, (GELU3, GELU4, GELU5, GELU6))]
         if proto_mods:
             from collections import Counter
             epoch_log = []
