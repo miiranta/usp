@@ -329,19 +329,6 @@ class GELU3(nn.Module):
         log_sensitivity_birth→ θ_b ∈ (0,1) novelty threshold for spawning
         log_sensitivity_death→ θ_d ∈ (0,1) activity threshold for pruning
 
-    Novelty gate is per-neuron (B, T, D):
-        novelty[b,t,d] = exp(-tau[d] * max_sim[b,t])
-        scale[b,t,d]   = (1 - α[d]*d[d]) + α[d]*d[d] * novelty[b,t,d]
-
-    Dynamic Prototype Registry (no hard cap):
-        Birth  – when batch-averaged max cosine-sim < mean(sensitivity_birth),
-                 spawn a new prototype from the current batch mean.
-        Death  – each prototype k tracks an EMA activation score (how often
-                 it is selected as nearest).  When act_score[k] drops below
-                 mean(sensitivity_death), the prototype is pruned (≥1 kept).
-        Strength – emerges naturally: frequently selected prototypes build
-                 a representative EMA → high sim → strong suppression.
-
     Parameters are lazily created on the first forward pass (D unknown at
     __init__ time).  Build the optimizer *after* the dummy forward that
     run_experiment already performs.
@@ -357,12 +344,11 @@ class GELU3(nn.Module):
         self.log_blend             : nn.Parameter = None  # (D,)
         self.log_sensitivity_birth : nn.Parameter = None  # (D,)
         self.log_sensitivity_death : nn.Parameter = None  # (D,)
-
-        self._D = None   # filled on first forward
+        self._D = None
 
         # Dynamic prototype state
         self._emas      : torch.Tensor = None   # (K, D)
-        self._act_score : list         = None   # [float], length K — EMA of selection
+        self._act_score : list         = None   # [float], length K
         self._proto_log : list         = []     # K count sampled every training forward
         self._ready = False
 
@@ -387,7 +373,6 @@ class GELU3(nn.Module):
         self._act_score = None
         self._proto_log = []
         self._ready     = False
-        # Per-neuron Parameters are kept — only the prototype tensors are reset.
 
     @staticmethod
     def _gelu(x: torch.Tensor) -> torch.Tensor:
@@ -401,17 +386,16 @@ class GELU3(nn.Module):
 
     # ── Prototype management ───────────────────────────────────────────
     def _spawn(self, x_mean: torch.Tensor):
-        """Append a new prototype; initial activation score = 1.0."""
         self._emas      = torch.cat([self._emas, x_mean.unsqueeze(0)], dim=0)
         self._act_score.append(1.0)
 
     def _prune(self, death_thresh: float):
-        """Remove prototypes whose activation EMA fell below death_thresh; keep ≥1."""
+        """Remove prototypes below death_thresh; keep ≥1."""
         K = self._emas.shape[0]
         if K <= 1:
             return
         alive = [k for k in range(K) if self._act_score[k] >= death_thresh]
-        if not alive:   # keep the most recently active one
+        if not alive:
             alive = [max(range(K), key=lambda k: self._act_score[k])]
         if len(alive) < K:
             self._emas      = self._emas[alive]
@@ -419,9 +403,7 @@ class GELU3(nn.Module):
 
     # ── Forward ────────────────────────────────────────────────────────
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (B, T, D)
         B, T, D = x.shape
-
         if self._D is None:
             self._init_params(D, x.device, x.dtype)
 
@@ -489,50 +471,38 @@ class GELU3(nn.Module):
 
 
 class GELU4(nn.Module):
-    """Fully differentiable per-neuron EMA GELU with soft-gated prototype death.
+    """Same as GELU3 but with soft differentiable death gate.
 
-    Identical to GELU3 except the hard prune is replaced by a **soft gate**
-    applied to per-prototype similarities before the max-pool, so that
-    log_sensitivity_death receives real gradients:
+    log_sensitivity_death is a scalar IN the computation graph:
+        act   = tensor(_act_score)                          # (K,) detached floats
+        gate  = sigmoid((act - thresh_death) * sharpness)  # (K,) IN graph
+        max_sim = (sim * gate).max(dim=-1)                 # (B, T)
 
-        act   = tensor(_act_score)                          # (K,) — detached floats
-        gate  = sigmoid((act - thresh_death) * sharpness)  # (K,) — IN graph
-        gated_sim = sim * gate                             # (B, T, K)
-        max_sim   = gated_sim.max(dim=-1)                  # (B, T)
+    Gradient path: loss → novelty → max_sim → gated_sim → gate
+                   → thresh_death → log_sensitivity_death  ✓
+                   → sharpness    → log_gate_sharpness      ✓
 
-    Gradient path: loss → novelty → max_sim → gated_sim → gate →
-                   thresh_death → log_sensitivity_death  ✓
-
-    A lightweight cleanup prune still runs each step to free memory for
-    prototypes whose gate has collapsed below GELU4_PRUNE_EPSILON; this
-    happens *after* the backward-pass-relevant computation and has no
-    effect on gradients.
-
-    Learnable parameters (all lazily created on first forward, except
-    log_gate_sharpness which is a scalar and can be created at __init__):
-        logit_decay           (D,)  prototype EMA speed
-        log_tau               (D,)  suppression sharpness
-        log_blend             (D,)  max suppression strength
-        log_sensitivity_birth (D,)  birth threshold  (used detached — discrete event)
-        log_sensitivity_death (D,)  death threshold  (IN graph via soft gate)
-        log_gate_sharpness    ()    slope at the gate cutoff
+    All scalar params (birth/death/sharpness) created at __init__.
+    Per-neuron (D,) params created lazily.
+    Birth capped at GELU3_K_MAX; cleanup prune runs post-forward with no gradient impact.
     """
 
     def __init__(self, ema_decay: float = None):
         super().__init__()
         self._init_decay = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
 
-        # Scalar param — no D dependency, safe to create now
-        self.log_gate_sharpness = nn.Parameter(
-            torch.tensor(math.log(Config.GELU4_GATE_SHARPNESS)))
+        # All scalar params — no D dependency, created now
+        self.log_sensitivity_birth = nn.Parameter(
+            torch.tensor(Config.GELU3_SENSITIVITY_BIRTH))           # detached in forward
+        self.log_sensitivity_death = nn.Parameter(
+            torch.tensor(Config.GELU3_SENSITIVITY_DEATH))           # IN graph
+        self.log_gate_sharpness    = nn.Parameter(
+            torch.tensor(math.log(Config.GELU4_GATE_SHARPNESS)))   # IN graph
 
         # Per-neuron params — lazily created in _init_params
-        self.logit_decay           : nn.Parameter = None  # (D,)
-        self.log_tau               : nn.Parameter = None  # (D,)
-        self.log_blend             : nn.Parameter = None  # (D,)
-        self.log_sensitivity_birth : nn.Parameter = None  # (D,)
-        self.log_sensitivity_death : nn.Parameter = None  # (D,)
-
+        self.logit_decay : nn.Parameter = None  # (D,)
+        self.log_tau     : nn.Parameter = None  # (D,)
+        self.log_blend   : nn.Parameter = None  # (D,)
         self._D = None
 
         # Dynamic prototype state
@@ -552,10 +522,6 @@ class GELU4(nn.Module):
         self.log_blend = nn.Parameter(
             torch.full((D,), math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND)),
                        device=device, dtype=dtype))
-        self.log_sensitivity_birth = nn.Parameter(
-            torch.full((D,), Config.GELU3_SENSITIVITY_BIRTH, device=device, dtype=dtype))
-        self.log_sensitivity_death = nn.Parameter(
-            torch.full((D,), Config.GELU3_SENSITIVITY_DEATH, device=device, dtype=dtype))
 
     def reset_state(self):
         self._emas      = None
@@ -579,23 +545,19 @@ class GELU4(nn.Module):
         self._act_score.append(1.0)
 
     def _cleanup(self, gate_vals: list):
-        """Memory-only prune: drop prototypes whose gate has collapsed. No gradient impact.
-
-        gate_vals has length = K at gate-computation time.  _spawn may have added
-        a new prototype since then, so we only consider the first len(gate_vals)
-        slots; the newly born prototype is always kept (it wasn't gated yet).
+        """Memory-only prune: drop prototypes whose gate collapsed. No gradient impact.
+        gate_vals corresponds to prototypes present at gate-computation time;
+        any newly spawned prototypes (appended after) are always kept.
         """
-        K_gated = len(gate_vals)   # prototypes that were present when gate was computed
+        K_gated = len(gate_vals)
         if K_gated <= 1:
             return
-        eps   = Config.GELU4_PRUNE_EPSILON
-        # build alive list over gated slots only; always keep newly spawned ones
+        eps     = Config.GELU4_PRUNE_EPSILON
         K_total = self._emas.shape[0]
-        alive = [k for k in range(K_gated) if gate_vals[k] >= eps]
+        alive   = [k for k in range(K_gated) if gate_vals[k] >= eps]
         if not alive:
             alive = [max(range(K_gated), key=lambda k: gate_vals[k])]
-        # append any prototypes born after gate was computed (indices K_gated..K_total-1)
-        alive += list(range(K_gated, K_total))
+        alive  += list(range(K_gated, K_total))   # keep newly born
         if len(alive) < K_total:
             self._emas      = self._emas[alive]
             self._act_score = [self._act_score[k] for k in alive]
@@ -603,23 +565,22 @@ class GELU4(nn.Module):
     # ── Forward ────────────────────────────────────────────────────────
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, D = x.shape
-
         if self._D is None:
             self._init_params(D, x.device, x.dtype)
 
-        tau          = self.log_tau.exp()                              # (D,)
-        alpha        = torch.sigmoid(self.log_blend)                   # (D,)
-        d            = torch.sigmoid(self.logit_decay)                 # (D,) in-graph
-        d_val        = d.detach()                                      # (D,) for EMA
-        sharpness    = self.log_gate_sharpness.exp()                   # scalar, in-graph
-        thresh_death = torch.sigmoid(self.log_sensitivity_death).mean()            # scalar, IN graph
-        thresh_birth = torch.sigmoid(self.log_sensitivity_birth).detach().mean().item()  # out of graph
+        tau          = self.log_tau.exp()                                            # (D,)
+        alpha        = torch.sigmoid(self.log_blend)                                 # (D,)
+        d            = torch.sigmoid(self.logit_decay)                               # (D,) in-graph
+        d_val        = d.detach()                                                    # (D,) for EMA
+        sharpness    = self.log_gate_sharpness.exp()                                 # scalar, IN graph
+        thresh_death = torch.sigmoid(self.log_sensitivity_death)                     # scalar, IN graph
+        thresh_birth = torch.sigmoid(self.log_sensitivity_birth).detach().item()     # scalar, detached
 
         x_mean = x.detach().flatten(0, -2).mean(0)    # (D,)
 
         # ── Bootstrap ─────────────────────────────────────────────────
         if not self._ready:
-            self._emas      = x_mean.unsqueeze(0).clone()   # (1, D)
+            self._emas      = x_mean.unsqueeze(0).clone()
             self._act_score = [1.0]
             self._ready     = True
             return self._gelu(x)
@@ -627,30 +588,25 @@ class GELU4(nn.Module):
         # ── Cosine similarity: (B, T, K) ──────────────────────────────
         x_norm = F.normalize(x,          dim=-1)
         p_norm = F.normalize(self._emas, dim=-1)
-        sim    = torch.einsum('btd,kd->btk', x_norm, p_norm)   # (B, T, K)
+        sim    = torch.einsum('btd,kd->btk', x_norm, p_norm)
 
-        # ── Soft death gate — IN graph ───────────────────────────────
-        # act_score is plain floats (no autograd), but thresh_death IS in graph:
-        #   d(gate)/d(thresh_death) = -sharpness * gate * (1 - gate)  ≠  0
-        act       = torch.tensor(self._act_score, device=x.device, dtype=x.dtype)  # (K,)
-        gate      = torch.sigmoid((act - thresh_death) * sharpness)                # (K,)
-        max_sim, _ = (sim * gate.view(1, 1, -1)).max(dim=-1)                       # (B, T)
+        # ── Soft death gate — IN graph ─────────────────────────────────
+        act        = torch.tensor(self._act_score, device=x.device, dtype=x.dtype)  # (K,)
+        gate       = torch.sigmoid((act - thresh_death) * sharpness)                # (K,) IN graph
+        max_sim, _ = (sim * gate.view(1, 1, -1)).max(dim=-1)                        # (B, T)
 
-        # ── Per-neuron novelty & gate: (B, T, D) ──────────────────────
-        novelty = torch.exp(
-            -tau.view(1, 1, D) * max_sim.unsqueeze(-1)
-        )                                                              # (B, T, D)
+        # ── Per-neuron novelty & scale: (B, T, D) ─────────────────────
+        novelty = torch.exp(-tau.view(1, 1, D) * max_sim.unsqueeze(-1))
         a  = alpha.view(1, 1, D)
         dg = d.view(1, 1, D)
-        effective_scale = (1.0 - a * dg) + a * dg * novelty           # (B, T, D)
+        effective_scale = (1.0 - a * dg) + a * dg * novelty
         blended = x * effective_scale
 
-        # ── Competitive EMA: update top-K nearest prototypes ──────────
+        # ── Competitive EMA: top-2 update ─────────────────────────────
         x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)
-        sims_mean   = (F.normalize(self._emas, dim=-1) @ x_mean_norm.T).squeeze(-1)  # (K,)
+        sims_mean   = (F.normalize(self._emas, dim=-1) @ x_mean_norm.T).squeeze(-1)
         K           = self._emas.shape[0]
-        top_k       = min(Config.GELU3_TOP_K_UPDATE, K)
-        top_indices = sims_mean.topk(top_k).indices.tolist()
+        top_indices = sims_mean.topk(min(2, K)).indices.tolist()
         k_star      = top_indices[0]
         for rank, k in enumerate(top_indices):
             w = 1.0 / (rank + 1)
@@ -662,14 +618,13 @@ class GELU4(nn.Module):
             target = 1.0 if k == k_star else 0.0
             self._act_score[k] = a_decay * self._act_score[k] + (1.0 - a_decay) * target
 
-        # ── Birth (discrete — uses detached thresh_birth) ──────────────────
-        if max_sim.detach().mean().item() < thresh_birth:
+        # ── Birth (capped at K_MAX, uses detached thresh_birth) ────────
+        if max_sim.detach().mean().item() < thresh_birth and K < Config.GELU3_K_MAX:
             self._spawn(x_mean)
 
-        # ── Memory cleanup (post-backward, no gradient impact) ─────────────
+        # ── Memory cleanup (post-forward, no gradient impact) ──────────
         self._cleanup(gate.detach().tolist())
 
-        # ── Log prototype count ────────────────────────────────────────
         if torch.is_grad_enabled():
             self._proto_log.append(self._emas.shape[0])
 
