@@ -634,7 +634,7 @@ class GELU5(nn.Module):
     """Dynamic Gaussian-Mixture Memory GELU — fully self-regulating.
 
     Maintains K cluster means that grow and shrink automatically, with no
-    hardcoded thresholds, no K-cap, and no fixed epsilon floors in the logic.
+    hardcoded thresholds, no K-cap, and no fixed distance floors.
 
     ── Core idea ──────────────────────────────────────────────────────────
     Each cluster k has a mean μ_k (D,) and a weight w_k (scalar).
@@ -649,36 +649,38 @@ class GELU5(nn.Module):
         scale_i  =  1 − α_i · famil_i
         output   =  GELU(x · scale)
 
-    ── Birth (learned threshold θ_b) ──────────────────────────────────────
-    Responsibility entropy H(r) = −Σ r_k log r_k is maximised when all
-    clusters are equally poor at explaining x.  Conversely, max_r is low
-    when no cluster is a good match.  A new cluster is born when:
-        max_r  <  θ_b  =  sigmoid(logit_birth)
-    logit_birth is a learned parameter → the model decides how novel
-    something must be before it deserves its own cluster.
+    ── Birth (relative distance spike, learned ratio θ_b) ─────────────────
+    Birth is triggered when the distance to the nearest cluster is θ_b×
+    larger than the running EMA of typical distances:
 
-    ── Death (no threshold, pure weight decay) ─────────────────────────────
-    Weights are updated via EMA toward current responsibilities:
-        w_k  ←  dw · w_k + (1−dw) · r_k      then renormalised
-    A cluster that consistently loses has its weight driven exponentially
-    toward zero.  We remove it only when its contribution to famil becomes
-    numerically indistinguishable — detected as w_k·K < θ_d, where θ_d is
-    also a learned parameter (not hardcoded).  Death is thus doubly adaptive:
-    the decay speed (dw) and the floor (θ_d) both come from the data.
+        dist_nearest  =  RMS(x_mean − μ_{k*})
+        ema_dist     ←  d · ema_dist + (1−d) · dist_nearest   [EMA buffer]
+        birth if  dist_nearest  >  θ_b · ema_dist
+
+    where  θ_b = softplus(logit_birth) > 0  is a learned positive ratio.
+    This works for any K ≥ 1 because it is an *absolute* distance signal,
+    not a relative share — with K=1 the single cluster's distance is the
+    only reference, and any drift in the data regime triggers birth.
+
+    ── Death (pure weight decay, learned floor θ_d) ───────────────────────
+    Weights are EMA-updated toward current responsibilities then renormalised:
+        w_k  ←  dw · w_k + (1−dw) · r_k  →  renormalise
+    A cluster that consistently loses is pruned when  w_k · K < θ_d,
+    where  θ_d = sigmoid(logit_death)  is also learned.
 
     ── Forgetting ──────────────────────────────────────────────────────────
-    When a signal stops appearing, only the losing cluster's weight decays —
-    its mean is untouched.  After enough steps, the weight falls below θ_d
-    and the cluster is pruned.  The next occurrence of that signal will find
-    no matching cluster and spawn a fresh one.
+    When a signal stops appearing, its cluster never wins, its weight drains
+    via EMA, and eventually falls below the learned θ_d floor → pruned.
+    Its next occurrence is novel again relative to ema_dist → respawned.
 
-    Learned parameters:
-        logit_decay   → d  ∈ (0,1)  mean EMA speed              [scalar]
-        logit_w_decay → dw ∈ (0,1)  weight EMA speed            [scalar]
-        logit_birth   → θ_b ∈ (0,1) max-responsibility birth cut [scalar]
-        logit_death   → θ_d ∈ (0,1) relative weight death floor  [scalar]
-        log_tau       → τ > 0        suppression sharpness        [(D,), lazy]
-        log_blend     → α ∈ (0,1)   max suppression depth        [(D,), lazy]
+    Learned parameters (all scalar):
+        logit_decay   → d  ∈ (0,1)          mean + dist EMA speed
+        logit_w_decay → dw ∈ (0,1)          weight EMA speed
+        logit_birth   → θ_b = softplus(·)>0  birth distance ratio
+        logit_death   → θ_d ∈ (0,1)          relative weight death floor
+    Per-neuron [(D,), lazy]:
+        log_tau        → τ > 0               suppression sharpness
+        log_blend      → α ∈ (0,1)           max suppression depth
     """
 
     def __init__(self, ema_decay: float = None):
@@ -686,12 +688,12 @@ class GELU5(nn.Module):
         init_d = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
         ld = math.log(init_d / (1.0 - init_d))
 
-        # Scalar learned params — govern cluster lifecycle, no D dependency
-        self.logit_decay   = nn.Parameter(torch.tensor(ld))    # mean EMA speed
-        self.logit_w_decay = nn.Parameter(torch.tensor(ld))    # weight EMA speed
-        # birth: sigmoid(0) ≈ 0.5 → spawn when best cluster owns < 50% responsibility
-        self.logit_birth   = nn.Parameter(torch.tensor(0.0))
-        # death: sigmoid(-2) ≈ 0.12 → prune when cluster weight < 12% of uniform
+        # Scalar learned params — govern cluster lifecycle
+        self.logit_decay   = nn.Parameter(torch.tensor(ld))
+        self.logit_w_decay = nn.Parameter(torch.tensor(ld))
+        # birth ratio: softplus(1.0) ≈ 1.31 → spawn when 31% further than typical
+        self.logit_birth   = nn.Parameter(torch.tensor(1.0))
+        # death floor: sigmoid(-2) ≈ 0.12 → prune when < 12% of uniform weight
         self.logit_death   = nn.Parameter(torch.tensor(-2.0))
 
         # Per-neuron params — lazily created on first forward (D unknown here)
@@ -702,6 +704,7 @@ class GELU5(nn.Module):
         # Dynamic mixture state
         self._mus       : torch.Tensor = None  # (K, D)  cluster means
         self._ws        : torch.Tensor = None  # (K,)    normalised weights
+        self._ema_dist  : float        = None  # running EMA of dist to nearest cluster
         self._ready     : bool         = False
         self._proto_log : list         = []    # K count per training step (monitoring)
 
@@ -716,6 +719,7 @@ class GELU5(nn.Module):
     def reset_state(self):
         self._mus       = None
         self._ws        = None
+        self._ema_dist  = None
         self._proto_log = []
         self._ready     = False
 
@@ -734,76 +738,83 @@ class GELU5(nn.Module):
         if self._D is None:
             self._init_params(D, x.device, x.dtype)
 
-        tau   = self.log_tau.exp()                    # (D,) in-graph
-        alpha = torch.sigmoid(self.log_blend)         # (D,) in-graph
-        d_val  = torch.sigmoid(self.logit_decay).detach().item()   # scalar
-        dw_val = torch.sigmoid(self.logit_w_decay).detach().item() # scalar
-        θ_b    = torch.sigmoid(self.logit_birth).detach().item()   # scalar, learned
-        θ_d    = torch.sigmoid(self.logit_death).detach().item()   # scalar, learned
+        tau    = self.log_tau.exp()                     # (D,) in-graph
+        alpha  = torch.sigmoid(self.log_blend)          # (D,) in-graph
+        d_val  = torch.sigmoid(self.logit_decay).detach().item()
+        dw_val = torch.sigmoid(self.logit_w_decay).detach().item()
+        # θ_b > 0: birth when dist_nearest > θ_b × ema_dist
+        θ_b    = F.softplus(self.logit_birth).detach().item()
+        θ_d    = torch.sigmoid(self.logit_death).detach().item()
 
-        x_mean = x.detach().mean(dim=(0, 1))   # (D,) — batch+time mean, fully detached
+        x_mean = x.detach().mean(dim=(0, 1))   # (D,) fully detached
 
         # ── Bootstrap ────────────────────────────────────────────────
         if not self._ready:
-            self._mus   = x_mean.unsqueeze(0).clone()                            # (1, D)
-            self._ws    = torch.ones(1, device=x.device, dtype=x.dtype)          # (1,)
-            self._ready = True
+            self._mus      = x_mean.unsqueeze(0).clone()
+            self._ws       = torch.ones(1, device=x.device, dtype=x.dtype)
+            self._ema_dist = 0.0    # will be set on next step from real distance
+            self._ready    = True
             return self._gelu(x)
 
         K = self._mus.shape[0]
 
-        # ── Soft responsibilities (batch-level, scalar per cluster) ───
-        # RMS distance from x_mean to each cluster centre, in log-space for stability
-        diff_means = x_mean.unsqueeze(0) - self._mus              # (K, D) detached
-        dist       = diff_means.pow(2).mean(dim=-1).sqrt()        # (K,)
-        log_r      = self._ws.log() - dist                        # unnorm log-prob
-        log_r      = log_r - log_r.logsumexp(dim=0)               # log-softmax → stable
-        r          = log_r.exp()                                   # (K,) ∈ (0,1), Σ=1
-        max_r, k_star_idx = r.max(dim=0)
-        k_star = k_star_idx.item()
+        # ── Soft responsibilities ─────────────────────────────────────
+        diff_means = x_mean.unsqueeze(0) - self._mus          # (K, D) detached
+        dist       = diff_means.pow(2).mean(dim=-1).sqrt()    # (K,)   RMS distance
+        log_r      = self._ws.log() - dist
+        log_r      = log_r - log_r.logsumexp(dim=0)           # stable log-softmax
+        r          = log_r.exp()                               # (K,) Σ=1
+        k_star_idx = r.argmax()
+        k_star     = k_star_idx.item()
+        dist_nearest = dist[k_star].item()                     # dist to winner
 
         # ── Per-token per-neuron familiarity (vectorised over K) ──────
-        # diff_all: (K, B, T, D) — gradient flows through x and tau only
-        diff_all  = x.unsqueeze(0) - self._mus.view(K, 1, 1, D)               # (K,B,T,D)
-        famil_all = torch.exp(-tau.view(1, 1, 1, D) * diff_all.abs())          # (K,B,T,D)
-        famil     = (r.view(K, 1, 1, 1) * famil_all).sum(dim=0)               # (B,T,D)
-        scale     = 1.0 - alpha.view(1, 1, D) * famil                          # (B,T,D)
+        diff_all  = x.unsqueeze(0) - self._mus.view(K, 1, 1, D)       # (K,B,T,D)
+        famil_all = torch.exp(-tau.view(1, 1, 1, D) * diff_all.abs()) # (K,B,T,D)
+        famil     = (r.view(K, 1, 1, 1) * famil_all).sum(dim=0)       # (B,T,D)
+        scale     = 1.0 - alpha.view(1, 1, D) * famil                  # (B,T,D)
 
         # ── EMA updates — training only, all detached ─────────────────
         if self.training:
-            # Update winner mean toward current batch mean
+            # Update winner mean
             self._mus[k_star] = d_val * self._mus[k_star] + (1.0 - d_val) * x_mean
 
-            # Update all weights toward responsibilities then renormalise
+            # Update weight EMA → renormalise
             self._ws = dw_val * self._ws + (1.0 - dw_val) * r
             self._ws = self._ws / self._ws.sum()
 
-            # ── Birth: spawn when best cluster can't explain input ────
-            # max_r < θ_b means "no existing cluster is a good match"
-            if max_r.item() < θ_b:
-                new_mu  = x_mean.unsqueeze(0).clone()                           # (1, D)
-                # New cluster born with weight proportional to novelty, natural scale
-                init_w  = torch.tensor([(1.0 - max_r.item()) / (K + 1)],
-                                       device=x.device, dtype=x.dtype)
+            # Update running distance EMA (bootstraps on first real step)
+            if self._ema_dist == 0.0:
+                self._ema_dist = dist_nearest
+            else:
+                self._ema_dist = d_val * self._ema_dist + (1.0 - d_val) * dist_nearest
+
+            # ── Birth: current distance is a relative spike vs typical ─
+            # Works for K=1 and K>1 equally; ema_dist is the self-normaliser
+            if dist_nearest > θ_b * self._ema_dist:
+                new_mu = x_mean.unsqueeze(0).clone()
+                # initial weight: inverse of novelty ratio — more novel = more weight
+                init_w = torch.tensor(
+                    [dist_nearest / (self._ema_dist * (K + 1))],
+                    device=x.device, dtype=x.dtype)
                 self._mus = torch.cat([self._mus, new_mu], dim=0)
                 self._ws  = torch.cat([self._ws, init_w])
                 self._ws  = self._ws / self._ws.sum()
                 K += 1
 
-            # ── Death: remove clusters whose relative weight collapsed ─
-            # ws_k * K < θ_d  ↔  cluster has < θ_d fraction of uniform weight
-            # θ_d is learned — no hardcoded floor
+            # ── Death: prune clusters with collapsed relative weight ───
             if K > 1:
                 alive = (self._ws * K >= θ_d).nonzero(as_tuple=True)[0]
-                if alive.numel() == 0:                         # safety: keep the best
+                if alive.numel() == 0:
                     alive = self._ws.argmax().unsqueeze(0)
                 if alive.numel() < K:
                     self._mus = self._mus[alive]
                     self._ws  = self._ws[alive]
                     self._ws  = self._ws / self._ws.sum()
+                    K = self._mus.shape[0]
 
         if torch.is_grad_enabled():
-            self._proto_log.append(self._mus.shape[0])
+            self._proto_log.append(K)
 
         return self._gelu(x * scale)
 
