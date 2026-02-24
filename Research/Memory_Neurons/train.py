@@ -377,9 +377,11 @@ class GELU2Soft(nn.Module):
             return self._gelu(x)
 
         # ── Per-token novelty (same as GELU2) ──────────────────────────
-        x_norm  = F.normalize(x, dim=-1)                        # (B, T, D)
-        p_norm  = F.normalize(self._emas, dim=-1)               # (K, D)
-        sim     = torch.einsum('btd,kd->btk', x_norm, p_norm)  # (B, T, K)
+        # Detach _emas so stale grad_fn from a previous soft-update never
+        # leaks into the current forward graph (fixes retain_graph error).
+        x_norm  = F.normalize(x, dim=-1)                                # (B, T, D)
+        p_norm  = F.normalize(self._emas.detach(), dim=-1)              # (K, D)
+        sim     = torch.einsum('btd,kd->btk', x_norm, p_norm)          # (B, T, K)
 
         max_sim, _ = sim.max(dim=-1)                            # (B, T)
         novelty    = torch.exp(-tau * max_sim)                  # (B, T)
@@ -387,12 +389,13 @@ class GELU2Soft(nn.Module):
         effective_scale = (1.0 - alpha * d) + alpha * d * novelty.unsqueeze(-1)
         blended = x * effective_scale
 
-        # ── Soft update: all prototypes move toward x_mean ─────────────
-        x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)              # (1, D)
-        proto_sims  = (p_norm * x_mean_norm).sum(-1)                        # (K,) cosine sims
-        weights     = F.softmax(tau_soft * proto_sims, dim=0)               # (K,) ∑=1
-        delta       = x_mean.unsqueeze(0) - self._emas                      # (K, D)
-        self._emas  = self._emas + (1 - d_val) * weights.unsqueeze(1) * delta
+        # ── Soft update: outside autograd — _emas must stay grad_fn-free
+        with torch.no_grad():
+            x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)      # (1, D)
+            proto_sims  = (p_norm * x_mean_norm).sum(-1)                # (K,) cosine sims
+            weights     = F.softmax(tau_soft * proto_sims, dim=0)       # (K,) ∑=1
+            delta       = x_mean.unsqueeze(0) - self._emas              # (K, D)
+            self._emas  = self._emas + (1 - d_val) * weights.unsqueeze(1) * delta
 
         return self._gelu(blended)
 
@@ -544,8 +547,9 @@ class GELU2SelectiveSoft(nn.Module):
             return self._gelu(x)
 
         # ── Per-token novelty ───────────────────────────────────────────
+        # Detach _emas to prevent stale grad_fn from propagating (retain_graph fix).
         x_norm  = F.normalize(x, dim=-1)
-        p_norm  = F.normalize(self._emas, dim=-1)
+        p_norm  = F.normalize(self._emas.detach(), dim=-1)
         sim     = torch.einsum('btd,kd->btk', x_norm, p_norm)
 
         max_sim, _ = sim.max(dim=-1)
@@ -554,12 +558,13 @@ class GELU2SelectiveSoft(nn.Module):
         effective_scale = (1.0 - alpha * d) + alpha * d * novelty.unsqueeze(-1)
         blended = x * effective_scale
 
-        # ── Soft update ─────────────────────────────────────────────────
-        x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)
-        proto_sims  = (p_norm * x_mean_norm).sum(-1)                 # (K,)
-        weights     = F.softmax(tau_soft * proto_sims, dim=0)        # (K,)
-        delta       = x_mean.unsqueeze(0) - self._emas               # (K, D)
-        self._emas  = self._emas + (1 - d_val) * weights.unsqueeze(1) * delta
+        # ── Soft update — outside autograd so _emas stays grad_fn-free ─
+        with torch.no_grad():
+            x_mean_norm = F.normalize(x_mean.unsqueeze(0), dim=-1)
+            proto_sims  = (p_norm * x_mean_norm).sum(-1)             # (K,)
+            weights     = F.softmax(tau_soft * proto_sims, dim=0)    # (K,)
+            delta       = x_mean.unsqueeze(0) - self._emas           # (K, D)
+            self._emas  = self._emas + (1 - d_val) * weights.unsqueeze(1) * delta
 
         return self._gelu(blended)
 
