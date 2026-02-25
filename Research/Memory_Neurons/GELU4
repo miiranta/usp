@@ -1,0 +1,104 @@
+INIT
+    K_max = maximum number of prototypes per neuron
+    K_min = minimum number of prototypes per neuron (e.g. 1)
+
+    mean[K_max][D]            // EMA mean per prototype, per neuron
+    var[K_max][D]             // EMA variance per prototype, per neuron
+    active[K_max]             // active prototype mask
+
+    ready = false
+
+    alpha[D] ∈ (0, 1)         // learnable novelty suppression per neuron
+    beta[D] > 0               // learnable sensitivity per neuron
+
+    tau_assign > 0            // soft assignment temperature (fixed)
+    d = constant in (0,1)     // fixed EMA decay
+    eps = small constant
+
+    birth_threshold > 0       // surprise needed to create prototype
+    death_threshold > 0       // minimum usage before removal
+
+
+INPUT
+    x:
+        B = batch size
+        T = sequence length
+        D = feature / hidden dimension
+
+    context:
+        c[b,t,C]              // contextual signal (position, task, attention, etc.)
+
+    There are B × T tokens total
+
+
+RUN
+    if not ready:
+        active[1] = true
+        mean[1] = mean(x over B and T)
+        var[1]  = variance(x over B and T)
+        for k in 2..K_max:
+            active[k] = false
+        ready = true
+        return GELU(x)
+
+    for b in 1..B:
+        for t in 1..T:
+            for i in 1..D:
+
+                // context gate (shared across prototypes)
+                g_ctx = f(c[b,t])          // scalar in (0, +∞), fixed or learned
+
+                // similarity to each prototype
+                for k in 1..K_max:
+                    if active[k]:
+                        z[k] =
+                            (x[b,t,i] - mean[k][i]) /
+                            sqrt(var[k][i] + eps)
+
+                        sim[k] =
+                            tanh(beta[i] * z[k]) * g_ctx
+                    else:
+                        sim[k] = -infinity
+
+                // soft assignment over prototypes
+                for k in 1..K_max:
+                    w[k] = exp(sim[k] / tau_assign)
+
+                Z = sum(w over k)
+
+                for k in 1..K_max:
+                    w[k] = w[k] / Z
+
+                // aggregate familiarity
+                similarity = sum(w[k] * sim[k] over k)
+
+                // novelty-modulated activation
+                scale = 1 - alpha[i] * similarity
+                y[b,t,i] = GELU(x[b,t,i] * scale)
+
+                // soft EMA updates (context-conditioned)
+                for k in 1..K_max:
+                    if active[k]:
+                        mean[k][i] =
+                            d * mean[k][i] +
+                            (1 - d) * w[k] * x[b,t,i]
+
+                        var[k][i] =
+                            d * var[k][i] +
+                            (1 - d) * w[k] *
+                            (x[b,t,i] - mean[k][i])^2
+
+                // prototype birth (context-sensitive)
+                if max(sim[k] over k) < birth_threshold * g_ctx:
+                    if exists inactive prototype j:
+                        active[j] = true
+                        mean[j][i] = x[b,t,i]
+                        var[j][i]  = eps
+
+                // prototype death (usage-based)
+                for k in 1..K_max:
+                    if active[k] and w[k] < death_threshold:
+                        if number of active prototypes > K_min:
+                            mark k as inactive
+
+    return y

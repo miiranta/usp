@@ -387,10 +387,180 @@ class GELU3(nn.Module):
         return y
 
 
+class GELU4(nn.Module):
+    """Fully per-neuron habituation GELU (GELU3 with per-neuron EMA decay).
+
+    Extends GELU3 by making the EMA decay d also a per-neuron learnable
+    parameter d[D], so each dimension independently controls both its
+    suppression strength and its memory length:
+
+        similarity[b,t,k] = sign(x[b,t,k] * prototype[k])   # +1 same sign, -1 opposite
+        scale[b,t,k]      = 1 - alpha[k] * similarity[b,t,k]
+        y[b,t,k]          = GELU(x[b,t,k] * scale[b,t,k])
+
+    Prototype updated per-neuron:
+        prototype[k] = d[k] * prototype[k] + (1 - d[k]) * batch_mean[k]
+
+    Learnable parameters (both lazy, shape (D,)):
+        log_alpha[D] -> alpha[k] in (0,1) : per-neuron suppression strength
+        logit_decay[D] -> d[k]  in (0,1) : per-neuron EMA decay
+    """
+
+    def __init__(self, ema_decay: float = None):
+        super().__init__()
+        self._init_decay   = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
+        self._prototype: torch.Tensor = None
+        self._ready        = False
+        self.log_alpha:    nn.Parameter = None   # (D,), lazy
+        self.logit_decay:  nn.Parameter = None   # (D,), lazy
+
+    def reset_state(self):
+        self._prototype = None
+        self._ready = False
+
+    @staticmethod
+    def _gelu(x: torch.Tensor) -> torch.Tensor:
+        return (
+            0.5 * x
+            * (1.0 + torch.tanh(
+                math.sqrt(2.0 / math.pi)
+                * (x + 0.044715 * x.pow(3))
+            ))
+        )
+
+    def _init_params(self, D: int, device: torch.device, dtype: torch.dtype):
+        """Lazily register per-neuron parameters once D is known."""
+        if self.log_alpha is None:
+            alpha_logit = math.log(Config.GELU2_BLEND / (1.0 - Config.GELU2_BLEND))
+            self.log_alpha = nn.Parameter(
+                torch.full((D,), alpha_logit, device=device, dtype=dtype)
+            )
+        if self.logit_decay is None:
+            d_logit = math.log(self._init_decay / (1.0 - self._init_decay))
+            self.logit_decay = nn.Parameter(
+                torch.full((D,), d_logit, device=device, dtype=dtype)
+            )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (B, T, D)
+        D = x.shape[-1]
+        self._init_params(D, x.device, x.dtype)
+
+        alpha = torch.sigmoid(self.log_alpha)              # (D,)
+        d     = torch.sigmoid(self.logit_decay)            # (D,)  in-graph
+        d_val = d.detach()                                 # (D,)  for EMA update
+
+        x_mean = x.detach().flatten(0, -2).mean(0)        # (D,)
+
+        if not self._ready:
+            self._prototype = x_mean.clone()
+            self._ready     = True
+            return self._gelu(x)
+
+        # similarity = sign(x[b,t,k] * prototype[k])  ->  +1 same sign, -1 opposite
+        sim   = torch.sign(x.detach() * self._prototype)  # (B, T, D)
+        scale = 1.0 - alpha * sim                         # (B, T, D)
+        y     = self._gelu(x * scale)
+
+        # Per-neuron EMA prototype update
+        self._prototype = d_val * self._prototype + (1.0 - d_val) * x_mean
+
+        return y
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout, max_len=5000):
+        super().__init__()
+        self.dropout = nn.Dropout(dropout)
+        pe = torch.zeros(max_len, d_model)
+        pos = torch.arange(max_len).unsqueeze(1)
+        div = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(pos * div)
+        pe[:, 1::2] = torch.cos(pos * div)
+        self.register_buffer('pe', pe.unsqueeze(0))  # (1, max_len, d_model)
+
+    def forward(self, x):
+        x = x + self.pe[:, :x.size(1)]
+        return self.dropout(x)
+
+
+class TransformerLM(nn.Module):
+    def __init__(self, vocab_size, cfg: Config, activation_cls=GELU):
+        super().__init__()
+        self.embed   = nn.Embedding(vocab_size, cfg.D_MODEL)
+        self.pos_enc = PositionalEncoding(cfg.D_MODEL, cfg.DROPOUT)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=cfg.D_MODEL, nhead=cfg.N_HEADS,
+            dim_feedforward=cfg.D_FF, dropout=cfg.DROPOUT,
+            activation=activation_cls(), batch_first=True
+        )
+        self.transformer = nn.TransformerEncoder(
+            encoder_layer, num_layers=cfg.N_LAYERS
+        )
+
+        self.head = nn.Linear(cfg.D_MODEL, vocab_size)
+        self._init_weights()
+
+    def _init_weights(self):
+        for p in self.parameters():
+            if isinstance(p, nn.parameter.UninitializedParameter):
+                continue   # LazyLinear params – not yet materialised
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
+
+    def forward(self, x):
+        seq_len     = x.size(1)
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(
+            seq_len, device=x.device
+        )
+        out = self.pos_enc(self.embed(x))
+        out = self.transformer(out, mask=causal_mask, is_causal=True)
+        return self.head(out)
+
+
+# ─────────────────────────────────────────────
+#  Training helpers
+# ─────────────────────────────────────────────
+
+def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
+    model.train() if train else model.eval()
+    total_loss, total_tokens = 0.0, 0
+    t0 = time.time()
+
+    phase = "train" if train else "eval "
+    ctx = torch.enable_grad() if train else torch.no_grad()
+    with ctx:
+        pbar = tqdm(enumerate(loader, 1), total=len(loader), desc=f"  {phase}", leave=False)
+        for step, (x, y) in pbar:
+            x, y = x.to(device), y.to(device)
+            logits = model(x)                          # (B, T, V)
+            loss = criterion(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
+
+            if train:
+                optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), cfg.GRAD_CLIP)
+                optimizer.step()
+
+            total_loss   += loss.item() * y.numel()
+            total_tokens += y.numel()
+
+            avg = total_loss / total_tokens
+            ppl = math.exp(min(avg, 20))
+            pbar.set_postfix(loss=f"{avg:.4f}", ppl=f"{ppl:.2f}")
+
+            if train and step % cfg.LOG_EVERY == 0:
+                elapsed = time.time() - t0
+                tqdm.write(f"  step {step:5d} | loss {avg:.4f} | ppl {ppl:8.2f} | {elapsed:.1f}s")
+
+    avg_loss = total_loss / total_tokens
+    return avg_loss, math.exp(min(avg_loss, 20))
+
 ALL_EXPERIMENTS = [
     ("control",      GELU),
     ("gelu2_k1",     GELU2),
-    ("gelu3_k1",        GELU3),
+    ("gelu3",        GELU3),
+    ("gelu4",        GELU4),
 ]
 
 
