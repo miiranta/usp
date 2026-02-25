@@ -155,7 +155,7 @@ function drawFrame(epochIdx) {
     ctx.restore();
 
     // Peak label — stack vertically if positions clash
-    const lText = peakX.toFixed(3);
+    const lText = 'Mo=' + peakX.toFixed(3);
     ctx.font = 'bold 12px Arial';
     const tw  = ctx.measureText(lText).width;
     let lx = peakCX + 5;

@@ -1264,7 +1264,7 @@ def plot_distributions_faceted(sources):
                        alpha=0.85, zorder=5)
             # Offset label to the right of the line with a white background
             x_range = avg_df['Bin_Center'].max() - avg_df['Bin_Center'].min()
-            ax.text(peak_x + x_range * 0.02, 0.88, f'{peak_x:.3f}',
+            ax.text(peak_x + x_range * 0.02, 0.88, f'Mo={peak_x:.3f}',
                     transform=ax.get_xaxis_transform(),
                     ha='left', va='top', fontsize=13,
                     fontweight='bold', color=color, zorder=6,
@@ -1954,45 +1954,47 @@ def plot_distribution_summary_per_epoch(sources):
         sorted_epochs = sorted(epoch_stats.keys())
         xs = sorted_epochs
 
+        # Source colour: Control = BLUE, Optimized = ORANGE
+        panel_color = src_colors.get(label, BLUE)
+
         def _vec(key, _stats=epoch_stats, _xs=sorted_epochs):
             means    = [_stats[e][key][0] for e in _xs]
             ci_lower = [_stats[e][key][1] for e in _xs]
             ci_upper = [_stats[e][key][2] for e in _xs]
             return np.array(means), np.array(ci_lower), np.array(ci_upper)
 
-        # --- Peak weight position  (X of GIF dashed line) -- left axis ---
+        # --- Mode (Mo)  (X of GIF dashed line) -- left axis ---
         m, lo, hi = _vec('peak_weight')
-        ax.plot(xs, m, color='#9467bd', linewidth=3.0, linestyle='--',
-                label='Peak Weight Position')
-        ax.fill_between(xs, lo, hi, color='#9467bd', alpha=0.18)
+        ax.plot(xs, m, color=panel_color, linewidth=3.0, linestyle='--',
+                label='Mode (Mo)')
+        ax.fill_between(xs, lo, hi, color=panel_color, alpha=0.18)
 
-        # --- Avg weight value / μ  (X of GIF dotted line) -- left axis ---
+        # --- Average (μ)  (X of GIF dotted line) -- left axis ---
         m, lo, hi = _vec('avg_weight')
-        ax.plot(xs, m, color='#7f7f7f', linewidth=2.5, linestyle=':',
-                label='Avg Weight Value (μ)')
-        ax.fill_between(xs, lo, hi, color='#7f7f7f', alpha=0.15)
+        ax.plot(xs, m, color=panel_color, linewidth=2.5, linestyle=':',
+                label='Average (μ)')
+        ax.fill_between(xs, lo, hi, color=panel_color, alpha=0.15)
 
-        # --- Peak density  (Y / height of GIF dashed line) -- right axis ---
+        # --- Highest probability density f(Mo)  (Y of GIF dashed line) -- right axis ---
         m, lo, hi = _vec('peak_density')
-        ax_right.plot(xs, m, color='#d62728', linewidth=2.5, linestyle='-',
-                      label='Peak Density')
-        ax_right.fill_between(xs, lo, hi, color='#d62728', alpha=0.13)
-        ax_right.set_ylabel('Peak Density', fontsize=14, fontweight='bold',
-                            labelpad=10, color='#d62728')
-        ax_right.tick_params(axis='y', labelcolor='#d62728', labelsize=12)
+        ax_right.plot(xs, m, color=panel_color, linewidth=2.5, linestyle='-',
+                      label='Highest probability density (f(Mo))')
+        ax_right.fill_between(xs, lo, hi, color=panel_color, alpha=0.13)
+        ax_right.set_ylabel('Highest probability density (f(Mo))', fontsize=18,
+                            fontweight='bold', labelpad=10, color=panel_color)
+        ax_right.tick_params(axis='y', labelcolor=panel_color, labelsize=16)
         ax_right.spines['top'].set_visible(False)
+        ax_right.spines['right'].set_color(panel_color)
+        ax_right.spines['right'].set_linewidth(1.5)
 
-        # Title coloured by source
-        panel_color = src_colors.get(label, BLUE)
-        ax.set_title(label, fontsize=20, fontweight='bold', pad=12,
-                     color=panel_color)
-
-        ax.set_xlabel('Epoch', fontsize=15, fontweight='bold', labelpad=10)
-        ax.set_ylabel('Weight Value', fontsize=14, fontweight='bold', labelpad=10)
-        ax.tick_params(axis='both', labelsize=12)
+        ax.set_xlabel('Epoch', fontsize=18, fontweight='bold', labelpad=10)
+        ax.set_ylabel('Weight Value', fontsize=18, fontweight='bold', labelpad=10)
+        ax.tick_params(axis='both', labelsize=16)
         ax.grid(True, alpha=0.35)
         ax.set_axisbelow(True)
         ax.spines['top'].set_visible(False)
+        ax.spines['left'].set_color(panel_color)
+        ax.spines['left'].set_linewidth(1.5)
 
         # Combined legend from both axes
         h_l, lbl_l = ax.get_legend_handles_labels()
@@ -2087,8 +2089,8 @@ def plot_distributions_3d_evolution(sources):
             poly_base.set_edgecolor('none')
             ax.add_collection3d(poly_base)
 
-        ax.set_xlabel('Weight Value', fontsize=12, labelpad=14)
-        ax.set_ylabel('Epoch', fontsize=12, labelpad=14)
+        ax.set_xlabel('Weight Value', fontsize=16, fontweight='bold', labelpad=14)
+        ax.set_ylabel('Epoch', fontsize=16, fontweight='bold', labelpad=14)
         ax.set_zlabel('')          # suppress built-in z-label entirely
         ax.set_xlim(x_min, x_max)
         ax.set_zlim(0, global_y_max)
@@ -2099,8 +2101,8 @@ def plot_distributions_3d_evolution(sources):
         ax.xaxis.pane.set_edgecolor('lightgray')
         ax.yaxis.pane.set_edgecolor('lightgray')
         ax.zaxis.pane.set_edgecolor('lightgray')
-        ax.tick_params(axis='both', labelsize=9)
-        ax.tick_params(axis='z', labelsize=8, pad=12)
+        ax.tick_params(axis='both', labelsize=14)
+        ax.tick_params(axis='z', labelsize=13, pad=12)
         # Fewer ticks + compact format so labels don't reach the spine
         ax.set_zticks(np.linspace(0, global_y_max, 5))
         ax.zaxis.set_major_formatter(
@@ -2114,7 +2116,7 @@ def plot_distributions_3d_evolution(sources):
             'Probability Density',
             xy=(1.0, 0.50), xycoords=ax.transAxes,
             xytext=(55, 0), textcoords='offset points',
-            ha='left', va='center', rotation=90, fontsize=11,
+            ha='left', va='center', rotation=90, fontsize=15, fontweight='bold',
             annotation_clip=False,
         )
 
@@ -2235,7 +2237,7 @@ def plot_distributions_gif_evolution(sources):
                                 linewidth=1.8, alpha=0.85, zorder=5)
                 peak_vlines[i] = vl
                 x_range = x_max - x_min
-                txt = ax.text(peak_x + x_range * 0.02, 0.88, f'{peak_x:.3f}',
+                txt = ax.text(peak_x + x_range * 0.02, 0.88, f'Mo={peak_x:.3f}',
                               transform=ax.get_xaxis_transform(),
                               ha='left', va='top', fontsize=11,
                               fontweight='bold', color=color, zorder=6,
@@ -2482,7 +2484,7 @@ function drawFrame(epochIdx) {{
     ctx.restore();
 
     // Peak label — stack vertically if positions clash
-    const lText = peakX.toFixed(3);
+    const lText = 'Mo=' + peakX.toFixed(3);
     ctx.font = 'bold 12px Arial';
     const tw  = ctx.measureText(lText).width;
     let lx = peakCX + 5;
