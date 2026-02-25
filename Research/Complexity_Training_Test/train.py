@@ -86,7 +86,6 @@ class Config:
                     with open(lock_file, 'r') as f:
                         lock_pid = int(f.read().strip())
                     
-                    # Check if process still exists (Windows compatible)
                     try:
                         import psutil
                         if psutil.pid_exists(lock_pid):
@@ -96,7 +95,6 @@ class Config:
                             print(f"  GPU {gpu_id}: Stale lock (PID {lock_pid} not running). Removing.")
                             os.remove(lock_file)
                     except ImportError:
-                        # Fallback without psutil
                         print(f"  GPU {gpu_id}: LOCKED by PID {lock_pid} ({stat['free']/1024**3:.2f}GB free). Skipping.")
                         continue
                 except:
@@ -118,7 +116,6 @@ class Config:
             selected_gpu = gpu_stats[0]['id']
             print(f"WARNING: No free GPUs found. Falling back to GPU {selected_gpu} (Max Free RAM).")
         
-        # Register cleanup
         def cleanup_lock(path):
             if os.path.exists(path):
                 try:
@@ -141,7 +138,6 @@ class Config:
 
         return torch.device(f'cuda:{selected_gpu}')
         
-    # Lazy initialization of device
     _DEVICE = None
     @classmethod
     def DEVICE(cls):
@@ -1157,10 +1153,10 @@ def main():
 
     if config.CONTROL_MODE():
         mode = "control (ce only)"
-        output_dir = os.path.join(script_dir, 'output/just_another_output_0.0')
+        output_dir = os.path.join(script_dir, 'output/output_0.0')
     else:
         mode = "experimental (lmc + ce)"
-        output_dir = os.path.join(script_dir, 'output/just_another_output_1.0')
+        output_dir = os.path.join(script_dir, 'output/output_1.0')
         
     print(f"{'='*80}")
     print(f"Transformer LMC Training - Mode: {mode.upper()}")
