@@ -911,19 +911,16 @@ class GELU6(nn.Module):
 
         # ── Responsibilities + lifecycle — zero autograd overhead ──────
         with torch.no_grad():
-            K       = self._mus.shape[0]
-            # clone so subsequent in-place EMA writes don't corrupt mus_fwd
-            mus_fwd = self._mus.clone()                         # (K, D)
+            K = self._mus.shape[0]
 
-            diff_means   = x_mean.unsqueeze(0) - mus_fwd       # (K, D)
-            dist         = diff_means.pow(2).mean(-1).sqrt()   # (K,)
+            # Compute responsibilities on current clusters (used for lifecycle)
+            diff_means   = x_mean.unsqueeze(0) - self._mus      # (K, D)
+            dist         = diff_means.pow(2).mean(-1).sqrt()    # (K,)
             log_r        = self._ws.log() - dist
             log_r        = log_r - log_r.logsumexp(0)
-            r            = log_r.exp()                          # (K,) Σ=1
+            r            = log_r.exp()                           # (K,) Σ=1
             k_star       = r.argmax().item()
             dist_nearest = dist[k_star].item()
-            # extract r as plain Python floats for the familiarity loop
-            r_list       = r.tolist()                           # [float × K]
 
             if self.training:
                 d_val  = torch.sigmoid(self.logit_decay).item()
@@ -968,8 +965,15 @@ class GELU6(nn.Module):
                         self._ws  = self._ws[alive]
                         self._ws  = self._ws / self._ws.sum()
                         K         = self._mus.shape[0]
-                        mus_fwd   = mus_fwd[alive]   # keep in sync for loop below
-                        r_list    = r_list[:K]        # approximate; loop already stable
+
+            # Snapshot AFTER lifecycle so K, mus_fwd, r_list are always in sync
+            K       = self._mus.shape[0]
+            mus_fwd = self._mus.clone()                          # (K, D)
+            diff2   = x_mean.unsqueeze(0) - mus_fwd             # (K, D)
+            dist2   = diff2.pow(2).mean(-1).sqrt()               # (K,)
+            log_r2  = self._ws.log() - dist2
+            log_r2  = log_r2 - log_r2.logsumexp(0)
+            r_list  = log_r2.exp().tolist()                      # [float × K]
 
         # ── Familiarity: accumulate over K into (BT, D) ───────────────
         # Peak memory: 3 × (BT, D)  vs GELU5's 2 × (K, B, T, D)
