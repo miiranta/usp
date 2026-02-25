@@ -826,15 +826,22 @@ class GELU5(nn.Module):
 
 
 class GELU6(nn.Module):
-    """GELU5 — same maths, better efficiency.
+    """GELU5 — same lifecycle, O(BT·D) familiarity via hard nearest-cluster.
 
-    Optimisations over GELU5 (no change to algorithm or quality):
-    • (B,T) flattened to BT before cluster ops → 3-D tensors everywhere.
-    • familiarity tensor layout is (BT, K, D) instead of (K, B, T, D)
-      — the K-reduction is now contiguous, improving cache hit rate.
-    • All bookkeeping (responsibilities, EMA updates, birth/death) is
-      wrapped in torch.no_grad() → zero autograd overhead for that work.
-    • Scalar hyperparameter extractions (.item()) also in no_grad().
+    Key algorithmic change vs GELU5:
+      The (K,B,T,D) soft-weighted familiarity sum is replaced by hard
+      per-token nearest-cluster assignment:
+
+          k*(token) = argmin_k  ||x_token − μ_k||₂      (BT, K) cdist
+          famil     = exp(−τ · |x − μ_{k*}|)            (BT, D)  — no K dim
+
+      Birth/death/EMA lifecycle is identical to GELU5, operating on x_mean.
+      Soft responsibilities (r_k) are kept only for the lifecycle, where
+      they are O(K·D) — negligible cost.
+
+    Complexity vs GELU5/6:
+      Old: allocate + reduce (BT × K × D) tensor each forward
+      New: cdist (BT × K) + gather + (BT × D) exp  — ~K× less memory
     """
 
     def __init__(self, ema_decay: float = None):
@@ -887,16 +894,9 @@ class GELU6(nn.Module):
         if self._D is None:
             self._init_params(D, x.device, x.dtype)
 
-        # In-graph parameters (needed for gradients)
-        tau   = self.log_tau.exp()            # (D,)
-        alpha = torch.sigmoid(self.log_blend) # (D,)
-
-        # Scalar hyperparameters — detached, no autograd overhead
-        with torch.no_grad():
-            d_val  = torch.sigmoid(self.logit_decay).item()
-            dw_val = torch.sigmoid(self.logit_w_decay).item()
-            θ_b    = F.softplus(self.logit_birth).item()
-            θ_d    = torch.sigmoid(self.logit_death).item()
+        # In-graph parameters (needed for gradients through familiarity)
+        tau   = self.log_tau.exp()             # (D,)
+        alpha = torch.sigmoid(self.log_blend)  # (D,)
 
         x_mean = x.detach().mean(dim=(0, 1))   # (D,) fully detached
 
@@ -908,58 +908,53 @@ class GELU6(nn.Module):
             self._ready    = True
             return self._gelu(x)
 
-        K = self._mus.shape[0]
-
-        # ── Responsibilities — fully detached, no autograd tracking ───
+        # All cluster management and token assignment — zero autograd cost
         with torch.no_grad():
-            diff_means   = x_mean.unsqueeze(0) - self._mus       # (K, D)
-            dist         = diff_means.pow(2).mean(dim=-1).sqrt() # (K,)
+            K       = self._mus.shape[0]
+            mus_fwd = self._mus.clone()                             # (K, D)
+
+            # ── Per-token nearest cluster: (BT,) ──────────────────────
+            x_flat_d = x.reshape(B * T, D)                         # (BT, D) detached view
+            if K == 1:
+                k_assign = torch.zeros(B * T, dtype=torch.long, device=x.device)
+            else:
+                k_assign = torch.cdist(x_flat_d, mus_fwd).argmin(dim=1)  # (BT,)
+
+            mu_tok = mus_fwd[k_assign]              # (BT, D) — winner mean per token
+
+            # ── Lifecycle responsibilities (O(K·D) only) ──────────────
+            diff_means   = x_mean.unsqueeze(0) - mus_fwd            # (K, D)
+            dist         = diff_means.pow(2).mean(dim=-1).sqrt()    # (K,)
             log_r        = self._ws.log() - dist
             log_r        = log_r - log_r.logsumexp(dim=0)
-            r            = log_r.exp()                            # (K,) Σ=1
+            r            = log_r.exp()                               # (K,)
             k_star       = r.argmax().item()
             dist_nearest = dist[k_star].item()
 
-        # ── Familiarity: (BT, K, D) layout → K-reduction is contiguous ─
-        # Clone so in-place EMA writes don't invalidate the saved tensor
-        # for autograd (same reason as GELU5).
-        mus_fwd = self._mus.detach().clone()                   # (K, D)
-        x_flat  = x.reshape(B * T, D)                         # (BT, D)
-        diff    = x_flat.unsqueeze(1) - mus_fwd.unsqueeze(0)  # (BT, K, D)
-        famil   = (
-            r.view(1, K, 1) * torch.exp(-tau.view(1, 1, D) * diff.abs())
-        ).sum(dim=1).reshape(B, T, D)                         # (B, T, D)
+            # ── EMA + birth + death ────────────────────────────────────
+            if self.training:
+                d_val  = torch.sigmoid(self.logit_decay).item()
+                dw_val = torch.sigmoid(self.logit_w_decay).item()
+                θ_b    = F.softplus(self.logit_birth).item()
+                θ_d    = torch.sigmoid(self.logit_death).item()
 
-        scale = 1.0 - alpha.view(1, 1, D) * famil             # (B, T, D)
+                self._mus[k_star] = d_val * self._mus[k_star] + (1.0 - d_val) * x_mean
 
-        # ── EMA updates + lifecycle — no autograd overhead ────────────
-        if self.training:
-            with torch.no_grad():
-                # Update winner mean
-                self._mus[k_star] = (
-                    d_val * self._mus[k_star] + (1.0 - d_val) * x_mean
-                )
-
-                # Weight EMA → renormalise
                 self._ws = dw_val * self._ws + (1.0 - dw_val) * r
                 self._ws = self._ws / self._ws.sum()
 
-                # Running distance EMA (bootstraps on first real step)
                 if self._ema_dist == 0.0:
                     self._ema_dist = dist_nearest
                 else:
-                    self._ema_dist = (
-                        d_val * self._ema_dist + (1.0 - d_val) * dist_nearest
-                    )
+                    self._ema_dist = d_val * self._ema_dist + (1.0 - d_val) * dist_nearest
 
                 # Birth
                 if dist_nearest > θ_b * self._ema_dist:
-                    new_mu = x_mean.unsqueeze(0).clone()
                     init_w = torch.tensor(
                         [dist_nearest / (self._ema_dist * (K + 1))],
                         device=x.device, dtype=x.dtype)
-                    self._mus = torch.cat([self._mus, new_mu], dim=0)
-                    self._ws  = torch.cat([self._ws,  init_w])
+                    self._mus = torch.cat([self._mus, x_mean.unsqueeze(0).clone()], dim=0)
+                    self._ws  = torch.cat([self._ws, init_w])
                     self._ws  = self._ws / self._ws.sum()
                     K        += 1
 
@@ -973,6 +968,13 @@ class GELU6(nn.Module):
                         self._ws  = self._ws[alive]
                         self._ws  = self._ws / self._ws.sum()
                         K         = self._mus.shape[0]
+
+        # ── Familiarity: (BT, D) only — no K dimension ────────────────
+        # mu_tok is detached; gradient flows through x_flat → x and through tau/alpha
+        x_flat = x.reshape(B * T, D)                               # (BT, D) IN graph
+        diff   = x_flat - mu_tok                                   # (BT, D) IN graph
+        famil  = torch.exp(-tau * diff.abs()).reshape(B, T, D)     # (B, T, D)
+        scale  = 1.0 - alpha.view(1, 1, D) * famil                # (B, T, D)
 
         if torch.is_grad_enabled():
             self._proto_log.append(K)
