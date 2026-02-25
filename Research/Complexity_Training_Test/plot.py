@@ -1978,22 +1978,22 @@ def plot_distribution_summary_per_epoch(sources):
         # --- Highest probability density f(Mo)  (Y of GIF dashed line) -- right axis ---
         m, lo, hi = _vec('peak_density')
         ax_right.plot(xs, m, color=panel_color, linewidth=2.5, linestyle='-',
-                      label='Highest probability density (f(Mo))')
+                      label='Highest Probability Density (f(Mo))')
         ax_right.fill_between(xs, lo, hi, color=panel_color, alpha=0.13)
-        ax_right.set_ylabel('Highest probability density (f(Mo))', fontsize=18,
-                            fontweight='bold', labelpad=10, color=panel_color)
-        ax_right.tick_params(axis='y', labelcolor=panel_color, labelsize=16)
+        ax_right.set_ylabel('Highest Probability Density [f(Mo)]', fontsize=18,
+                            fontweight='bold', labelpad=10, color='black')
+        ax_right.tick_params(axis='y', labelcolor='black', labelsize=16)
         ax_right.spines['top'].set_visible(False)
-        ax_right.spines['right'].set_color(panel_color)
+        ax_right.spines['right'].set_color('black')
         ax_right.spines['right'].set_linewidth(1.5)
 
         ax.set_xlabel('Epoch', fontsize=18, fontweight='bold', labelpad=10)
-        ax.set_ylabel('Weight Value', fontsize=18, fontweight='bold', labelpad=10)
-        ax.tick_params(axis='both', labelsize=16)
+        ax.set_ylabel('Weight Values [μ, Mo]', fontsize=18, fontweight='bold', labelpad=10, color='black')
+        ax.tick_params(axis='both', labelsize=16, labelcolor='black')
         ax.grid(True, alpha=0.35)
         ax.set_axisbelow(True)
         ax.spines['top'].set_visible(False)
-        ax.spines['left'].set_color(panel_color)
+        ax.spines['left'].set_color('black')
         ax.spines['left'].set_linewidth(1.5)
 
         # Combined legend from both axes
