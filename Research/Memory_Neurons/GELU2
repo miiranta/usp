@@ -1,0 +1,50 @@
+We are trying to create a neuron that can learn to suppress familiar inputs and enhance novel ones
+
+INIT
+    prototype[D]          // EMA memory vector
+    ready = false
+
+    // Right now, learned per layer
+    τ > 0                 // novelty sharpness (learned)
+    α ∈ (0, 1)            // suppression strength (learned)
+    d ∈ (0, 1)            // EMA decay (learned)
+
+
+INPUT
+    x: [
+        B = batch size
+        T = sequence length
+        D = feature / hidden dimension
+    ]
+    // That means we have B × T tokens
+
+
+RUN
+    if not ready:
+        prototype = mean(x over B and T)
+        ready = true
+        return GELU(x)
+
+    // For each token
+    for b in 1..B:
+        for t in 1..T:
+
+            // Measure familiarity
+            similarity = cosine(x[b,t], prototype)
+
+            // Convert to novelty
+            novelty = exp(-τ * similarity)
+
+            // Compute per-token gain
+            scale = (1 - α·d) + α·d * novelty
+
+            // Apply gated activation
+            y[b,t] = GELU(x[b,t] * scale)
+
+    // Update EMA memory
+    batch_mean = mean(x over B and T)
+    prototype =
+        d * prototype +
+        (1 - d) * batch_mean
+
+    return y
