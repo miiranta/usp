@@ -58,6 +58,9 @@ class Config:
     GELU4_GATE_SHARPNESS    = 10.0  # initial gate sharpness — higher → harder cutoff
     GELU4_PRUNE_EPSILON     = 0.01  # remove prototype from memory when gate < this
 
+    # GELU5 / GELU6 cluster cap — prevents unbounded K growth and OOM
+    GELU5_K_MAX             = 8     # max number of clusters per activation layer
+
     @staticmethod
     def get_device():
 
@@ -796,7 +799,7 @@ class GELU5(nn.Module):
 
             # ── Birth: current distance is a relative spike vs typical ─
             # Works for K=1 and K>1 equally; ema_dist is the self-normaliser
-            if dist_nearest > θ_b * self._ema_dist:
+            if dist_nearest > θ_b * self._ema_dist and K < Config.GELU5_K_MAX:
                 new_mu = x_mean.unsqueeze(0).clone()
                 # initial weight: inverse of novelty ratio — more novel = more weight
                 init_w = torch.tensor(
@@ -945,8 +948,8 @@ class GELU6(nn.Module):
                         d_val * self._ema_dist + (1.0 - d_val) * dist_nearest
                     )
 
-                # Birth
-                if dist_nearest > θ_b * self._ema_dist:
+                # Birth — capped at K_MAX to bound backward-graph memory
+                if dist_nearest > θ_b * self._ema_dist and K < Config.GELU5_K_MAX:
                     init_w = torch.tensor(
                         [dist_nearest / (self._ema_dist * (K + 1))],
                         device=x.device, dtype=x.dtype)
@@ -966,27 +969,26 @@ class GELU6(nn.Module):
                         self._ws  = self._ws / self._ws.sum()
                         K         = self._mus.shape[0]
 
-            # Snapshot AFTER lifecycle so K, mus_fwd, r_list are always in sync
+            # Snapshot AFTER lifecycle — K, mus_fwd, r are always in sync
             K       = self._mus.shape[0]
             mus_fwd = self._mus.clone()                          # (K, D)
             diff2   = x_mean.unsqueeze(0) - mus_fwd             # (K, D)
             dist2   = diff2.pow(2).mean(-1).sqrt()               # (K,)
             log_r2  = self._ws.log() - dist2
             log_r2  = log_r2 - log_r2.logsumexp(0)
-            r_list  = log_r2.exp().tolist()                      # [float × K]
+            r_vec   = log_r2.exp()                               # (K,) tensor
 
-        # ── Familiarity: accumulate over K into (BT, D) ───────────────
-        # Peak memory: 3 × (BT, D)  vs GELU5's 2 × (K, B, T, D)
-        # Math is identical: famil = Σ_k r_k · exp(−τ · |x − μ_k|)
-        x_flat = x.reshape(B * T, D)                            # (BT, D) in-graph
-        famil  = torch.zeros_like(x_flat)                       # (BT, D) accumulator
-        for k in range(K):
-            famil = famil + r_list[k] * torch.exp(
-                -tau * (x_flat - mus_fwd[k]).abs()              # (BT, D)
-            )
-        famil = famil.reshape(B, T, D)                          # (B, T, D)
+        # ── Familiarity: single fused (BT, K, D) op ───────────────────
+        # One graph node instead of K chained nodes → backward holds one
+        # (BT, K, D) saved tensor rather than K live (BT, D) intermediates.
+        # With K ≤ K_MAX=8 this is bounded and predictable.
+        x_flat = x.reshape(B * T, D)                             # (BT, D) in-graph
+        diff   = x_flat.unsqueeze(1) - mus_fwd.unsqueeze(0)     # (BT, K, D)
+        famil  = (r_vec.view(1, K, 1) * torch.exp(
+            -tau.view(1, 1, D) * diff.abs()
+        )).sum(dim=1).reshape(B, T, D)                           # (B, T, D)
 
-        scale = 1.0 - alpha.view(1, 1, D) * famil              # (B, T, D)
+        scale = 1.0 - alpha.view(1, 1, D) * famil               # (B, T, D)
 
         if torch.is_grad_enabled():
             self._proto_log.append(K)
