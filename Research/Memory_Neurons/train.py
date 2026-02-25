@@ -3,6 +3,7 @@ import csv
 import math
 import time
 import atexit
+import functools
 
 import torch
 import torch.nn as nn
@@ -686,10 +687,11 @@ class GELU5(nn.Module):
         log_blend      → α ∈ (0,1)           max suppression depth
     """
 
-    def __init__(self, ema_decay: float = None):
+    def __init__(self, ema_decay: float = None, k_max: int = None):
         super().__init__()
         init_d = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
         ld = math.log(init_d / (1.0 - init_d))
+        self._k_max = k_max if k_max is not None else Config.GELU5_K_MAX
 
         # Scalar learned params — govern cluster lifecycle
         self.logit_decay   = nn.Parameter(torch.tensor(ld))
@@ -786,8 +788,8 @@ class GELU5(nn.Module):
                 else:
                     self._ema_dist = d_val * self._ema_dist + (1.0 - d_val) * dist_nearest
 
-                # Birth — capped at K_MAX to bound backward-graph memory
-                if dist_nearest > θ_b * self._ema_dist and K < Config.GELU5_K_MAX:
+                # Birth — capped at self._k_max to bound backward-graph memory
+                if dist_nearest > θ_b * self._ema_dist and K < self._k_max:
                     new_mu = x_mean.unsqueeze(0).clone()
                     init_w = torch.tensor(
                         [dist_nearest / (self._ema_dist * (K + 1))],
@@ -851,10 +853,11 @@ class GELU6(nn.Module):
     nodes are created for quantities that never need gradients.
     """
 
-    def __init__(self, ema_decay: float = None):
+    def __init__(self, ema_decay: float = None, k_max: int = None):
         super().__init__()
         init_d = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
         ld = math.log(init_d / (1.0 - init_d))
+        self._k_max = k_max if k_max is not None else Config.GELU5_K_MAX
 
         self.logit_decay   = nn.Parameter(torch.tensor(ld))
         self.logit_w_decay = nn.Parameter(torch.tensor(ld))
@@ -951,8 +954,8 @@ class GELU6(nn.Module):
                         d_val * self._ema_dist + (1.0 - d_val) * dist_nearest
                     )
 
-                # Birth — capped at K_MAX to bound backward-graph memory
-                if dist_nearest > θ_b * self._ema_dist and K < Config.GELU5_K_MAX:
+                # Birth — capped at self._k_max to bound backward-graph memory
+                if dist_nearest > θ_b * self._ema_dist and K < self._k_max:
                     init_w = torch.tensor(
                         [dist_nearest / (self._ema_dist * (K + 1))],
                         device=x.device, dtype=x.dtype)
@@ -1274,13 +1277,21 @@ class GELU7(nn.Module):
 
 
 ALL_EXPERIMENTS = [
-    ("control",   GELU),
-    ("gelu2_k1",  GELU2),
-    ("gelu3_kn",  GELU3),
-    ("gelu4_kn",  GELU4),
-    ("gelu5_kn",  GELU5),
-    ("gelu6_kn",  GELU6),
-    ("gelu7_kn",  GELU7),
+    ("control",      GELU),
+    ("gelu2_k1",     GELU2),
+    ("gelu3_kn",     GELU3),
+    ("gelu4_kn",     GELU4),
+    ("gelu5_kn",     GELU5),
+    ("gelu5_k16",    functools.partial(GELU5, k_max=16)),
+    ("gelu5_k32",    functools.partial(GELU5, k_max=32)),
+    ("gelu5_k64",    functools.partial(GELU5, k_max=64)),
+    ("gelu5_k128",   functools.partial(GELU5, k_max=128)),
+    ("gelu6_kn",     GELU6),
+    ("gelu6_k16",    functools.partial(GELU6, k_max=16)),
+    ("gelu6_k32",    functools.partial(GELU6, k_max=32)),
+    ("gelu6_k64",    functools.partial(GELU6, k_max=64)),
+    ("gelu6_k128",   functools.partial(GELU6, k_max=128)),
+    ("gelu7_kn",     GELU7),
 ]
 
 
