@@ -1366,8 +1366,8 @@ def run_experiment(exp_name, activation_cls, vocab, device):
             # torch.save(model.state_dict(), checkpoint)
             print(f"  → new best model (val ppl {vl_ppl:.2f})")
 
-        # ── GELU3 / GELU4 / GELU5 / GELU6: prototype-count per layer ────
-        proto_mods = [m for m in model.modules() if isinstance(m, (GELU3, GELU4, GELU5, GELU6))]
+        # ── GELU3 / GELU4 / GELU5 / GELU6 / GELU7: prototype-count per layer ────
+        proto_mods = [m for m in model.modules() if isinstance(m, (GELU3, GELU4, GELU5, GELU6, GELU7))]
         if proto_mods:
             from collections import Counter
             for layer_idx, m in enumerate(proto_mods):
