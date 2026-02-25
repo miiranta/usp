@@ -1185,20 +1185,20 @@ def run_experiment(exp_name, activation_cls, vocab, device):
             # torch.save(model.state_dict(), checkpoint)
             print(f"  → new best model (val ppl {vl_ppl:.2f})")
 
-        # ── GELU3 / GELU4: print prototype-count frequency for this epoch ─
+        # ── GELU3 / GELU4 / GELU5 / GELU6: prototype-count per layer ────
         proto_mods = [m for m in model.modules() if isinstance(m, (GELU3, GELU4, GELU5, GELU6))]
         if proto_mods:
             from collections import Counter
-            epoch_log = []
-            for m in proto_mods:
-                epoch_log.extend(m._proto_log)
+            for layer_idx, m in enumerate(proto_mods):
+                layer_log = m._proto_log[:]
                 m._proto_log.clear()
-            if epoch_log:
-                cls_name = type(proto_mods[0]).__name__
-                counts   = Counter(epoch_log)
-                total    = len(epoch_log)
+                if not layer_log:
+                    continue
+                cls_name = type(m).__name__
+                counts   = Counter(layer_log)
+                total    = len(layer_log)
                 max_freq = max(counts.values())
-                print(f"  Prototype count distribution ({cls_name}, {len(proto_mods)} layer(s), {total} samples):")
+                print(f"  [{cls_name} layer {layer_idx}] Prototype count distribution ({total} samples):")
                 for k in sorted(counts):
                     bar = "█" * max(1, round(counts[k] / max_freq * 30))
                     print(f"    K={k:3d}: {counts[k]:6d} ({100*counts[k]/total:5.1f}%) {bar}")
