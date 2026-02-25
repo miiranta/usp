@@ -1093,6 +1093,186 @@ def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
 #  Experiments
 # ─────────────────────────────────────────────
 
+class GELU7(nn.Module):
+    """GELU6 with additive threshold-shift habituation instead of multiplicative scaling.
+
+    Identical cluster lifecycle to GELU6.  The ONLY change is how the
+    familiarity signal feeds back into the activation:
+
+        GELU6:  output = GELU(x · (1 − α · famil))     # amplitude gate
+        GELU7:  output = GELU(x − θ · famil)            # activation-threshold shift
+
+    where  θ = softplus(log_threshold) > 0  is a per-neuron learned parameter.
+
+    ── Intuition ──────────────────────────────────────────────────────────────
+    GELU transitions from ~0 to ~x around x = 0.  Subtracting θ·famil shifts
+    that transition point rightward by θ·famil: familiar inputs must be larger
+    to "earn" the same activation level that a novel input gets for free.
+
+    * famil ≈ 0  (novel)   → no shift   → standard GELU, full responsiveness.
+    * famil ≈ 1  (familiar) → shift = θ → x must exceed θ to activate clearly.
+    * Inhibition is never total: for any finite θ, sufficiently large x always
+      produces a positive output.
+
+    Learned parameters:
+        Scalar:
+            logit_decay    → d  ∈ (0,1)          cluster-mean EMA speed
+            logit_w_decay  → dw ∈ (0,1)          cluster-weight EMA speed
+            logit_birth    → θ_b = softplus(·)>0  birth distance ratio
+            logit_death    → θ_d ∈ (0,1)          relative weight death floor
+        Per-neuron [(D,), lazy]:
+            log_tau        → τ > 0               familiarity sharpness
+            log_threshold  → θ  > 0              max activation shift per neuron
+    """
+
+    def __init__(self, ema_decay: float = None):
+        super().__init__()
+        init_d = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
+        ld = math.log(init_d / (1.0 - init_d))
+
+        self.logit_decay   = nn.Parameter(torch.tensor(ld))
+        self.logit_w_decay = nn.Parameter(torch.tensor(ld))
+        self.logit_birth   = nn.Parameter(torch.tensor(1.0))
+        self.logit_death   = nn.Parameter(torch.tensor(-2.0))
+
+        self.log_tau       : nn.Parameter = None  # (D,)  lazily created
+        self.log_threshold : nn.Parameter = None  # (D,)  lazily created
+        self._D = None
+
+        self._mus       : torch.Tensor = None
+        self._ws        : torch.Tensor = None
+        self._ema_dist  : float        = None
+        self._ready     : bool         = False
+        self._proto_log : list         = []
+
+    def _init_params(self, D: int, device: torch.device, dtype: torch.dtype):
+        self._D = D
+        self.log_tau = nn.Parameter(
+            torch.full((D,), math.log(Config.GELU2_TEMP), device=device, dtype=dtype))
+        # Initial threshold ≈ GELU2_TEMP (same scale as tau); softplus(log(τ)) = τ
+        self.log_threshold = nn.Parameter(
+            torch.full((D,), math.log(Config.GELU2_TEMP), device=device, dtype=dtype))
+
+    def reset_state(self):
+        self._mus       = None
+        self._ws        = None
+        self._ema_dist  = None
+        self._proto_log = []
+        self._ready     = False
+
+    @staticmethod
+    def _gelu(x: torch.Tensor) -> torch.Tensor:
+        return (
+            0.5 * x
+            * (1.0 + torch.tanh(
+                math.sqrt(2.0 / math.pi)
+                * (x + 0.044715 * x.pow(3))
+            ))
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, T, D = x.shape
+        if self._D is None:
+            self._init_params(D, x.device, x.dtype)
+
+        # In-graph parameters — gradients flow through familiarity → threshold
+        tau       = self.log_tau.exp()                  # (D,)
+        threshold = F.softplus(self.log_threshold)      # (D,) > 0
+
+        x_mean = x.detach().mean(dim=(0, 1))            # (D,) fully detached
+
+        # ── Bootstrap ─────────────────────────────────────────────────
+        if not self._ready:
+            self._mus      = x_mean.unsqueeze(0).clone()
+            self._ws       = torch.ones(1, device=x.device, dtype=x.dtype)
+            self._ema_dist = 0.0
+            self._ready    = True
+            return self._gelu(x)
+
+        # ── Responsibilities + lifecycle — zero autograd overhead ──────
+        with torch.no_grad():
+            K = self._mus.shape[0]
+
+            diff_means   = x_mean.unsqueeze(0) - self._mus      # (K, D)
+            dist         = diff_means.pow(2).mean(-1).sqrt()    # (K,)
+            log_r        = self._ws.log() - dist
+            log_r        = log_r - log_r.logsumexp(0)
+            r            = log_r.exp()                           # (K,) Σ=1
+            k_star       = r.argmax().item()
+            dist_nearest = dist[k_star].item()
+
+            if self.training:
+                d_val  = torch.sigmoid(self.logit_decay).item()
+                dw_val = torch.sigmoid(self.logit_w_decay).item()
+                θ_b    = F.softplus(self.logit_birth).item()
+                θ_d    = torch.sigmoid(self.logit_death).item()
+
+                # Winner mean EMA
+                self._mus[k_star] = (
+                    d_val * self._mus[k_star] + (1.0 - d_val) * x_mean
+                )
+
+                # Weight EMA → renormalise
+                self._ws = dw_val * self._ws + (1.0 - dw_val) * r
+                self._ws = self._ws / self._ws.sum()
+
+                # Running distance EMA
+                if self._ema_dist == 0.0:
+                    self._ema_dist = dist_nearest
+                else:
+                    self._ema_dist = (
+                        d_val * self._ema_dist + (1.0 - d_val) * dist_nearest
+                    )
+
+                # Birth — capped at K_MAX
+                if dist_nearest > θ_b * self._ema_dist and K < Config.GELU5_K_MAX:
+                    init_w = torch.tensor(
+                        [dist_nearest / (self._ema_dist * (K + 1))],
+                        device=x.device, dtype=x.dtype)
+                    self._mus = torch.cat([self._mus, x_mean.unsqueeze(0).clone()], dim=0)
+                    self._ws  = torch.cat([self._ws, init_w])
+                    self._ws  = self._ws / self._ws.sum()
+                    K        += 1
+
+                # Death
+                if K > 1:
+                    alive = (self._ws * K >= θ_d).nonzero(as_tuple=True)[0]
+                    if alive.numel() == 0:
+                        alive = self._ws.argmax().unsqueeze(0)
+                    if alive.numel() < K:
+                        self._mus = self._mus[alive]
+                        self._ws  = self._ws[alive]
+                        self._ws  = self._ws / self._ws.sum()
+                        K         = self._mus.shape[0]
+
+            # Snapshot AFTER lifecycle
+            K       = self._mus.shape[0]
+            mus_fwd = self._mus.clone()                          # (K, D)
+            diff2   = x_mean.unsqueeze(0) - mus_fwd             # (K, D)
+            dist2   = diff2.pow(2).mean(-1).sqrt()               # (K,)
+            log_r2  = self._ws.log() - dist2
+            log_r2  = log_r2 - log_r2.logsumexp(0)
+            r_vec   = log_r2.exp()                               # (K,) tensor
+
+        # ── Familiarity: fused (BT, K, D) op ──────────────────────────
+        # Identical to GELU6 — τ controls how quickly famil decays with distance.
+        x_flat = x.reshape(B * T, D)                             # (BT, D) in-graph
+        diff   = x_flat.unsqueeze(1) - mus_fwd.unsqueeze(0)     # (BT, K, D)
+        famil  = (r_vec.view(1, K, 1) * torch.exp(
+            -tau.view(1, 1, D) * diff.abs()
+        )).sum(dim=1).reshape(B, T, D)                           # (B, T, D)  ∈ (0,1)
+
+        # ── Threshold shift: higher familiarity → harder to trigger ────
+        # x_shifted_i = x_i − θ_i · famil_i
+        # GELU transitions near 0; shifting left raises the effective threshold.
+        shift = threshold.view(1, 1, D) * famil                  # (B, T, D) ≥ 0
+
+        if torch.is_grad_enabled():
+            self._proto_log.append(K)
+
+        return self._gelu(x - shift)
+
+
 ALL_EXPERIMENTS = [
     ("control",   GELU),
     ("gelu2_k1",  GELU2),
@@ -1100,6 +1280,7 @@ ALL_EXPERIMENTS = [
     ("gelu4_kn",  GELU4),
     ("gelu5_kn",  GELU5),
     ("gelu6_kn",  GELU6),
+    ("gelu7_kn",  GELU7),
 ]
 
 
