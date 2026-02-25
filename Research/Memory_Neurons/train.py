@@ -27,16 +27,16 @@ class Config:
     TEST_FILE  = os.path.join(DATA_DIR, "wiki.test.tokens")
 
     # Model
-    D_MODEL     = 256    # embedding / hidden dim
+    D_MODEL     = 128    # embedding / hidden dim
     N_HEADS     = 4      # attention heads
     N_LAYERS    = 4      # transformer encoder layers
     D_FF        = 1024   # feed-forward inner dim
     DROPOUT     = 0.1
-    SEQ_LEN     = 128    # context window (tokens)
+    SEQ_LEN     = 64    # context window (tokens)
 
     # Training
-    BATCH_SIZE  = 64
-    EPOCHS      = 20
+    BATCH_SIZE  = 32
+    EPOCHS      = 15
     LR          = 3e-4
     GRAD_CLIP   = 1.0
     LOG_EVERY   = 200    # steps between log lines
