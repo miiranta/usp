@@ -761,65 +761,68 @@ class GELU5(nn.Module):
 
         K = self._mus.shape[0]
 
-        # ── Soft responsibilities ─────────────────────────────────────
-        diff_means = x_mean.unsqueeze(0) - self._mus          # (K, D) detached
-        dist       = diff_means.pow(2).mean(dim=-1).sqrt()    # (K,)   RMS distance
-        log_r      = self._ws.log() - dist
-        log_r      = log_r - log_r.logsumexp(dim=0)           # stable log-softmax
-        r          = log_r.exp()                               # (K,) Σ=1
-        k_star_idx = r.argmax()
-        k_star     = k_star_idx.item()
-        dist_nearest = dist[k_star].item()                     # dist to winner
+        # ── Responsibilities + EMA + lifecycle — all in no_grad ───────
+        # CRITICAL: r is derived from self._ws.log(). Without no_grad,
+        # self._ws = dw*self._ws + (1-dw)*r chains a new grad_fn onto
+        # self._ws every step, growing the graph across the entire epoch.
+        with torch.no_grad():
+            diff_means   = x_mean.unsqueeze(0) - self._mus       # (K, D)
+            dist         = diff_means.pow(2).mean(dim=-1).sqrt() # (K,)
+            log_r        = self._ws.log() - dist
+            log_r        = log_r - log_r.logsumexp(dim=0)
+            r            = log_r.exp()                            # (K,) Σ=1
+            k_star       = r.argmax().item()
+            dist_nearest = dist[k_star].item()
+
+            # ── EMA updates — training only ───────────────────────────
+            if self.training:
+                self._mus[k_star] = d_val * self._mus[k_star] + (1.0 - d_val) * x_mean
+
+                self._ws = dw_val * self._ws + (1.0 - dw_val) * r
+                self._ws = self._ws / self._ws.sum()
+
+                if self._ema_dist == 0.0:
+                    self._ema_dist = dist_nearest
+                else:
+                    self._ema_dist = d_val * self._ema_dist + (1.0 - d_val) * dist_nearest
+
+                # Birth — capped at K_MAX to bound backward-graph memory
+                if dist_nearest > θ_b * self._ema_dist and K < Config.GELU5_K_MAX:
+                    new_mu = x_mean.unsqueeze(0).clone()
+                    init_w = torch.tensor(
+                        [dist_nearest / (self._ema_dist * (K + 1))],
+                        device=x.device, dtype=x.dtype)
+                    self._mus = torch.cat([self._mus, new_mu], dim=0)
+                    self._ws  = torch.cat([self._ws, init_w])
+                    self._ws  = self._ws / self._ws.sum()
+                    K += 1
+
+                # Death
+                if K > 1:
+                    alive = (self._ws * K >= θ_d).nonzero(as_tuple=True)[0]
+                    if alive.numel() == 0:
+                        alive = self._ws.argmax().unsqueeze(0)
+                    if alive.numel() < K:
+                        self._mus = self._mus[alive]
+                        self._ws  = self._ws[alive]
+                        self._ws  = self._ws / self._ws.sum()
+                        K = self._mus.shape[0]
+
+            # Snapshot post-lifecycle for familiarity — detached, K-consistent
+            K       = self._mus.shape[0]
+            mus_fwd = self._mus.clone()    # (K, D) detached inside no_grad
+            r_fwd   = self._ws.log()       # recompute r from final ws
+            dist2   = (x_mean.unsqueeze(0) - mus_fwd).pow(2).mean(-1).sqrt()
+            r_fwd   = r_fwd - dist2
+            r_fwd   = (r_fwd - r_fwd.logsumexp(0)).exp()  # (K,) detached
 
         # ── Per-token per-neuron familiarity (vectorised over K) ──────
-        # Clone so mus_fwd gets its own storage + version counter.
-        # .detach() alone shares storage with self._mus — the in-place EMA
-        # update self._mus[k]=... would then increment mus_fwd's version
-        # counter too, causing "modified by in-place op" in backward().
-        mus_fwd   = self._mus.detach().clone()
-        diff_all  = x.unsqueeze(0) - mus_fwd.view(K, 1, 1, D)         # (K,B,T,D)
-        famil_all = torch.exp(-tau.view(1, 1, 1, D) * diff_all.abs()) # (K,B,T,D)
-        famil     = (r.view(K, 1, 1, 1) * famil_all).sum(dim=0)       # (B,T,D)
-        scale     = 1.0 - alpha.view(1, 1, D) * famil                  # (B,T,D)
-
-        # ── EMA updates — training only, all detached ─────────────────
-        if self.training:
-            # Update winner mean
-            self._mus[k_star] = d_val * self._mus[k_star] + (1.0 - d_val) * x_mean
-
-            # Update weight EMA → renormalise
-            self._ws = dw_val * self._ws + (1.0 - dw_val) * r
-            self._ws = self._ws / self._ws.sum()
-
-            # Update running distance EMA (bootstraps on first real step)
-            if self._ema_dist == 0.0:
-                self._ema_dist = dist_nearest
-            else:
-                self._ema_dist = d_val * self._ema_dist + (1.0 - d_val) * dist_nearest
-
-            # ── Birth: current distance is a relative spike vs typical ─
-            # Works for K=1 and K>1 equally; ema_dist is the self-normaliser
-            if dist_nearest > θ_b * self._ema_dist and K < Config.GELU5_K_MAX:
-                new_mu = x_mean.unsqueeze(0).clone()
-                # initial weight: inverse of novelty ratio — more novel = more weight
-                init_w = torch.tensor(
-                    [dist_nearest / (self._ema_dist * (K + 1))],
-                    device=x.device, dtype=x.dtype)
-                self._mus = torch.cat([self._mus, new_mu], dim=0)
-                self._ws  = torch.cat([self._ws, init_w])
-                self._ws  = self._ws / self._ws.sum()
-                K += 1
-
-            # ── Death: prune clusters with collapsed relative weight ───
-            if K > 1:
-                alive = (self._ws * K >= θ_d).nonzero(as_tuple=True)[0]
-                if alive.numel() == 0:
-                    alive = self._ws.argmax().unsqueeze(0)
-                if alive.numel() < K:
-                    self._mus = self._mus[alive]
-                    self._ws  = self._ws[alive]
-                    self._ws  = self._ws / self._ws.sum()
-                    K = self._mus.shape[0]
+        # r_fwd is detached — no cross-step graph chain through self._ws.
+        # Gradients for tau/alpha still flow correctly through famil_all.
+        diff_all  = x.unsqueeze(0) - mus_fwd.view(K, 1, 1, D)          # (K,B,T,D)
+        famil_all = torch.exp(-tau.view(1, 1, 1, D) * diff_all.abs())   # (K,B,T,D)
+        famil     = (r_fwd.view(K, 1, 1, 1) * famil_all).sum(dim=0)    # (B,T,D)
+        scale     = 1.0 - alpha.view(1, 1, D) * famil                   # (B,T,D)
 
         if torch.is_grad_enabled():
             self._proto_log.append(K)
