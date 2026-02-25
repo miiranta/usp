@@ -58,13 +58,6 @@ class Config:
     GELU4_GATE_SHARPNESS    = 10.0  # initial gate sharpness — higher → harder cutoff
     GELU4_PRUNE_EPSILON     = 0.01  # remove prototype from memory when gate < this
 
-    # GELU6 defaults
-    GELU6_ASSIGN_TEMP   = 1.0   # init logit for β = softplus(·): cluster assignment sharpness
-                                 # high β → hard per-cluster suppression (complex/fine-grained)
-                                 # low  β → soft blend across clusters (coarse/smooth)
-    GELU6_BIRTH_LOGIT   = 1.0   # init logit for birth ratio θ_b = softplus(·)
-                                 # tolerance to new signals: higher → harder to spawn new cluster
-
     @staticmethod
     def get_device():
 
@@ -831,96 +824,36 @@ class GELU5(nn.Module):
         return self._gelu(x * scale)
 
 
+
 class GELU6(nn.Module):
-    """Online-EM Dynamic-Memory GELU — principled self-regulation with per-cluster scales.
+    """GELU5 — same maths, better efficiency.
 
-    Improves over GELU5 in four ways, all without adding hardcoded values:
-
-    1. SOFT (online-EM) MEAN UPDATES instead of hard winner-take-all:
-       Every cluster's mean moves toward x_mean at a rate proportional to its
-       responsibility r_k.  This is the exact online EM update for a GMM:
-           lr_k   = (1 − d_mu) · r_k          ∈ [0, 1−d_mu]
-           μ_k  ← (1 − lr_k) · μ_k + lr_k · x_mean
-       Winner updates fast, losers barely move — but all stay calibrated.
-
-    2. PER-CLUSTER SCALE σ_k (scalar per cluster):
-       Each cluster tracks the EMA of its typical signal distance (soft-EM style):
-           lr_σk  = (1 − d_σ) · r_k
-           σ_k  ← (1 − lr_σk) · σ_k + lr_σk · RMS(x_mean − μ_k)
-       Clusters with large spread suppress loosely; tight clusters suppress sharply.
-       This makes τ a pure sharpness knob, not a scale compensator.
-
-    3. SCALE-NORMALISED ASSIGNMENT:
-       Soft assignments use σ-normalised distances:
-           dist²_norm[b,t,k] = dist²[b,t,k] / σ_k²
-           weights = softmax(−β · dist²_norm)
-       Now β is in standard-deviation units: β=1 ≈ soft, β=10 ≈ hard.
-       Per-cluster σ appears in both the assignment AND the familiarity gate:
-           eff_sigma[b,t] = Σ_k weights[b,t,k] · σ_k          # (B,T)
-           famil_i = exp(−τ_i · |x_i − eff_mu_i| / eff_sigma)  # per-neuron τ kept
-
-    4. DECOUPLED EMA SPEEDS:
-       d_mu, d_sigma, d_w are three independent learned scalars — mean tracking,
-       scale tracking, and weight tracking can have different timescales.
-
-    ── Complexity knob (init_complexity) ──────────────────────────────────
-    β = softplus(logit_assign_temp).  High β → hard cluster assignment →
-    each cluster suppresses its own mode distinctly (fine-grained).
-    Low β → soft blend → coarse habituation.  Fully learned; init biases start.
-
-    ── Tolerance knob (init_tolerance) ────────────────────────────────────
-    θ_b = softplus(logit_birth).  Birth fires when the normalised distance to
-    the nearest cluster is θ_b × larger than the running EMA of typical distances.
-    High → conservative (fewer clusters).  Low → liberal (more clusters).
-
-    ── Birth / Death / Forgetting ──────────────────────────────────────────
-    Birth: relative distance spike (works at K=1, no absolute floor).
-    Death: EMA weight drain → prune when w_k · K < θ_d (learned).
-    Forgetting: when a signal disappears, its cluster loses responsibility →
-    mean and scale stop updating → weight drains → pruned → next occurrence novel.
-
-    Learned parameters (scalar unless noted):
-        logit_decay_mu   → d_mu  ∈ (0,1)    mean EMA speed
-        logit_decay_sigma→ d_σ   ∈ (0,1)    per-cluster scale EMA speed
-        logit_w_decay    → d_w   ∈ (0,1)    weight EMA speed
-        logit_birth      → θ_b   > 0         birth distance ratio  [tolerance knob]
-        logit_death      → θ_d   ∈ (0,1)    weight death floor
-        logit_assign_temp→ β     > 0         assignment sharpness   [complexity knob]
-        log_tau          → τ     > 0  (D,)  per-neuron suppression sharpness
-        log_blend        → α     ∈(0,1)(D,) per-neuron max suppression depth
+    Optimisations over GELU5 (no change to algorithm or quality):
+    • (B,T) flattened to BT before cluster ops → 3-D tensors everywhere.
+    • familiarity tensor layout is (BT, K, D) instead of (K, B, T, D)
+      — the K-reduction is now contiguous, improving cache hit rate.
+    • All bookkeeping (responsibilities, EMA updates, birth/death) is
+      wrapped in torch.no_grad() → zero autograd overhead for that work.
+    • Scalar hyperparameter extractions (.item()) also in no_grad().
     """
 
-    def __init__(
-        self,
-        ema_decay       : float = None,
-        init_complexity : float = None,   # logit init for β (assignment sharpness)
-        init_tolerance  : float = None,   # logit init for θ_b (birth ratio)
-    ):
+    def __init__(self, ema_decay: float = None):
         super().__init__()
-        init_d  = ema_decay       if ema_decay       is not None else Config.GELU2_EMA_DECAY
-        init_β  = init_complexity if init_complexity is not None else Config.GELU6_ASSIGN_TEMP
-        init_θb = init_tolerance  if init_tolerance  is not None else Config.GELU6_BIRTH_LOGIT
+        init_d = ema_decay if ema_decay is not None else Config.GELU2_EMA_DECAY
         ld = math.log(init_d / (1.0 - init_d))
 
-        # Three decoupled EMA speed scalars
-        self.logit_decay_mu    = nn.Parameter(torch.tensor(ld))       # mean speed
-        self.logit_decay_sigma = nn.Parameter(torch.tensor(ld))       # scale speed
-        self.logit_w_decay     = nn.Parameter(torch.tensor(ld))       # weight speed
-        # Lifecycle / complexity knobs
-        self.logit_birth       = nn.Parameter(torch.tensor(float(init_θb)))
-        self.logit_death       = nn.Parameter(torch.tensor(-2.0))
-        self.logit_assign_temp = nn.Parameter(torch.tensor(float(init_β)))
+        self.logit_decay   = nn.Parameter(torch.tensor(ld))
+        self.logit_w_decay = nn.Parameter(torch.tensor(ld))
+        self.logit_birth   = nn.Parameter(torch.tensor(1.0))
+        self.logit_death   = nn.Parameter(torch.tensor(-2.0))
 
-        # Per-neuron params — lazily created on first forward
-        self.log_tau   : nn.Parameter = None  # (D,)
+        self.log_tau   : nn.Parameter = None  # (D,)  lazily created
         self.log_blend : nn.Parameter = None  # (D,)
         self._D = None
 
-        # Dynamic mixture state
-        self._mus       : torch.Tensor = None   # (K, D)  cluster means
-        self._scales    : list         = None   # [float] × K per-cluster scale σ_k
-        self._ws        : torch.Tensor = None   # (K,)    normalised weights
-        self._ema_dist  : float        = 0.0    # running EMA of nearest-cluster dist
+        self._mus       : torch.Tensor = None
+        self._ws        : torch.Tensor = None
+        self._ema_dist  : float        = None
         self._ready     : bool         = False
         self._proto_log : list         = []
 
@@ -934,9 +867,8 @@ class GELU6(nn.Module):
 
     def reset_state(self):
         self._mus       = None
-        self._scales    = None
         self._ws        = None
-        self._ema_dist  = 0.0
+        self._ema_dist  = None
         self._proto_log = []
         self._ready     = False
 
@@ -955,135 +887,92 @@ class GELU6(nn.Module):
         if self._D is None:
             self._init_params(D, x.device, x.dtype)
 
-        tau    = self.log_tau.exp()                      # (D,)  in-graph
-        alpha  = torch.sigmoid(self.log_blend)           # (D,)  in-graph
-        beta   = F.softplus(self.logit_assign_temp)      # scalar in-graph → complexity knob
-        d_mu   = torch.sigmoid(self.logit_decay_mu).detach().item()
-        d_s    = torch.sigmoid(self.logit_decay_sigma).detach().item()
-        dw_val = torch.sigmoid(self.logit_w_decay).detach().item()
-        θ_b    = F.softplus(self.logit_birth).detach().item()
-        θ_d    = torch.sigmoid(self.logit_death).detach().item()
+        # In-graph parameters (needed for gradients)
+        tau   = self.log_tau.exp()            # (D,)
+        alpha = torch.sigmoid(self.log_blend) # (D,)
+
+        # Scalar hyperparameters — detached, no autograd overhead
+        with torch.no_grad():
+            d_val  = torch.sigmoid(self.logit_decay).item()
+            dw_val = torch.sigmoid(self.logit_w_decay).item()
+            θ_b    = F.softplus(self.logit_birth).item()
+            θ_d    = torch.sigmoid(self.logit_death).item()
 
         x_mean = x.detach().mean(dim=(0, 1))   # (D,) fully detached
 
-        # ── Bootstrap ──────────────────────────────────────────────────
+        # ── Bootstrap ─────────────────────────────────────────────────
         if not self._ready:
-            # init σ = RMS distance from individual tokens to the batch mean.
-            # This is the token-level spread, not the magnitude of the mean —
-            # a stable starting value that matches what the EMA will track later.
-            with torch.no_grad():
-                diff_boot  = x.detach() - x_mean.view(1, 1, D)          # (B,T,D)
-                init_scale = diff_boot.pow(2).mean().sqrt().item()
-            init_scale = max(init_scale, 1e-3)
-            self._mus    = x_mean.unsqueeze(0).clone()        # (1, D)
-            self._scales = [init_scale]                       # [σ_0]
-            self._ws     = torch.ones(1, device=x.device, dtype=x.dtype)
-            self._ready  = True
+            self._mus      = x_mean.unsqueeze(0).clone()
+            self._ws       = torch.ones(1, device=x.device, dtype=x.dtype)
+            self._ema_dist = 0.0
+            self._ready    = True
             return self._gelu(x)
 
         K = self._mus.shape[0]
 
-        # ── Batch-level soft responsibilities (detached, lifecycle only) ─
-        diff_means  = x_mean.unsqueeze(0) - self._mus          # (K, D)
-        dist_batch  = diff_means.pow(2).mean(dim=-1).sqrt()    # (K,)  RMS distances
-        # σ-normalised log-responsibilities
-        scales_t    = x.new_tensor(self._scales)                # (K,) detached
-        norm_dist   = dist_batch / scales_t                     # (K,) in σ units
-        log_r       = self._ws.log() - norm_dist
-        log_r       = log_r - log_r.logsumexp(dim=0)
-        r           = log_r.exp()                               # (K,) Σ=1
+        # ── Responsibilities — fully detached, no autograd tracking ───
+        with torch.no_grad():
+            diff_means   = x_mean.unsqueeze(0) - self._mus       # (K, D)
+            dist         = diff_means.pow(2).mean(dim=-1).sqrt() # (K,)
+            log_r        = self._ws.log() - dist
+            log_r        = log_r - log_r.logsumexp(dim=0)
+            r            = log_r.exp()                            # (K,) Σ=1
+            k_star       = r.argmax().item()
+            dist_nearest = dist[k_star].item()
 
-        k_star       = r.argmax().item()
-        dist_nearest = dist_batch[k_star].item()
+        # ── Familiarity: (BT, K, D) layout → K-reduction is contiguous ─
+        # Clone so in-place EMA writes don't invalidate the saved tensor
+        # for autograd (same reason as GELU5).
+        mus_fwd = self._mus.detach().clone()                   # (K, D)
+        x_flat  = x.reshape(B * T, D)                         # (BT, D)
+        diff    = x_flat.unsqueeze(1) - mus_fwd.unsqueeze(0)  # (BT, K, D)
+        famil   = (
+            r.view(1, K, 1) * torch.exp(-tau.view(1, 1, D) * diff.abs())
+        ).sum(dim=1).reshape(B, T, D)                         # (B, T, D)
 
-        # ── Stage 1: per-token squared distances (B,T,K) ─────────────
-        # Clone so mus_fwd gets its own storage + version counter.
-        # .detach() alone shares storage with self._mus — the in-place EMA
-        # update self._mus[k]=... would then increment mus_fwd's version
-        # counter too, causing "modified by in-place op" in backward().
-        # Gradients still flow through beta via weights; none needed for mus.
-        mus_fwd = self._mus.detach().clone()   # (K,D) snapshot for this forward pass
-        # Uses identity: ||x−μ||² = ||x||² − 2xᵀμ + ||μ||²  (no (K,B,T,D) tensor)
-        x_sq   = x.pow(2).sum(dim=-1, keepdim=True)            # (B,T,1)
-        mu_sq  = mus_fwd.pow(2).sum(dim=-1)                    # (K,)
-        cross  = torch.einsum('btd,kd->btk', x, mus_fwd)      # (B,T,K)
-        dist2  = (x_sq + mu_sq.view(1, 1, K) - 2.0 * cross).clamp(min=0.0) / D  # (B,T,K)
+        scale = 1.0 - alpha.view(1, 1, D) * famil             # (B, T, D)
 
-        # ── Stage 2: σ-normalised soft assignment → blended refs ──────
-        # Floor scales_t so division never produces NaN / Inf.
-        scales_safe = scales_t.clamp(min=1e-3)                  # (K,) floored
-        # Gradient flows: loss→famil→eff_mu/eff_sigma→weights→beta
-        dist2_norm = dist2 / scales_safe.pow(2).view(1, 1, K)  # (B,T,K) in σ² units
-        weights    = torch.softmax(-beta * dist2_norm, dim=-1)  # (B,T,K)
-        eff_mu     = torch.einsum('btk,kd->btd', weights, mus_fwd)          # (B,T,D)
-        eff_sigma  = torch.einsum('btk,k->bt',   weights, scales_safe)      # (B,T)
-
-        # ── Stage 3: per-neuron τ, scale-normalised familiarity ───────
-        diff  = x - eff_mu                                                   # (B,T,D) in-graph
-        # Extra floor on eff_sigma so gradient of exp stays finite.
-        famil = torch.exp(-tau.view(1, 1, D) * diff.abs()
-                          / eff_sigma.clamp(min=1e-4).unsqueeze(-1))        # (B,T,D)
-        scale = 1.0 - alpha.view(1, 1, D) * famil                           # (B,T,D)
-
-        # ── EMA updates — training only, all detached ──────────────────
+        # ── EMA updates + lifecycle — no autograd overhead ────────────
         if self.training:
-            # Per-cluster RMS spread of individual tokens (not batch-mean distance).
-            # dist2 is (B,T,K), each entry = ||x[b,t]−μ_k||²/D.
-            # sqrt(mean over b,t) = typical per-dimension distance to cluster k.
-            # This is stable and stays finite even when μ_k ≈ x_mean.
-            sigma_from_tokens = dist2.detach().mean(dim=(0, 1)).sqrt()  # (K,)
-
-            # Soft online-EM updates: every cluster moves proportional to r_k
-            # lr_k = (1-d) · r_k  →  winner moves fastest, losers barely move
-            r_list = r.tolist()
-            for k in range(K):
-                rk = r_list[k]
-                # Mean update
-                lr_mu = (1.0 - d_mu) * rk
-                self._mus[k] = (1.0 - lr_mu) * self._mus[k] + lr_mu * x_mean
-                # Scale update: track within-cluster token spread (not batch-mean distance)
-                lr_s = (1.0 - d_s) * rk
-                self._scales[k] = max(
-                    (1.0 - lr_s) * self._scales[k] + lr_s * sigma_from_tokens[k].item(),
-                    1e-3  # hard floor — prevents collapse and div-by-zero
+            with torch.no_grad():
+                # Update winner mean
+                self._mus[k_star] = (
+                    d_val * self._mus[k_star] + (1.0 - d_val) * x_mean
                 )
 
-            # Weight EMA → renormalise
-            self._ws = dw_val * self._ws + (1.0 - dw_val) * r
-            self._ws = self._ws / self._ws.sum()
+                # Weight EMA → renormalise
+                self._ws = dw_val * self._ws + (1.0 - dw_val) * r
+                self._ws = self._ws / self._ws.sum()
 
-            # Running distance EMA — normalised by current winner's σ
-            norm_near = dist_nearest / self._scales[k_star]
-            if self._ema_dist == 0.0:
-                self._ema_dist = norm_near
-            else:
-                self._ema_dist = d_mu * self._ema_dist + (1.0 - d_mu) * norm_near
+                # Running distance EMA (bootstraps on first real step)
+                if self._ema_dist == 0.0:
+                    self._ema_dist = dist_nearest
+                else:
+                    self._ema_dist = (
+                        d_val * self._ema_dist + (1.0 - d_val) * dist_nearest
+                    )
 
-            # ── Birth: normalised distance spike ───────────────────────
-            # norm_near is in σ units → θ_b is also in σ units → scale-free
-            if norm_near > θ_b * self._ema_dist:
-                init_scale_new = self._scales[k_star]   # inherit winner's spread
-                init_w = torch.tensor(
-                    [dist_nearest / (self._scales[k_star] * self._ema_dist * (K + 1))],
-                    device=x.device, dtype=x.dtype)
-                self._mus    = torch.cat([self._mus, x_mean.unsqueeze(0).clone()], dim=0)
-                self._scales.append(init_scale_new)
-                self._ws     = torch.cat([self._ws, init_w])
-                self._ws     = self._ws / self._ws.sum()
-                K += 1
+                # Birth
+                if dist_nearest > θ_b * self._ema_dist:
+                    new_mu = x_mean.unsqueeze(0).clone()
+                    init_w = torch.tensor(
+                        [dist_nearest / (self._ema_dist * (K + 1))],
+                        device=x.device, dtype=x.dtype)
+                    self._mus = torch.cat([self._mus, new_mu], dim=0)
+                    self._ws  = torch.cat([self._ws,  init_w])
+                    self._ws  = self._ws / self._ws.sum()
+                    K        += 1
 
-            # ── Death: prune clusters with collapsed relative weight ────
-            if K > 1:
-                alive = (self._ws * K >= θ_d).nonzero(as_tuple=True)[0]
-                if alive.numel() == 0:
-                    alive = self._ws.argmax().unsqueeze(0)
-                if alive.numel() < K:
-                    alive_list   = alive.tolist()
-                    self._mus    = self._mus[alive]
-                    self._scales = [self._scales[k] for k in alive_list]
-                    self._ws     = self._ws[alive]
-                    self._ws     = self._ws / self._ws.sum()
-                    K = self._mus.shape[0]
+                # Death
+                if K > 1:
+                    alive = (self._ws * K >= θ_d).nonzero(as_tuple=True)[0]
+                    if alive.numel() == 0:
+                        alive = self._ws.argmax().unsqueeze(0)
+                    if alive.numel() < K:
+                        self._mus = self._mus[alive]
+                        self._ws  = self._ws[alive]
+                        self._ws  = self._ws / self._ws.sum()
+                        K         = self._mus.shape[0]
 
         if torch.is_grad_enabled():
             self._proto_log.append(K)
