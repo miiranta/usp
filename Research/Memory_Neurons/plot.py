@@ -109,9 +109,10 @@ test_data = pd.concat(test_records, ignore_index=True)[
 
 control_ppl  = test_data.loc[test_data["experiment"] == "control", "test_ppl"].values[0]
 control_loss = test_data.loc[test_data["experiment"] == "control", "test_loss"].values[0]
-test_data["ppl_delta"]   = test_data["test_ppl"]  - control_ppl
-test_data["loss_delta"]  = test_data["test_loss"] - control_loss
-test_data["ppl_improv%"] = -100 * test_data["ppl_delta"] / control_ppl
+test_data["ppl_delta"]    = test_data["test_ppl"]  - control_ppl
+test_data["loss_delta"]   = test_data["test_loss"] - control_loss
+test_data["ppl_improv%"]  = -100 * test_data["ppl_delta"]  / control_ppl
+test_data["loss_improv%"] = -100 * test_data["loss_delta"] / control_loss
 
 # ── Save test results ─────────────────────────────────────────────────
 test_csv = os.path.join(PLOTS_DIR, "test_results.csv")
@@ -173,25 +174,31 @@ for lbl in plot_df["label"]:
 fig, axes = plt.subplots(1, 2, figsize=(14, max(5, 0.45 * n + 2)))
 fig.suptitle("Test Results", fontsize=13, fontweight="bold")
 
-for ax, col, xlabel, title in [
-    (axes[0], "test_loss", "Loss",       "Test Loss"),
-    (axes[1], "test_ppl",  "Perplexity", "Test Perplexity"),
+for ax, col, pct_col, xlabel, title in [
+    (axes[0], "test_loss", "loss_improv%", "Loss",       "Test Loss"),
+    (axes[1], "test_ppl",  "ppl_improv%",  "Perplexity", "Test Perplexity"),
 ]:
     bars = ax.barh(plot_df["label"], plot_df[col], color=colors, edgecolor="white")
     ax.set_title(title, fontsize=11, fontweight="bold")
     ax.set_xlabel(xlabel)
     ax.invert_yaxis()
     span = plot_df[col].max() - plot_df[col].min() + 1e-9
-    for bar, val in zip(bars, plot_df[col]):
+    for bar, (_, row) in zip(bars, plot_df.iterrows()):
+        val = row[col]
+        if row["label"] == "Control":
+            label_str = f"{val:.3f}"
+        else:
+            pct = row[pct_col]
+            label_str = f"{val:.3f}  ({pct:+.1f}%)"
         ax.text(val + 0.015 * span, bar.get_y() + bar.get_height() / 2,
-                f"{val:.3f}", va="center", ha="left", fontsize=8)
+                label_str, va="center", ha="left", fontsize=8)
     ctrl_val = plot_df.loc[plot_df["label"] == "Control", col].values
     if len(ctrl_val):
         ax.axvline(ctrl_val[0], color="red", linewidth=1.2, linestyle="--",
                    alpha=0.7, label="Control")
         ax.legend(fontsize=8)
     ax.set_xlim(plot_df[col].min() - 0.05 * span,
-                plot_df[col].max() + 0.20 * span)
+                plot_df[col].max() + 0.32 * span)
 
 legend_handles = [
     Patch(color="#888888",       label="Control"),
