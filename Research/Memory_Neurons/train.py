@@ -4,6 +4,75 @@ import math
 import time
 import atexit
 import functools
+import sys
+
+# Allow importing from experiments/ subfolder
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from experiments.gelu5 import GELU5
+from experiments.gelu6 import GELU6
+from experiments.gelu7 import GELU7
+from experiments.gelu8 import GELU8
+from experiments.gelu10 import GELU10
+from experiments.gelu11 import GELU11
+from experiments.gelu12 import GELU12
+from experiments.gelu13 import GELU13
+from experiments.gelu16 import GELU16
+from experiments.gelu17 import GELU17
+from experiments.gelu18 import GELU18
+from experiments.gelu19 import GELU19
+from experiments.gelu20 import GELU20
+from experiments.gelu21 import GELU21
+from experiments.gelu22 import GELU22
+from experiments.gelu23 import GELU23
+from experiments.gelu24 import GELU24
+from experiments.gelu25 import GELU25
+from experiments.gelu26 import GELU26
+from experiments.gelu27 import GELU27
+from experiments.gelu28 import GELU28
+from experiments.gelu29 import GELU29
+from experiments.gelu30 import GELU30
+from experiments.gelu31 import GELU31
+from experiments.gelu32 import GELU32
+from experiments.gelu33 import GELU33
+from experiments.gelu34 import GELU34
+from experiments.gelu35 import GELU35
+from experiments.gelu36 import GELU36
+from experiments.gelu37 import GELU37
+from experiments.gelu38 import GELU38
+from experiments.gelu39 import GELU39
+from experiments.gelu40 import GELU40
+from experiments.gelu41 import GELU41
+from experiments.gelu42 import GELU42
+from experiments.gelu43 import GELU43
+from experiments.gelu44 import GELU44
+from experiments.gelu45 import GELU45
+from experiments.gelu46 import GELU46
+from experiments.gelu47 import GELU47
+from experiments.gelu48 import GELU48
+from experiments.gelu49 import GELU49
+from experiments.gelu50 import GELU50
+from experiments.gelu51 import GELU51
+from experiments.gelu52 import GELU52
+from experiments.gelu53 import GELU53
+from experiments.gelu54 import GELU54
+from experiments.gelu55 import GELU55
+from experiments.gelu56 import GELU56
+from experiments.gelu57 import GELU57
+from experiments.gelu58 import GELU58
+from experiments.gelu59 import GELU59
+from experiments.gelu60 import GELU60
+from experiments.gelu61 import GELU61
+from experiments.gelu62 import GELU62
+from experiments.gelu63 import GELU63
+from experiments.gelu64 import GELU64
+from experiments.gelu65 import GELU65
+from experiments.gelu66 import GELU66
+from experiments.gelu67 import GELU67
+from experiments.gelu68 import GELU68
+from experiments.gelu69 import GELU69
+from experiments.gelu70 import GELU70
+from experiments.gelu71 import GELU71
+from experiments.gelu72 import GELU72
 
 import torch
 import torch.nn as nn
@@ -398,9 +467,85 @@ def run_epoch(model, loader, criterion, optimizer, device, cfg, train=True):
     avg_loss = total_loss / total_tokens
     return avg_loss, math.exp(min(avg_loss, 20))
 
+# Each entry: (name, activation_cls, early_stop)
+# early_stop = (check_epoch, max_val_ppl) - aborts if val_ppl exceeds threshold at check_epoch
+# Control epoch-5 val_ppl = 239.14; +10% slack = 263
 ALL_EXPERIMENTS = [
-    ("control",      GELU),
-    ("gelu2",     GELU2),
+    ("control",   GELU,                                     None),
+    ("gelu2_k1",  functools.partial(GELU2, n_prototypes=1), None),
+    ("gelu5",     GELU5,                                    None),
+    ("gelu6",     GELU6,                                    None),
+    ("gelu7",     GELU7,                                    None),
+    ("gelu8",     functools.partial(GELU8, n_prototypes=4), None),
+    ("gelu10",    GELU10,                                   None),  # sign-agreement (re-run)
+    ("gelu11",    GELU11,                                   None),  # deviation amplification (done)
+    ("gelu12",    functools.partial(GELU12, n_prototypes=8), None),  # WTA prototype memory
+    ("gelu13",    functools.partial(GELU13, n_prototypes=8), None),  # momentum-updated memory
+    ("gelu16",    GELU16,                                    None),  # causal temporal-difference surprise
+    ("gelu17",    GELU17,                                    None),  # per-channel predictive coding gate
+    ("gelu18",    GELU18,                                    None),  # within-sequence episodic familiarity
+    ("gelu19",    GELU19,                                    None),  # divisive normalization (homeostatic gain)
+    ("gelu20",    GELU20,                                    None),  # orthogonal familiarity subtraction
+    ("gelu21",    GELU21,                                    None),  # cross-position channel uniqueness
+    ("gelu22",    GELU22,                                    None),  # dual-timescale EMA (fast+slow)
+    ("gelu23",    GELU23,                                    None),  # EMA threshold shift (adaptive spike threshold)
+    ("gelu24",    GELU24,                                    None),  # Z-score calibrated familiarity suppression
+    ("gelu25",    GELU25,                                    None),  # output-side EMA gate (suppress habitual GELU outputs)
+    ("gelu26",    GELU26,                                    None),  # diagonal-Gaussian NLL surprise (Mahalanobis)
+    ("gelu27",    GELU27,                                    None),  # backprop-trained familiarity prototype (no EMA)
+    ("gelu28",    GELU28,                                    None),  # output-cosine EMA gate (cosine on GELU output)
+    ("gelu29",    GELU29,                                    None),  # contrastive dual-EMA (recent minus global)
+    ("gelu30",    GELU30,                                    None),  # binary median-split hard suppression
+    ("gelu31",    GELU31,                                    None),  # double gate: input cosine + output cosine combined
+    ("gelu32",    GELU32,                                    None),  # projection decomp: suppress familiar direction only
+    ("gelu33",    GELU33,                                    None),  # adaptive sigmoid suppression curve (learned shape)
+    ("gelu34",    GELU34,                                    None),  # multi-head familiarity: per-group cosine EMA
+    ("gelu35",    GELU35,                                    None),  # position-progressive: later positions suppressed more
+    ("gelu36",    GELU36,                                    None),  # dual-context: max(global EMA, local sequence) familiarity
+    ("gelu37",    GELU37,                                    None),  # predictive coding: amplify prediction error (subtractive EMA)
+    ("gelu38",    GELU38,                                    None),  # per-channel frequency habituation (D-dim gate, not scalar)
+    ("gelu39",    GELU39,                                    None),  # stateless within-sequence instance contrast (no EMA)
+    ("gelu40",    functools.partial(GELU40, n_prototypes=8), None),  # gradient-trained Hopfield memory + residual amplification
+    ("gelu41",    GELU41,                                    None),  # causal cumulative-mean contrast (causal within-seq coding)
+    # ── gelu39 derivatives: pushing toward 50% PPL reduction ──
+    ("gelu42",    GELU42,                                    None),  # full seq instance norm (mean+variance, learned affine 2D params)
+    ("gelu43",    GELU43,                                    None),  # per-channel alpha vector (D params) — gelu39 generalised
+    ("gelu44",    GELU44,                                    None),  # pre-activation seq contrast (contrast x before GELU)
+    ("gelu45",    GELU45,                                    None),  # double contrast: pre-GELU + post-GELU (2 scalars)
+    ("gelu46",    GELU46,                                    None),  # self-similarity weighted contrast (free attention inside FF)
+    ("gelu47",    GELU47,                                    None),  # causal online instance norm: normalize pos-t against mean/std of past 0..t-1
+    ("gelu48",    GELU48,                                    None),  # exponentially-weighted causal mean subtraction (smooth causal gelu41)
+    ("gelu49",    GELU49,                                    None),  # batch-dimension contrast: subtract cross-batch mean (safe axis, not time)
+    # ── signal separation experiments ──
+    ("gelu50",    GELU50,                                    None),  # K-prototype orthogonal subspace suppression (geometric projection, K=8)
+    ("gelu51",    GELU51,                                    None),  # per-channel EMA z-score gate: D-dimensional novelty selector
+    ("gelu52",    GELU52,                                    None),  # learned low-rank interference cancellation (rank-4, task-driven)
+    # ── signal processing experiments ──
+    ("gelu53",    GELU53,                                    None),  # FFT spectral whitening: suppress overrepresented channel-frequency modes
+    ("gelu54",    GELU54,                                    None),  # ring buffer episodic recall: exact N-episode memory, nearest-episode gate
+    ("gelu55",    GELU55,                                    None),  # 5-timescale filter bank: multi-pole IIR residual amplification
+    # ── self-regulating neuro-inspired experiments ──
+    ("gelu56",    GELU56,                                    None),  # synaptic depression: per-channel resource depletion & recovery (Tsodyks-Markram)
+    ("gelu57",    GELU57,                                    None),  # homeostatic plasticity: per-channel activity normalization toward target rate
+    ("gelu58",    GELU58,                                    None),  # Oja online PCA: suppress first principal component (dominant variance direction)
+    # ── richer memory experiments ──
+    ("gelu59",    GELU59,                                    None),  # K=8 output-cosine EMA bank: competitive prototypes, soft-max familiarity
+    ("gelu60",    GELU60,                                    None),  # within-sequence causal max-similarity + cross-batch EMA dual memory
+    ("gelu61",    GELU61,                                    None),  # K=16 second-moment EMA modes: mean cosine² familiarity (power-based)
+    # ── gelu56 variations: fixing energy loss + dual-axis ──
+    ("gelu62",    GELU62,                                    None),  # contrast-normalized depression: tanh firing + r/mean(r) energy preservation
+    ("gelu63",    GELU63,                                    None),  # depression × EMA cosine: orthogonal dual-axis suppression
+    ("gelu64",    GELU64,                                    None),  # two-pool depression: fast (burst) + slow (sustained) resource pools
+    # ── biology-faithful mechanisms: calcium, shunting, threshold, familiarity ──
+    ("gelu65",    GELU65,                                    None),  # Ca-AHP: per-channel causal calcium → AHP gate, contrast-normalized
+    ("gelu66",    GELU66,                                    None),  # shunting inhibition: divisive conductance g[d]/mean(g), relative normalization
+    ("gelu67",    GELU67,                                    None),  # adaptive firing threshold: GELU(x - EMA_x), pre-GELU threshold shift
+    ("gelu68",    GELU68,                                    None),  # familiarity-sensitive depletion: cosine-gated vesicle release
+    # ── breaking the 4.4% ceiling: contrast-norm, dual-timescale, surprise, opponent-process ──
+    ("gelu69",    GELU69,                                    None),  # contrast-norm double cosine: novelty amplified (gate/mean), not just suppressed
+    ("gelu70",    GELU70,                                    None),  # dual-timescale: within-seq fast EMA × cross-batch slow EMA, contrast-norm
+    ("gelu71",    GELU71,                                    None),  # surprise × cosine: input-deviation surprise boosts familiar-direction gate
+    ("gelu72",    GELU72,                                    None),  # opponent-process: output = GELU(x) + alpha*(GELU(x) - ema_out) deviation ampl
 ]
 
 
@@ -408,7 +553,11 @@ ALL_EXPERIMENTS = [
 #  Single-experiment runner
 # ─────────────────────────────────────────────
 
-def run_experiment(exp_name, activation_cls, vocab, device):
+def run_experiment(exp_name, activation_cls, vocab, device, early_stop=None):
+    """
+    Trains a single experiment and compares against the best model (gelu2_k1).
+    Early stops if validation PPL is worse than gelu2_k1 for 5 consecutive epochs.
+    """
     output_dir = os.path.join(Config.OUTPUT_DIR, exp_name)
     checkpoint  = os.path.join(output_dir, "best_model.pt")
 
@@ -418,6 +567,19 @@ def run_experiment(exp_name, activation_cls, vocab, device):
     print(f"  Activation : {act_name}")
     print(f"  Output dir : {output_dir}")
     print(f"{'='*55}")
+
+    # ── Load best model metrics for comparison ──────────────
+    best_model_metrics = {}
+    best_model_path = os.path.join(Config.OUTPUT_DIR, "gelu2_k1", "metrics.csv")
+    if os.path.exists(best_model_path):
+        with open(best_model_path, "r") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                epoch = int(row["epoch"])
+                best_model_metrics[epoch] = float(row["val_ppl"])
+        print(f"  Reference model: gelu2_k1 (loaded {len(best_model_metrics)} epochs)\n")
+    else:
+        print(f"  No reference model found, proceeding without baseline comparison\n")
 
     # ── Skip if already done ──────────────────────────────
     if os.path.exists(output_dir):
@@ -462,6 +624,7 @@ def run_experiment(exp_name, activation_cls, vocab, device):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=Config.EPOCHS)
 
     best_val_loss = float('inf')
+    consecutive_epochs_below_baseline = 0
     metrics_path = os.path.join(output_dir, "metrics.csv")
 
     with open(metrics_path, "w", newline="") as f:
@@ -485,6 +648,21 @@ def run_experiment(exp_name, activation_cls, vocab, device):
             best_val_loss = vl_loss
             # torch.save(model.state_dict(), checkpoint)
             print(f"  → new best model (val ppl {vl_ppl:.2f})")
+
+        # ── Early stopping: 5 consecutive epochs below baseline ──
+        if best_model_metrics and epoch in best_model_metrics:
+            baseline_ppl = best_model_metrics[epoch]
+            if vl_ppl > baseline_ppl:
+                consecutive_epochs_below_baseline += 1
+                print(f"  ⚠ Below baseline (gelu2_k1 epoch {epoch}: {baseline_ppl:.2f}) "
+                      f"— {consecutive_epochs_below_baseline}/5 strikes")
+            else:
+                consecutive_epochs_below_baseline = 0
+                print(f"  ✓ Above baseline (gelu2_k1 epoch {epoch}: {baseline_ppl:.2f})")
+
+            if consecutive_epochs_below_baseline >= 5:
+                print(f"\n  ✗ Early stop: 5 consecutive epochs below baseline. Moving to next experiment.")
+                return
 
         print()
 
@@ -513,8 +691,8 @@ def main():
     vocab = Vocab()
     vocab.build([Config.TRAIN_FILE, Config.VALID_FILE, Config.TEST_FILE])
 
-    for exp_name, activation_cls in ALL_EXPERIMENTS:
-        run_experiment(exp_name, activation_cls, vocab, device)
+    for exp_name, activation_cls, early_stop in ALL_EXPERIMENTS:
+        run_experiment(exp_name, activation_cls, vocab, device, early_stop=early_stop)
 
 
 if __name__ == "__main__":
