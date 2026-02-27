@@ -73,6 +73,18 @@ from experiments.gelu69 import GELU69
 from experiments.gelu70 import GELU70
 from experiments.gelu71 import GELU71
 from experiments.gelu72 import GELU72
+from experiments.gelu73 import GELU73
+from experiments.gelu74 import GELU74
+from experiments.gelu75 import GELU75
+from experiments.gelu76 import GELU76
+from experiments.gelu77 import GELU77
+from experiments.gelu78 import GELU78
+from experiments.gelu79 import GELU79
+from experiments.gelu80 import GELU80
+from experiments.gelu81 import GELU81
+from experiments.gelu82 import GELU82
+from experiments.gelu83 import GELU83
+from experiments.gelu84 import GELU84
 
 import torch
 import torch.nn as nn
@@ -546,6 +558,21 @@ ALL_EXPERIMENTS = [
     ("gelu70",    GELU70,                                    None),  # dual-timescale: within-seq fast EMA × cross-batch slow EMA, contrast-norm
     ("gelu71",    GELU71,                                    None),  # surprise × cosine: input-deviation surprise boosts familiar-direction gate
     ("gelu72",    GELU72,                                    None),  # opponent-process: output = GELU(x) + alpha*(GELU(x) - ema_out) deviation ampl
+    # ── gelu71 extensions: break the 174.9 ceiling ──
+    ("gelu73",    GELU73,                                    None),  # gelu71 + contrast-norm: novel tokens amplified ABOVE 1.0, mean gate = 1
+    ("gelu74",    GELU74,                                    None),  # dual-axis surprise: input + output deviation, contrast-norm
+    ("gelu75",    GELU75,                                    None),  # dual-timescale surprise: local within-seq EMA + global cross-batch
+    ("gelu76",    GELU76,                                    None),  # gelu31 double-cosine × surprise boost, contrast-norm
+    # ── gelu71 variants: output-space, asymmetric, velocity, per-channel z-score ──
+    ("gelu77",    GELU77,                                    None),  # output-space surprise: ||out - ema_out_raw|| instead of input deviation
+    ("gelu78",    GELU78,                                    None),  # asymmetric cosine gate: anti-correlated patterns explicitly amplified
+    ("gelu79",    GELU79,                                    None),  # temporal velocity: within-seq rate-of-change + global surprise
+    ("gelu80",    GELU80,                                    None),  # per-channel z-score surprise: channel-normalized individual deviations
+    # ── gelu71 extensions: K=2 prototype, dual-signal, perpendicular, mahalanobis ──
+    ("gelu81",    GELU81,                                    None),  # K=2 dual-prototype cosine gate: familiarity = max cosine over 2 prototypes
+    ("gelu82",    GELU82,                                    None),  # input + output combined surprise (sum form, no contrast norm)
+    ("gelu83",    GELU83,                                    None),  # perpendicular-deviation surprise: removal of parallel/same-direction component
+    ("gelu84",    GELU84,                                    None),  # Mahalanobis/RMS-z surprise: per-channel variance normalized deviation
 ]
 
 

@@ -9,3 +9,6 @@ spacy-data/
 *.spacy
 
 outputs/
+
+*.pyc
+__pycache__/
