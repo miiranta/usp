@@ -2032,14 +2032,35 @@ def plot_distributions_3d_evolution(sources):
         return
 
     all_epochs = sorted({ep for ed in source_data.values() for ep in ed})
-    x_min, x_max, global_y_max = _dist_axis_limits(source_data, set(all_epochs))
+
+    # Robust axis limits for the 3D plot:
+    # - z (probability): 90th-percentile of per-epoch probability peaks × 1.20.
+    #   Using a percentile instead of the absolute max prevents late-epoch
+    #   narrow spikes from collapsing all other epochs to a flat baseline.
+    # - x (weight value): bins with probability > 1 % of the local epoch peak,
+    #   then the 1st–99th percentile of those bins for a moderate zoom.
+    per_epoch_maxes = []
+    all_sig_bins = []
+    for epoch_data_src in source_data.values():
+        for df in epoch_data_src.values():
+            ep_max = df['Probability'].max()
+            per_epoch_maxes.append(ep_max)
+            sig = df[df['Probability'] > ep_max * 0.01]
+            all_sig_bins.extend(sig['Bin_Center'].values)
+
+    global_y_max = float(np.percentile(per_epoch_maxes, 90)) * 1.20 if per_epoch_maxes else 1.0
+    if all_sig_bins:
+        x_min = float(np.percentile(all_sig_bins, 1))
+        x_max = float(np.percentile(all_sig_bins, 99))
+    else:
+        x_min, x_max = -0.15, 0.15
 
     cmaps_map = {'Control': plt.cm.Blues, 'Optimized': plt.cm.Oranges}
 
     sources_list = list(source_data.keys())
     n_panels = len(sources_list)
 
-    fig = plt.figure(figsize=(10 * n_panels, 9))
+    fig = plt.figure(figsize=(10 * n_panels, 10))
 
     for idx, label in enumerate(sources_list):
         ax = fig.add_subplot(1, n_panels, idx + 1, projection='3d')
@@ -2091,7 +2112,7 @@ def plot_distributions_3d_evolution(sources):
 
         ax.set_xlabel('Weight Value', fontsize=16, fontweight='bold', labelpad=14)
         ax.set_ylabel('Epoch', fontsize=16, fontweight='bold', labelpad=14)
-        ax.set_zlabel('')          # suppress built-in z-label entirely
+        ax.set_zlabel('Probability Density', fontsize=15, fontweight='bold', labelpad=30)
         ax.set_xlim(x_min, x_max)
         ax.set_zlim(0, global_y_max)
         ax.grid(False)
@@ -2108,23 +2129,12 @@ def plot_distributions_3d_evolution(sources):
         ax.zaxis.set_major_formatter(
             plt.FuncFormatter(lambda v, _: f'{v:.1e}')
         )
-        # Place the z-label using annotate with offset points from the right
-        # edge of the subplot box (transAxes).  offset points are device-
-        # independent so they always clear the tick numbers regardless of
-        # figure size or dpi.
-        ax.annotate(
-            'Probability Density',
-            xy=(1.0, 0.50), xycoords=ax.transAxes,
-            xytext=(55, 0), textcoords='offset points',
-            ha='left', va='center', rotation=90, fontsize=15, fontweight='bold',
-            annotation_clip=False,
-        )
 
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.97, bottom=0.06,
-                        wspace=-0.10)
+    plt.subplots_adjust(left=0.05, right=0.82, top=0.88, bottom=0.06,
+                        wspace=0.20)
 
     output_path = os.path.join(PLOTS_DIR, '3d_distribution_evolution.png')
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.savefig(output_path, dpi=150, bbox_inches='tight', pad_inches=0.6)
     plt.close()
     print(f"Saved plot: {output_path}")
 
