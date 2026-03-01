@@ -3,7 +3,6 @@
 
 # Adapted by Lucas Miranda
 
-import numpy as np
 import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
 from sklearn.metrics import mean_squared_error

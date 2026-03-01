@@ -1,8 +1,6 @@
 import os
 import matplotlib.pyplot as plt
 from collections import defaultdict
-import math
-import numpy as np
 import re
 import torch
 import torch.optim as optim
@@ -36,7 +34,6 @@ def _date_key(d):
     return (year, month, day)
 
 def get_unique_models(csv_data):
-    """Extract unique model names from CSV data."""
     models = set()
     for row in csv_data:
         if len(row) >= 2:
@@ -44,7 +41,6 @@ def get_unique_models(csv_data):
     return sorted(list(models))
 
 def filter_csv_by_models(csv_data, model_names):
-    """Filter CSV data to only include rows from specified models."""
     if not model_names:
         return csv_data
     model_set = set(model_names)
@@ -65,22 +61,12 @@ def get_csv_lines(filename):
 ##
 
 def optimize_equation_parameters(equation, model_avgs, human_avgs, title="optimization", full_model_names=None, epochs=5000, lr=0.01):
-    """
-    equation: A string equation with parameters (a, b, c, d, ...) and variable x
-                Example: "a * x + b" or "a * x**2 + b * x + c"
-                x represents the average model prediction per date
-    model_avgs: Dictionary of {date: average_grade} for models (interpolated)
-    human_avgs: Dictionary of {date: average_grade} for humans (interpolated)
-    title: Title for saving output files
-    full_model_names: List of full model names for display in plots
-    """
-    
     # Check if optimization already exists
     output_csv_filename = f"{title}_optimized.csv"
     output_csv_path = os.path.join(OPTIMIZED_FOLDER, output_csv_filename)
     
     if os.path.exists(output_csv_path):
-        print(f"✓ Optimization already exists, loading from: {output_csv_path}")
+        print(f"Optimization already exists, loading from: {output_csv_path}")
         
         # Load existing optimization results
         optimized_predictions = []
@@ -105,7 +91,7 @@ def optimize_equation_parameters(equation, model_avgs, human_avgs, title="optimi
         # Calculate MSE
         if len(optimized_predictions) == len(human_grades):
             mse = sum((opt - hum) ** 2 for opt, hum in zip(optimized_predictions, human_grades)) / len(human_grades)
-            print(f"✓ Loaded cached results with MSE: {mse:.10f}")
+            print(f"Loaded cached results with MSE: {mse:.10f}")
             
             # Extract parameters from equation - we'll return dummy params since we're loading from cache
             param_names = sorted(set(re.findall(r'\b[a-z]\b', equation)) - {'x'})
@@ -113,7 +99,7 @@ def optimize_equation_parameters(equation, model_avgs, human_avgs, title="optimi
             
             return best_params, mse
         else:
-            print(f"⚠️ Cached data size mismatch, recomputing...")
+            print(f"Cached data size mismatch, recomputing...")
     
     print(f"Computing new optimization for: {title}")
     
@@ -308,7 +294,7 @@ def calculate_and_save_daily_averages(title, csv_data):
     output_csv_path = os.path.join(INTERPOLATED_FOLDER, output_csv_filename)
     
     if os.path.exists(output_csv_path):
-        print(f"✓ Loading existing interpolated data from: {output_csv_path}")
+        print(f"Loading existing interpolated data from: {output_csv_path}")
         # Load existing data
         interpolated_date_averages = {}
         with open(output_csv_path, 'r', encoding='utf-8') as f:
@@ -319,7 +305,7 @@ def calculate_and_save_daily_averages(title, csv_data):
                     date_str = parts[0]
                     avg = float(parts[1])
                     interpolated_date_averages[date_str] = avg
-        print(f"✓ Loaded {len(interpolated_date_averages)} interpolated daily values from cache")
+        print(f"Loaded {len(interpolated_date_averages)} interpolated daily values from cache")
         return interpolated_date_averages
     
     print(f"Computing new interpolation for: {title}")
@@ -561,9 +547,9 @@ def main():
                     'run_title': run_title
                 }
                 all_results.append(result)
-                print(f"✓ Run {run_number} completed successfully")
+                print(f"Run {run_number} completed successfully")
             else:
-                print(f"✗ Run {run_number} failed")
+                print(f"Run {run_number} failed")
     
     # Sort results by MSE (lowest first)
     all_results.sort(key=lambda x: x['mse'])
@@ -585,7 +571,7 @@ def main():
             f.write(f"{result['equation']}|{result['mse']:.10f}|")
             f.write(f"{params_str}|{result['run_title']}\n")
     
-    print(f"✓ Results saved to: {results_csv_path}")
+    print(f"Results saved to: {results_csv_path}")
     print(f"\nTotal successful runs: {len(all_results)}/{total_runs}")
     
     # Print top 10 results

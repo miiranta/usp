@@ -21,7 +21,6 @@ os.makedirs(os.path.join(OUTPUT_FOLDER, 'improvement_analysis'), exist_ok=True)
 os.makedirs(os.path.join(OUTPUT_FOLDER, 'summary_csvs'), exist_ok=True)
 
 def load_all_csvs():
-    """Load all CSV files from the input folder and combine them."""
     all_data = []
     
     # Iterate through all subdirectories
@@ -40,7 +39,6 @@ def load_all_csvs():
     return combined_df
 
 def categorize_dataset(dataset_name):
-    """Categorize dataset into baseline, with correction, or without correction."""
     if dataset_name == 'baseline':
         return 'Baseline'
     elif dataset_name == 'interpolated':
@@ -51,7 +49,6 @@ def categorize_dataset(dataset_name):
         return 'Unknown'
 
 def create_global_plots(df):
-    """Create global plots for each metric, ordered by performance (best to worst)."""
     metrics = ['R2', 'RMSE', 'MAE', 'MSE']
     
     # Add category column
@@ -137,7 +134,6 @@ def create_global_plots(df):
         print(f"Created global plots for {model}")
 
 def create_combined_global_plots(df):
-    """Create combined global plots with both LSTM and ARIMA data in a single graph."""
     metrics = ['R2', 'RMSE', 'MAE', 'MSE']
     
     # Add category column
@@ -228,7 +224,6 @@ def create_combined_global_plots(df):
     print(f"Created combined global plots (LSTM vs ARIMA)")
 
 def create_aggregated_plots(df):
-    """Create aggregated plots showing average performance by category and model."""
     metrics = ['R2', 'RMSE', 'MAE', 'MSE']
     
     df['category'] = df['dataset'].apply(categorize_dataset)
@@ -307,7 +302,6 @@ def create_aggregated_plots(df):
         print(f"Created aggregated plot for {metric}")
 
 def create_summary_csv(df):
-    """Create a summary CSV with aggregate statistics."""
     df['category'] = df['dataset'].apply(categorize_dataset)
     
     metrics = ['R2', 'RMSE', 'MAE', 'MSE']
@@ -395,7 +389,6 @@ def create_summary_csv(df):
     return overall_df, category_df, model_df, model_category_df
 
 def create_improvement_analysis(df):
-    """Analyze improvement from baseline to corrections."""
     df['category'] = df['dataset'].apply(categorize_dataset)
     
     metrics = ['R2', 'RMSE', 'MAE', 'MSE']
@@ -485,7 +478,6 @@ def create_improvement_analysis(df):
     print("Created improvement analysis")
 
 def create_heatmaps(df):
-    """Create heatmaps for better visualization of performance patterns."""
     df['category'] = df['dataset'].apply(categorize_dataset)
     
     metrics = ['R2', 'RMSE', 'MAE', 'MSE']
@@ -550,7 +542,6 @@ def create_heatmaps(df):
     print("Created variability heatmap")
 
 def create_box_plots(df):
-    """Create box plots to show distribution of metrics."""
     df['category'] = df['dataset'].apply(categorize_dataset)
     
     metrics = ['R2', 'RMSE', 'MAE', 'MSE']
@@ -624,7 +615,6 @@ def create_box_plots(df):
     print("Created box plot distributions")
 
 def main():
-    """Main function to run all analysis."""
     print("Loading CSV files...")
     df = load_all_csvs()
     print(f"Loaded {len(df)} rows from {df['run_id'].nunique()} runs")
@@ -650,7 +640,7 @@ def main():
     print("\nCreating improvement analysis...")
     create_improvement_analysis(df)
     
-    print(f"\n✓ All statistics and plots have been saved to: {OUTPUT_FOLDER}")
+    print(f"\nAll statistics and plots have been saved to: {OUTPUT_FOLDER}")
 
 if __name__ == "__main__":
     main()

@@ -56,7 +56,7 @@ def load_evaluation_data(rank):
     _, _, _, run_title = create_evaluation_csvs(rank)
     RUN_TITLE = str(rank + 1) + "--" + run_title
     
-    # Create directory for this run (don't skip - may need to generate prediction CSVs)
+    # Create directory for this run 
     os.makedirs(os.path.join(PLOTS_FOLDER, RUN_TITLE), exist_ok=True)
     
     baseline = pd.read_csv(baseline_path, sep='|')
@@ -425,7 +425,6 @@ def run_full_evaluation():
                 print(f"\n--- {model_name} ---")
                 
                 try:
-                    # Check if per-timestep predictions CSV already exists
                     safe_model_name = model_name.replace(' ', '_').replace('(', '').replace(')', '')
                     pred_csv_path = os.path.join(PLOTS_FOLDER, RUN_TITLE,
                                                 f"predictions_{safe_model_name}_{dataset_name}.csv")
@@ -453,7 +452,6 @@ def run_full_evaluation():
                     # Evaluate
                     metrics = evaluate_model(model_name, dataset_name, predictions, test, lookback)
                     
-                    # Save per-timestep predictions for Diebold-Mariano test
                     true_values = test['inflation'].iloc[lookback:].values
                     min_len = min(len(true_values), len(predictions))
                     pred_df = pd.DataFrame({

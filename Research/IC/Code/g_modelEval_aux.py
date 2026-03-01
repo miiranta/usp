@@ -1,9 +1,7 @@
 import os
 import pandas as pd
 import requests
-from datetime import datetime
 from scipy.interpolate import CubicSpline
-import numpy as np
 
 INTERPOLATE_INFLATION_TO_DAILY = False # ARIMA does not like it
 
