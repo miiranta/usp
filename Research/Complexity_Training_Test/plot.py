@@ -1938,18 +1938,23 @@ def plot_distribution_summary_per_epoch(sources):
         return
 
     sources_list = list(source_data.keys())
-    n_cols       = len(sources_list)
+    n_rows       = len(sources_list)
     src_colors   = {'Control': BLUE, 'Optimized': ORANGE}
 
-    fig, axes = plt.subplots(1, n_cols, figsize=(9 * n_cols, 6), sharey=False)
-    if n_cols == 1:
+    fig, axes = plt.subplots(n_rows, 1, figsize=(9, 6 * n_rows), sharey=False)
+    if n_rows == 1:
         axes = [axes]
-    plt.subplots_adjust(left=0.08, right=0.97, top=0.92,
-                        bottom=0.12, wspace=0.45)
+    plt.subplots_adjust(left=0.10, right=0.88, top=0.97,
+                        bottom=0.06, hspace=0.10)
+
+    left_axes  = []
+    right_axes = []
 
     for col_idx, label in enumerate(sources_list):
         ax           = axes[col_idx]
         ax_right     = ax.twinx()
+        left_axes.append(ax)
+        right_axes.append(ax_right)
         epoch_stats  = source_data[label]
         sorted_epochs = sorted(epoch_stats.keys())
         xs = sorted_epochs
@@ -1987,9 +1992,15 @@ def plot_distribution_summary_per_epoch(sources):
         ax_right.spines['right'].set_color('black')
         ax_right.spines['right'].set_linewidth(1.5)
 
-        ax.set_xlabel('Epoch', fontsize=18, fontweight='bold', labelpad=10)
+        is_last = (col_idx == n_rows - 1)
+        if is_last:
+            ax.set_xlabel('Epoch', fontsize=18, fontweight='bold', labelpad=10)
+            ax.tick_params(axis='both', labelsize=16, labelcolor='black')
+        else:
+            ax.set_xlabel('')
+            ax.tick_params(axis='y', labelsize=16, labelcolor='black')
+            ax.tick_params(axis='x', labelbottom=False)
         ax.set_ylabel('Weight Values [μ, Mo]', fontsize=18, fontweight='bold', labelpad=10, color='black')
-        ax.tick_params(axis='both', labelsize=16, labelcolor='black')
         ax.grid(True, alpha=0.35)
         ax.set_axisbelow(True)
         ax.spines['top'].set_visible(False)
@@ -2000,7 +2011,21 @@ def plot_distribution_summary_per_epoch(sources):
         h_l, lbl_l = ax.get_legend_handles_labels()
         h_r, lbl_r = ax_right.get_legend_handles_labels()
         ax.legend(h_l + h_r, lbl_l + lbl_r,
-                  fontsize=11, loc='best', framealpha=0.85, edgecolor='#cccccc')
+                  fontsize=14, loc='upper right', framealpha=0.85,
+                  edgecolor='#cccccc', handlelength=2.0)
+
+    # --- Align Weight Values (left axes): shared limits + uniform 3-decimal formatter ---
+    all_left_lims = [ax.get_ylim() for ax in left_axes]
+    global_left_min = min(lo for lo, _ in all_left_lims)
+    global_left_max = max(hi for _, hi in all_left_lims)
+    margin = (global_left_max - global_left_min) * 0.05
+    for ax in left_axes:
+        ax.set_ylim(global_left_min - margin, global_left_max + margin)
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f'{v:.3f}'))
+
+    # --- Align Highest Probability Density (right axes): uniform scientific formatter ---
+    for ax_r in right_axes:
+        ax_r.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f'{v:.2e}'))
 
     output_path = os.path.join(PLOTS_DIR, 'distribution_summary_per_epoch.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -2060,10 +2085,14 @@ def plot_distributions_3d_evolution(sources):
     sources_list = list(source_data.keys())
     n_panels = len(sources_list)
 
-    fig = plt.figure(figsize=(10 * n_panels, 10))
+    # Wide figure so z-axis label isn't clipped; reduced per-panel height
+    # to cut the empty perspective space above the 3D box.
+    fig = plt.figure(figsize=(16, 6.5 * n_panels))
 
     for idx, label in enumerate(sources_list):
-        ax = fig.add_subplot(1, n_panels, idx + 1, projection='3d')
+        ax = fig.add_subplot(n_panels, 1, idx + 1, projection='3d')
+        # Restore original perspective
+        ax.view_init(elev=30, azim=-60)
         epoch_data = source_data[label]
         cmap = cmaps_map.get(label, plt.cm.Blues)
         epochs = sorted(epoch_data.keys())
@@ -2110,9 +2139,9 @@ def plot_distributions_3d_evolution(sources):
             poly_base.set_edgecolor('none')
             ax.add_collection3d(poly_base)
 
-        ax.set_xlabel('Weight Value', fontsize=16, fontweight='bold', labelpad=14)
-        ax.set_ylabel('Epoch', fontsize=16, fontweight='bold', labelpad=14)
-        ax.set_zlabel('Probability Density', fontsize=15, fontweight='bold', labelpad=30)
+        ax.set_xlabel('Weight Value', fontsize=18, fontweight='bold', labelpad=12)
+        ax.set_ylabel('Epoch', fontsize=18, fontweight='bold', labelpad=12)
+        ax.set_zlabel('Probability Density', fontsize=18, fontweight='bold', labelpad=28)
         ax.set_xlim(x_min, x_max)
         ax.set_zlim(0, global_y_max)
         ax.grid(False)
@@ -2123,18 +2152,21 @@ def plot_distributions_3d_evolution(sources):
         ax.yaxis.pane.set_edgecolor('lightgray')
         ax.zaxis.pane.set_edgecolor('lightgray')
         ax.tick_params(axis='both', labelsize=14)
-        ax.tick_params(axis='z', labelsize=13, pad=12)
+        ax.tick_params(axis='z', labelsize=13, pad=14)
+        # Limit x ticks to 5 to avoid crowding on the angled axis
+        ax.set_xticks(np.linspace(x_min, x_max, 5))
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f'{v:.2f}'))
         # Fewer ticks + compact format so labels don't reach the spine
         ax.set_zticks(np.linspace(0, global_y_max, 5))
         ax.zaxis.set_major_formatter(
             plt.FuncFormatter(lambda v, _: f'{v:.1e}')
         )
 
-    plt.subplots_adjust(left=0.05, right=0.82, top=0.88, bottom=0.06,
-                        wspace=0.20)
+    plt.subplots_adjust(left=0.02, right=0.92, top=0.99, bottom=0.03,
+                        hspace=0.15)
 
     output_path = os.path.join(PLOTS_DIR, '3d_distribution_evolution.png')
-    plt.savefig(output_path, dpi=150, bbox_inches='tight', pad_inches=0.6)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight', pad_inches=0.7)
     plt.close()
     print(f"Saved plot: {output_path}")
 
@@ -2587,32 +2619,32 @@ def main():
     master_df = load_all_data(SOURCES)
 
     # 1. Plot Metrics
-    plot_all_metrics(master_df)
+    # plot_all_metrics(master_df)
     
     # 2. Plot Distributions
-    plot_distributions_overlay(SOURCES)
+    # plot_distributions_overlay(SOURCES)
     
     # 3. New Plots
-    plot_generalization_gap(master_df)
-    plot_scatter_phase_space(master_df, 'LMC Complexity', 'Validation Loss')
-    plot_scatter_phase_space(master_df, 'Shannon Entropy', 'Validation Loss')
-    plot_scatter_phase_space(master_df, 'Shannon Entropy', 'LMC Complexity')
+    # plot_generalization_gap(master_df)
+    # plot_scatter_phase_space(master_df, 'LMC Complexity', 'Validation Loss')
+    # plot_scatter_phase_space(master_df, 'Shannon Entropy', 'Validation Loss')
+    # plot_scatter_phase_space(master_df, 'Shannon Entropy', 'LMC Complexity')
     # plot_final_metrics_boxplot(master_df)
-    plot_correlation_heatmaps(master_df)
-    plot_train_vs_val_loss(master_df)
-    plot_test_loss_barplot(master_df)
-    plot_3d_trajectory(master_df)
-    plot_complexity_performance_path(master_df)
-    plot_global_best_metrics_barplot(master_df)
-    plot_final_metrics_barplot(master_df)
-    plot_3d_trajectory_improved(master_df)
-    plot_train_val_test_loss_comparison(master_df)
-    plot_complexity_metrics_comparison(master_df)
-    plot_adaptive_mechanism(master_df)
-    plot_complexity_phase_space(master_df)
-    plot_overfitting_vs_complexity(master_df)
+    # plot_correlation_heatmaps(master_df)
+    # plot_train_vs_val_loss(master_df)
+    # plot_test_loss_barplot(master_df)
+    # plot_3d_trajectory(master_df)
+    # plot_complexity_performance_path(master_df)
+    # plot_global_best_metrics_barplot(master_df)
+    # plot_final_metrics_barplot(master_df)
+    # plot_3d_trajectory_improved(master_df)
+    # plot_train_val_test_loss_comparison(master_df)
+    # plot_complexity_metrics_comparison(master_df)
+    # plot_adaptive_mechanism(master_df)
+    # plot_complexity_phase_space(master_df)
+    # plot_overfitting_vs_complexity(master_df)
     
-    # Faceted Plots
+    # Faceted Plots (selected)
     plot_train_val_test_loss_faceted(master_df)
     plot_complexity_metrics_faceted(master_df)
     plot_adaptive_mechanism_faceted(master_df)
